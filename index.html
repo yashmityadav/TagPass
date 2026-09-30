@@ -43,7 +43,7 @@ input::placeholder{color:#8a94c4}
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
 <button class="ib" id="mute" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">🔊</button>
 <button class="ib" id="leave" onclick="leaveRoom()" style="right:64px;display:none">✕</button>
-<div id="tc"><button data-k="l" style="left:14px">◀</button><button data-k="r" style="left:104px">▶</button><button data-k="j" style="right:14px;width:92px;height:92px">▲</button></div>
+<div id="tc"><button data-k="l" style="left:30px">◀</button><button data-k="r" style="left:120px">▶</button><button data-k="j" style="right:30px;width:92px;height:92px">▲</button></div>
 <div id="ov"></div>
 <div id="rot"><div style="font-size:64px">⟳</div>Rotate your phone to landscape to play</div>
 <script>
@@ -117,7 +117,7 @@ async function enter(host){
 function leaveRoom(msg){try{room&&room.leave()}catch(e){}room=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 function lobbyUI(f){
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)).join()+isHost;
- if(!f&&S.sig===sig&&!ov.classList.contains('off'))return;S.sig=sig;
+ if(!f && S.sig === sig && ov.innerHTML.includes('Room code')) return; S.sig = sig;
  ovShow(`<h1 style="font-size:min(11vh,60px)">TAG</h1><div class="row" style="gap:26px"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qr"></div></div><div style="text-align:left;min-width:170px">Players ${peers.length}/5${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}</div></div>${isHost?`<button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:'<p>Waiting for the host to start…</p>'}<p>Friends join with the code, or by scanning the QR.</p>`);
  if(window.QRCode)try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}}
 
@@ -144,7 +144,7 @@ function sync(){
   if(!r)r=rem[p.peer]={x:q.x||0,y:q.y||0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:true,st:0,nm:'Player',ci:0,ts:now};
   r.tx=q.x||0;r.ty=q.y||0;r.vx=q.vx||0;r.vy=q.vy||0;r.face=q.f||1;r.g=q.g;r.it=q.it?1:0;r.alive=q.alive!==false;r.nm=String(q.nm||'Player').slice(0,12);r.ci=q.ci||0;r.ts=now;
   const pn=q.pn;if(pn&&pn.to==myId&&S.pn[p.peer]!==pn.n){S.pn[p.peer]=pn.n;
-   if(ME.alive&&!ME.it){ME.it=1;ME.pt=.2;pub(1);shake=.5;burst(ME.x+15,ME.y+10,20,'#fff',380);snd(300,.2,'sawtooth',.05,200)}}});
+   if(ME.alive&&!ME.it){ME.it=1;ME.pt=1;pub(1);shake=.5;burst(ME.x+15,ME.y+10,20,'#fff',380);snd(300,.2,'sawtooth',.05,200)}}});
  for(const k in rem)if(!seen[k])delete rem[k];
  const H=isHost?HS:(h?h.presence:null);
  if(H){S.H=H;apply(H)}
@@ -238,7 +238,7 @@ function upd(dt){
  if(!ME.alive)return;
  step(ME,human(),dt);ME.pt-=dt;pub();
  if(ME.it&&ME.pt<=0&&S.H&&S.H.st=='play')for(const k in rem){const r=rem[k];if(!r.alive||r.it)continue;
-  if(ME.x<r.x+PW&&ME.x+PW>r.x&&ME.y<r.y+PH&&ME.y+PH>r.y){ME.it=0;ME.pn={to:k,n:++ME.pc};ME.pt=.2;r.it=1;pub(1);shake=.5;burst(r.x+15,r.y+10,22,'#fff',380);snd(700,.18,'square',.07,-400);snd(300,.2,'sawtooth',.05,200);break}}}
+  if(ME.x<r.x+PW&&ME.x+PW>r.x&&ME.y<r.y+PH&&ME.y+PH>r.y){ME.it=0;ME.pn={to:k,n:++ME.pc};ME.pt=1;r.it=1;pub(1);shake=.5;burst(r.x+15,r.y+10,22,'#fff',380);snd(700,.18,'square',.07,-400);snd(300,.2,'sawtooth',.05,200);break}}}
 function camUpd(dt){
  const fit=Math.min(W/1600,H/836),mx=fit*2.3;let tx=800,ty=418,tz=fit;
  const L=(ME.alive?[ME]:[]).concat(Object.values(rem).filter(r=>r.alive));
