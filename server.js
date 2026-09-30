@@ -29,6 +29,8 @@ const wss = new WebSocketServer({
 
 wss.on('connection', (ws) => {
   const id = Math.random().toString(36).slice(2, 10);
+  ws.lastSeen = Date.now();
+  ws.on('pong', () => { ws.lastSeen = Date.now(); });
 
   let room = null;
   let count = 0;
@@ -55,6 +57,7 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (raw) => {
     // Protect the server from excessive messages.
+    ws.lastSeen = Date.now();
     if (++count > 150) return;
 
     let m;
@@ -64,6 +67,8 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
+
+    if (m && m.t === 'hb') { if (ws.readyState === 1) ws.send('{"t":"hb"}'); return; }
 
     // Join room.
     if (m.t === 'join' && !room) {
@@ -126,6 +131,14 @@ wss.on('connection', (ws) => {
 
   ws.on('error', () => {});
 });
+
+// Drop dead connections (closed browser, lost signal, frozen tab) so ghost players disappear.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (Date.now() - ws.lastSeen > 12000) { ws.terminate(); continue; }
+    try { ws.ping(); } catch {}
+  }
+}, 4000);
 
 server.listen(PORT, () => {
   console.log(

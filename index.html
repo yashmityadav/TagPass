@@ -83,7 +83,7 @@ const PHYS_HZ=60, NET_MS=33, REMOTE_INTERP_MS=70, REMOTE_EXTRAP_MS=120;
 const S={mode:'menu',gm:0,rn:0,rt:null,bt:null,ov:null,pn:{}},HS={st:'lobby',rn:0,gm:0,ord:[],rt:100},ME=mk(0,700,500);
 ME.alive=true;ME.pc=0;ME.pt=0;ME.ci=0;
 let cam={x:800,y:418,z:.6};
-const ovShow=h=>{ov.innerHTML=h;ov.classList.remove('off','fit');ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>ov.classList.add('off');
+const ovShow=h=>{ov.innerHTML=h;ov.classList.remove('off','fit');ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>ov.classList.add('off');
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
 function jingle(w){(w?[523,659,784,1047,1319]:[392,330,262,196]).forEach((f,i)=>setTimeout(()=>snd(f,.25,'square',.06),i*130))}
@@ -106,8 +106,10 @@ async function enter(host){
   let myid='',cbs=[],pcb=[],pl=[],ok=0;
   const find=id=>pl.find(p=>p.peer==id);
   const R={peers:()=>pl,onPeers(f){cbs.push(f);return()=>{}},onPos(f){pcb.push(f)},presence(p){if(ws.readyState==1)ws.send(JSON.stringify({t:'pres',p}));return Promise.resolve()},leave(){try{ws.close()}catch(e){}return Promise.resolve()}};
-  ws.onopen=()=>ws.send(JSON.stringify({t:'join',room:nm}));
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
+  let lastRx=Date.now(),hbT=0;
+  ws.onopen=()=>{ws.send(JSON.stringify({t:'join',room:nm}));hbT=setInterval(()=>{if(ws.readyState!=1)return;if(Date.now()-lastRx>10000){ws.close();return}ws.send('{"t":"hb"}')},3000)};
+  ws.onmessage=e=>{lastRx=Date.now();let m;try{m=JSON.parse(e.data)}catch(x){return}
+   if(m.t=='hb')return;
    if(m.t=='hello'){myid=m.id;ok=1;res(R)}
    else if(m.t=='full'){pl=m.peers.map(p=>({peer:p.id,presence:p.p,isMe:p.id==myid,sameTab:true,kind:'viewer'}));cbs.forEach(f=>f({peers:pl}))}
    else if(m.t=='u'){const p=find(m.id);if(!p)return;
@@ -116,7 +118,7 @@ async function enter(host){
    else if(m.t=='j'){pl.push({peer:m.id,presence:m.p,isMe:m.id==myid,sameTab:true,kind:'viewer'});cbs.forEach(f=>f({peers:pl}))}
    else if(m.t=='l'){pl=pl.filter(p=>p.peer!=m.id);cbs.forEach(f=>f({peers:pl}))}};
   ws.onerror=()=>{if(!ok)rej({code:'connect'})};
-  ws.onclose=()=>{if(!ok)rej({code:'closed'});else if(room===R)leaveRoom('Disconnected from the server.')}})}};
+  ws.onclose=()=>{clearInterval(hbT);if(!ok)rej({code:'closed'});else if(room===R)leaveRoom('Disconnected from the server.')}})}};
  try{room=await rm.join('tag-'+code.toLowerCase())}catch(e){return menu('Could not open the room ('+((e&&e.code)||'error')+').')}
  isHost=!!host;S.gm=0;S.rn=0;S.pn={};S.hostSeen=0;S.cset=0;ME.alive=true;ME.it=0;
  if(host){Object.assign(HS,{st:'lobby',rn:0,gm:0,ord:[]});S.hostSeen=1}
@@ -124,6 +126,7 @@ async function enter(host){
  room.onPeers(sync);room.onPos(fastPos);S.mode='lobby';$('leave').style.display='block';
  if(!host)setTimeout(()=>{if(room&&!S.hostSeen)leaveRoom('Room not found. Check the code.')},2600);
  sync()}
+addEventListener('pagehide',()=>{try{room&&room.leave()}catch(e){}});
 function leaveRoom(msg){try{room&&room.leave()}catch(e){}room=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';const k=Math.min(1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);w.style.transform=k<1?'scale('+k+')':'none'}
 addEventListener('resize',()=>setTimeout(fitLobby,60));
@@ -135,9 +138,11 @@ function lobbyUI(f){
  if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
  S.lobCode=code;
  ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
- ov.classList.add('fit');
- if(window.QRCode)try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}
- fitLobby();setTimeout(fitLobby,150);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitLobby)}
+ ov.classList.add('fit');ov.style.opacity='0';ov.style.transition='opacity .15s';
+ if(window.QRCode)try{const tmp=document.createElement('div');new QRCode(tmp,{text:BASE+'?room='+code,width:104,height:104});const c=tmp.querySelector('canvas');if(c){const im=new Image(104,104);im.src=c.toDataURL('image/png');im.style.cssText='display:block;width:104px;height:104px';$('qr').appendChild(im)}}catch(e){}
+ const shown=()=>{fitLobby();requestAnimationFrame(()=>requestAnimationFrame(()=>{if($('lobw'))ov.style.opacity='1'}))};
+ fitLobby();setTimeout(shown,400);
+ if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(shown,60))}
 
 /* ---------- net ---------- */
 let lastSent={};
