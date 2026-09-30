@@ -23,7 +23,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%}
 .b.alt{background:#2b8cff;box-shadow:0 6px 0 #1552a8}
 #tc{position:fixed;left:0;right:0;bottom:0;height:40%;display:none;pointer-events:none}
 .t.pl #tc{display:block}
-#tc button{pointer-events:auto;position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);width:76px;height:76px;border-radius:50%;border:0;background:rgba(255,255,255,.28);color:#fff;font-size:34px;font-family:inherit}
+#tc button{pointer-events:auto;position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 50px);width:76px;height:76px;border-radius:50%;border:0;background:rgba(255,255,255,.28);color:#fff;font-size:34px;font-family:inherit}
 #tc button.on{background:rgba(255,255,255,.6)}
 
 #ov{overflow:auto;justify-content:safe center;gap:10px}
@@ -120,10 +120,10 @@ function lobbyUI(f){
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)).join()+isHost;
  if(!f && S.sig === sig && ov.innerHTML.includes('Room code')) return; S.sig = sig;
  ovShow(`<h1 style="font-size:min(11vh,60px)">TAG</h1><div class="row" style="gap:26px"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qr"></div></div><div style="text-align:left;min-width:170px">Players ${peers.length}/5${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}</div></div>${isHost?`<button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:'<p>Waiting for the host to start…</p>'}<p>Friends join with the code, or by scanning the QR.</p>`);
- if(window.QRCode)try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}}
+ if(window.QRCode && $('qr') && !$('qr').hasChildNodes())try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}}
 
 /* ---------- net ---------- */
-function pub(f){if(!room)return;const n=performance.now();if(!f&&n-lastPub<66)return;lastPub=n;
+function pub(f){if(!room)return;const n=performance.now();if(!f&&n-lastPub<30)return;lastPub=n;
  try{const r=room.presence({x:Math.round(ME.x),y:Math.round(ME.y),vx:Math.round(ME.vx),vy:Math.round(ME.vy),f:ME.face,g:ME.g,it:!!ME.it,alive:ME.alive,pn:ME.pn||null});r&&r.catch&&r.catch(()=>{})}catch(e){}}
 function hpub(p){Object.assign(HS,p);try{room.presence(p)}catch(e){}apply(HS)}
 function hostStart(){const ord=peers.slice(0,5).map(p=>p.peer);hpub({st:'play',gm:Date.now()%1000000000,rn:1,ord,first:ord[Math.random()*ord.length|0],rt:100,loser:null,win:null})}
