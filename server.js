@@ -46,7 +46,8 @@ wss.on('connection', (ws) => {
     if (!room.size) {
       rooms.delete(room.name);
     } else {
-      room.dirty = true;
+      const out = JSON.stringify({ t: 'l', id });
+      for (const c of room.values()) if (c.ws.readyState === 1) c.ws.send(out);
     }
 
     room = null;
@@ -54,7 +55,7 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (raw) => {
     // Protect the server from excessive messages.
-    if (++count > 100) return;
+    if (++count > 150) return;
 
     let m;
 
@@ -85,19 +86,13 @@ wss.on('connection', (ws) => {
         return ws.close();
       }
 
-      r.set(id, {
-        ws,
-        pres: {}
-      });
-
+      const others = [...r].map(([oid, c]) => ({ id: oid, p: c.pres }));
+      const mine = { ws, pres: {} };
+      r.set(id, mine);
       room = r;
-      r.dirty = true;
-
-      ws.send(JSON.stringify({
-        t: 'hello',
-        id
-      }));
-
+      ws.send(JSON.stringify({ t: 'hello', id }));
+      ws.send(JSON.stringify({ t: 'full', peers: others.concat({ id, p: mine.pres }) }));
+      for (const [oid, c] of r) if (oid !== id && c.ws.readyState === 1) c.ws.send(JSON.stringify({ t: 'j', id, p: mine.pres }));
       return;
     }
 
@@ -115,13 +110,12 @@ wss.on('connection', (ws) => {
       if (!me) return;
 
       // Only accept normal keys.
+      const patch = {};
       for (const k of Object.keys(m.p)) {
-        if (k !== '__proto__' && k.length < 16) {
-          me.pres[k] = m.p[k];
-        }
+        if (k !== '__proto__' && k.length < 16) { me.pres[k] = m.p[k]; patch[k] = m.p[k]; }
       }
-
-      room.dirty = true;
+      const out = JSON.stringify({ t: 'u', id, p: patch });
+      for (const c of room.values()) if (c.ws.readyState === 1) c.ws.send(out);
     }
   });
 
@@ -132,29 +126,6 @@ wss.on('connection', (ws) => {
 
   ws.on('error', () => {});
 });
-
-// Broadcast changed room snapshots approximately 30 times per second.
-setInterval(() => {
-  for (const r of rooms.values()) {
-    if (!r.dirty) continue;
-
-    r.dirty = false;
-
-    const msg = JSON.stringify({
-      t: 'peers',
-      peers: [...r].map(([id, c]) => ({
-        id,
-        p: c.pres
-      }))
-    });
-
-    for (const c of r.values()) {
-      if (c.ws.readyState === 1) {
-        c.ws.send(msg);
-      }
-    }
-  }
-}, 33);
 
 server.listen(PORT, () => {
   console.log(

@@ -38,7 +38,8 @@ input::placeholder{color:#8a94c4}
 #qr img, #qr canvas{width:104px!important;height:104px!important;display:block;margin:0 auto}
 #rot{display:none;position:fixed;inset:0;z-index:99;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}
 @media (orientation:portrait) and (pointer:coarse){#rot{display:flex}}
-@media (max-height:480px){.b{font-size:22px;padding:8px 24px;min-width:170px}#ov p{font-size:15px}input{font-size:18px}#timer{font-size:48px}}
+#lob{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}#lob>div{min-width:150px}#qrw{width:116px;height:116px;margin:4px auto 0}
+@media (max-height:480px){#lobh,#lobp{display:none}#lob{flex-wrap:nowrap;gap:22px}#ov{padding:8px;gap:6px}#qr{width:96px;height:96px;min-width:96px;min-height:96px;padding:4px}#qr img,#qr canvas{width:88px!important;height:88px!important}#qrw{width:96px;height:96px}.b{font-size:22px;padding:8px 24px;min-width:170px}#ov p{font-size:15px}input{font-size:18px}#timer{font-size:48px}}
 </style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -78,7 +79,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0}}
 let room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,lastPub=0,hb=0,noIt=0,mi=0,mus=0,toastT,lastBoard='';
-const PHYS_HZ=60, NET_MS=33, REMOTE_INTERP_MS=55, REMOTE_EXTRAP_MS=90;
+const PHYS_HZ=60, NET_MS=33, REMOTE_INTERP_MS=70, REMOTE_EXTRAP_MS=120;
 const S={mode:'menu',gm:0,rn:0,rt:null,bt:null,ov:null,pn:{}},HS={st:'lobby',rn:0,gm:0,ord:[],rt:100},ME=mk(0,700,500);
 ME.alive=true;ME.pc=0;ME.pt=0;ME.ci=0;
 let cam={x:800,y:418,z:.6};
@@ -100,32 +101,48 @@ async function enter(host){
  lockLand();startMusic();try{AC&&AC.resume&&AC.resume()}catch(e){}
  $('msg').textContent='Connecting…';
  const WS_URL=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host);
+ const FAST={x:1,y:1,vx:1,vy:1,f:1,g:1};
  const rm={join(nm){return new Promise((res,rej)=>{let ws;try{ws=new WebSocket(WS_URL)}catch(e){return rej({code:'ws'})}
-  let myid='',cbs=[],pl=[],ok=0;
-  const R={peers:()=>pl,onPeers(f){cbs.push(f);return()=>{}},presence(p){if(ws.readyState==1)ws.send(JSON.stringify({t:'pres',p}));return Promise.resolve()},leave(){try{ws.close()}catch(e){}return Promise.resolve()}};
+  let myid='',cbs=[],pcb=[],pl=[],ok=0;
+  const find=id=>pl.find(p=>p.peer==id);
+  const R={peers:()=>pl,onPeers(f){cbs.push(f);return()=>{}},onPos(f){pcb.push(f)},presence(p){if(ws.readyState==1)ws.send(JSON.stringify({t:'pres',p}));return Promise.resolve()},leave(){try{ws.close()}catch(e){}return Promise.resolve()}};
   ws.onopen=()=>ws.send(JSON.stringify({t:'join',room:nm}));
   ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
    if(m.t=='hello'){myid=m.id;ok=1;res(R)}
-   else if(m.t=='peers'){pl=m.peers.map(p=>({peer:p.id,presence:p.p,isMe:p.id==myid,sameTab:true,kind:'viewer'}));cbs.forEach(f=>f({peers:pl}))}};
+   else if(m.t=='full'){pl=m.peers.map(p=>({peer:p.id,presence:p.p,isMe:p.id==myid,sameTab:true,kind:'viewer'}));cbs.forEach(f=>f({peers:pl}))}
+   else if(m.t=='u'){const p=find(m.id);if(!p)return;
+    let slow=0;for(const k in m.p){p.presence[k]=m.p[k];if(!FAST[k])slow=1}
+    if(slow)cbs.forEach(f=>f({peers:pl}));else if(!p.isMe)pcb.forEach(f=>f(p))}
+   else if(m.t=='j'){pl.push({peer:m.id,presence:m.p,isMe:m.id==myid,sameTab:true,kind:'viewer'});cbs.forEach(f=>f({peers:pl}))}
+   else if(m.t=='l'){pl=pl.filter(p=>p.peer!=m.id);cbs.forEach(f=>f({peers:pl}))}};
   ws.onerror=()=>{if(!ok)rej({code:'connect'})};
   ws.onclose=()=>{if(!ok)rej({code:'closed'});else if(room===R)leaveRoom('Disconnected from the server.')}})}};
  try{room=await rm.join('tag-'+code.toLowerCase())}catch(e){return menu('Could not open the room ('+((e&&e.code)||'error')+').')}
  isHost=!!host;S.gm=0;S.rn=0;S.pn={};S.hostSeen=0;S.cset=0;ME.alive=true;ME.it=0;
  if(host){Object.assign(HS,{st:'lobby',rn:0,gm:0,ord:[]});S.hostSeen=1}
  room.presence({nm:name,t0:Date.now(),host:host?1:0,st:host?'lobby':null,x:0,y:0,alive:true,it:false});
- room.onPeers(sync);S.mode='lobby';$('leave').style.display='block';
+ room.onPeers(sync);room.onPos(fastPos);S.mode='lobby';$('leave').style.display='block';
  if(!host)setTimeout(()=>{if(room&&!S.hostSeen)leaveRoom('Room not found. Check the code.')},2600);
  sync()}
 function leaveRoom(msg){try{room&&room.leave()}catch(e){}room=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 function lobbyUI(f){
- const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)).join()+isHost;
- if(!f && S.sig === sig && ov.innerHTML.includes('Room code')) return; S.sig = sig;
- ovShow(`<h1 style="font-size:min(11vh,60px)">TAG</h1><div class="row" style="gap:26px"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qr"></div></div><div style="text-align:left;min-width:170px">Players ${peers.length}/5${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}</div></div>${isHost?`<button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:'<p>Waiting for the host to start…</p>'}<p>Friends join with the code, or by scanning the QR.</p>`);
- if(window.QRCode && $('qr') && !$('qr').hasChildNodes())try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}}
+ const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost;
+ if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
+ const list=`Players ${peers.length}/5${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
+ const act=isHost?`<button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:'<p>Waiting for the host to start…</p>';
+ if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;return}
+ S.lobCode=code;
+ ovShow(`<h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><p id="lobp">Friends join with the code, or by scanning the QR.</p>`);
+ if(window.QRCode)try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}}
 
 /* ---------- net ---------- */
-function pub(f){if(!room)return;const n=performance.now();if(!f&&n-lastPub<NET_MS)return;lastPub=n;
- try{const r=room.presence({x:Math.round(ME.x),y:Math.round(ME.y),vx:Math.round(ME.vx),vy:Math.round(ME.vy),f:ME.face,g:ME.g,it:!!ME.it,alive:ME.alive,pn:ME.pn||null});r&&r.catch&&r.catch(()=>{})}catch(e){}}
+let lastSent={};
+function pub(f){if(!room)return;const n=performance.now();if(!f&&n-lastPub<NET_MS)return;
+ const c={x:Math.round(ME.x),y:Math.round(ME.y),vx:Math.round(ME.vx/4)*4,vy:Math.round(ME.vy/4)*4,f:ME.face,g:ME.g?1:0,it:!!ME.it,alive:ME.alive,pn:ME.pn||null},d={};let any=0;
+ for(const k in c){if(f||JSON.stringify(c[k])!==JSON.stringify(lastSent[k])){d[k]=c[k];any=1}}
+ if(!any){if(n-lastPub<1000)return;d.x=c.x}
+ lastPub=n;Object.assign(lastSent,c);
+ try{const r=room.presence(d);r&&r.catch&&r.catch(()=>{})}catch(e){}}
 function hpub(p){Object.assign(HS,p);try{room.presence(p)}catch(e){}apply(HS)}
 function hostStart(){const ord=peers.slice(0,5).map(p=>p.peer);hpub({st:'play',gm:Date.now()%1000000000,rn:1,ord,first:ord[Math.random()*ord.length|0],rt:100,loser:null,win:null})}
 function toLobby(){if(isHost)hpub({st:'lobby'})}
@@ -144,8 +161,7 @@ function sync(){
  const seen={},now=performance.now();
  all.forEach(p=>{if(p.isMe)return;seen[p.peer]=1;const q=p.presence;let r=rem[p.peer];
   if(!r)r=rem[p.peer]={x:q.x||0,y:q.y||0,vx:q.vx||0,vy:q.vy||0,face:1,g:0,sq:1,it:0,alive:true,st:0,nm:'Player',ci:0,ts:now,snaps:[]};
-  r.tx=q.x||0;r.ty=q.y||0;r.vx=q.vx||0;r.vy=q.vy||0;r.face=q.f||1;r.g=q.g;r.it=q.it?1:0;r.alive=q.alive!==false;r.nm=String(q.nm||'Player').slice(0,12);r.ci=q.ci||0;r.ts=now;r.rx=now;
-  r.snaps.push({t:now,x:r.tx,y:r.ty,vx:r.vx,vy:r.vy,face:r.face,g:r.g,it:r.it,alive:r.alive});
+  r.tx=q.x||0;r.ty=q.y||0;r.vx=q.vx||0;r.vy=q.vy||0;r.face=q.f||1;r.g=q.g;r.it=q.it?1:0;r.alive=q.alive!==false;r.nm=String(q.nm||'Player').slice(0,12);r.ci=q.ci||0;r.ts=now;r.rx=now;if(!r.snaps.length)r.snaps.push({t:now,x:r.tx,y:r.ty,vx:r.vx,vy:r.vy,face:r.face,g:r.g,it:r.it,alive:r.alive});else{const l=r.snaps[r.snaps.length-1];l.it=r.it;l.alive=r.alive}
   if(r.snaps.length>6)r.snaps.shift();
   const pn=q.pn;if(pn&&pn.to==myId&&S.pn[p.peer]!==pn.n){S.pn[p.peer]=pn.n;
    if(ME.alive&&!ME.it){ME.it=1;ME.pt=1;pub(1);shake=.5;burst(ME.x+15,ME.y+10,20,'#fff',380);snd(300,.2,'sawtooth',.05,200)}}});
@@ -172,6 +188,11 @@ function apply(H){
   const mine=H.win==myId,w=mine?name:(rem[H.win]?rem[H.win].nm:'');jingle(mine);
   ovShow(`<h1 style="font-size:min(13vh,68px)">${w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</h1>${isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>'}<button class="b alt" onclick="leaveRoom()">Leave</button>`)
  }else if((H.st=='lobby'||!H.st)&&S.mode!='lobby'&&S.mode!='menu'){S.mode='lobby';S.gm=0;S.rn=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent='';lobbyUI(1)}}
+function fastPos(p){
+ const r=rem[p.peer];if(!r)return;const q=p.presence,now=performance.now();
+ r.tx=q.x||0;r.ty=q.y||0;r.vx=q.vx||0;r.vy=q.vy||0;r.ts=now;
+ r.snaps.push({t:now,x:r.tx,y:r.ty,vx:r.vx,vy:r.vy,face:q.f||1,g:q.g,it:r.it,alive:r.alive});
+ if(r.snaps.length>8)r.snaps.shift()}
 function board(){
  const b=$('board');if(S.mode!='play'&&S.mode!='over'){if(lastBoard){b.innerHTML='';lastBoard=''}return}
  const h=peers.map(p=>{const q=p.isMe?ME:rem[p.peer]||{alive:true,it:0};const nm=p.isMe?name:q.nm||'Player';const c=(p.isMe?ME.ci:q.ci)||0;
