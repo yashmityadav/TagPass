@@ -38,7 +38,7 @@ input::placeholder{color:#8a94c4}
 #qr img, #qr canvas{width:104px!important;height:104px!important;display:block;margin:0 auto}
 #rot{display:none;position:fixed;inset:0;z-index:99;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}
 @media (orientation:portrait) and (pointer:coarse){#rot{display:flex}}
-#lob{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}#lob>div{min-width:150px}#qrw{width:116px;height:116px;margin:4px auto 0}
+#ov.fit{overflow:hidden;justify-content:center}#lobw{display:flex;flex-direction:column;align-items:center;gap:10px;transform-origin:center center}#lob{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}#lob>div{min-width:150px}#qrw{width:116px;height:116px;margin:4px auto 0}
 @media (max-height:480px){#lobh,#lobp{display:none}#lob{flex-wrap:nowrap;gap:22px}#ov{padding:8px;gap:6px}#qr{width:96px;height:96px;min-width:96px;min-height:96px;padding:4px}#qr img,#qr canvas{width:88px!important;height:88px!important}#qrw{width:96px;height:96px}.b{font-size:22px;padding:8px 24px;min-width:170px}#ov p{font-size:15px}input{font-size:18px}#timer{font-size:48px}}
 </style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
@@ -49,11 +49,11 @@ input::placeholder{color:#8a94c4}
 <div id="ov"></div>
 <div id="rot"><div style="font-size:64px">⟳</div>Rotate your phone to landscape to play</div>
 <script>
-var MUTE=false;
+var MUTE=false,QF=1;
 const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false,desynchronized:true}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
 const $=id=>document.getElementById(id);
 let W,H,DPR,sky;
-function rs(){W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1800000?1:area>1000000?1.15:1.35;DPR=Math.min(raw,maxDpr);cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
+function rs(){W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1800000?1:area>1000000?1.15:1.35;DPR=Math.min(raw,maxDpr)*QF;cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
 addEventListener('resize',rs);rs();
 if(matchMedia('(pointer:coarse)').matches)document.body.classList.add('t');
 
@@ -78,14 +78,14 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 /* ---------- state ---------- */
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0}}
-let room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,lastPub=0,hb=0,noIt=0,mi=0,mus=0,toastT,lastBoard='';
+let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,lastPub=0,hb=0,noIt=0,mi=0,mus=0,toastT,lastBoard='';
 const PHYS_HZ=60, NET_MS=33, REMOTE_INTERP_MS=70, REMOTE_EXTRAP_MS=120;
 const S={mode:'menu',gm:0,rn:0,rt:null,bt:null,ov:null,pn:{}},HS={st:'lobby',rn:0,gm:0,ord:[],rt:100},ME=mk(0,700,500);
 ME.alive=true;ME.pc=0;ME.pt=0;ME.ci=0;
 let cam={x:800,y:418,z:.6};
-const ovShow=h=>{ov.innerHTML=h;ov.classList.remove('off')},ovHide=()=>ov.classList.add('off');
+const ovShow=h=>{ov.innerHTML=h;ov.classList.remove('off','fit');ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>ov.classList.add('off');
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
-function lockLand(){try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
+function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
 function jingle(w){(w?[523,659,784,1047,1319]:[392,330,262,196]).forEach((f,i)=>setTimeout(()=>snd(f,.25,'square',.06),i*130))}
 function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play')return;const n=[0,3,7,10,12,10,7,3];snd(220*Math.pow(2,n[mi++%8]/12),.22,'triangle',.022);if(mi%2==0)snd(110*Math.pow(2,[0,0,5,7][(mi>>1)%4]/12),.3,'sine',.03)},230)}
 
@@ -98,7 +98,7 @@ async function enter(host){
  const nm=$('nm').value.trim().slice(0,12)||'Player';name=nm;try{localStorage.setItem('tagname',nm)}catch(e){}
  code=host?Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random()*32|0]).join(''):$('cd').value.trim().toUpperCase();
  if(code.length<3)return $('msg').textContent='Enter a room code first.';
- lockLand();startMusic();try{AC&&AC.resume&&AC.resume()}catch(e){}
+ try{document.activeElement&&document.activeElement.blur()}catch(e){}scrollTo(0,0);lockLand();startMusic();try{AC&&AC.resume&&AC.resume()}catch(e){}
  $('msg').textContent='Connecting…';
  const WS_URL=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host);
  const FAST={x:1,y:1,vx:1,vy:1,f:1,g:1};
@@ -125,15 +125,19 @@ async function enter(host){
  if(!host)setTimeout(()=>{if(room&&!S.hostSeen)leaveRoom('Room not found. Check the code.')},2600);
  sync()}
 function leaveRoom(msg){try{room&&room.leave()}catch(e){}room=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
+function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';const k=Math.min(1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);w.style.transform=k<1?'scale('+k+')':'none'}
+addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost;
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
  const list=`Players ${peers.length}/5${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
  const act=isHost?`<button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:'<p>Waiting for the host to start…</p>';
- if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;return}
+ if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
  S.lobCode=code;
- ovShow(`<h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><p id="lobp">Friends join with the code, or by scanning the QR.</p>`);
- if(window.QRCode)try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
+ ov.classList.add('fit');
+ if(window.QRCode)try{new QRCode($('qr'),{text:BASE+'?room='+code,width:104,height:104})}catch(e){}
+ fitLobby();setTimeout(fitLobby,150);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitLobby)}
 
 /* ---------- net ---------- */
 let lastSent={};
@@ -247,7 +251,8 @@ document.addEventListener('visibilitychange',()=>{last=performance.now();acc=0})
 function frame(n){
  requestAnimationFrame(frame);
  let dt=Math.min(.05,(n-last)/1000);last=n;time+=dt;
- if(S.mode=='play'){acc+=dt;while(acc>=1/PHYS_HZ){upd(1/PHYS_HZ);acc-=1/PHYS_HZ}hostTick(dt);if(isHost)tleft=HS.rt;
+ emaDt=emaDt*.95+dt*.05;if(emaDt>.03&&time-lastQ>4&&QF>.6){QF=Math.max(.6,QF-.15);lastQ=time;rs()}
+ if(S.mode=='play'){acc+=dt;let ns=0;while(acc>=1/PHYS_HZ&&ns++<6){upd(1/PHYS_HZ);acc-=1/PHYS_HZ}if(acc>1/PHYS_HZ)acc=0;hostTick(dt);if(isHost)tleft=HS.rt;
   const many=!S.H||!S.H.ord||S.H.ord.length>1;if(!many)tleft=100;
   const timerText=many?String(Math.ceil(Math.max(0,tleft))):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
  const t=performance.now(),renderT=t-REMOTE_INTERP_MS;
@@ -274,8 +279,11 @@ function frame(n){
 }
  shake=Math.max(0,shake-dt*3);
  
- camUpd(dt);draw()}
+ const ax=ME.x,ay=ME.y,al=Math.min(1,acc*PHYS_HZ);
+ if(S.mode=='play'&&ME.alive&&ME.px!==undefined&&Math.abs(ax-ME.px)<80&&Math.abs(ay-ME.py)<80){ME.x=ME.px+(ax-ME.px)*al;ME.y=ME.py+(ay-ME.py)*al}
+ camUpd(dt);draw();ME.x=ax;ME.y=ay}
 function upd(dt){
+ ME.px=ME.x;ME.py=ME.y;
  if(cd>0){cd-=dt;const n=cd>.4?Math.ceil((cd-.4)/.6):0;if(n!==cdS){cdS=n;snd(n>0?520:880,.12,'square',.05)}if(ME.alive)step(ME,{},dt);return}
  if(!ME.alive)return;
  step(ME,human(),dt);ME.pt-=dt;pub();
