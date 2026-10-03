@@ -43,6 +43,14 @@ input::placeholder{color:#8a94c4}
 @media (orientation:portrait) and (pointer:coarse){#rot{display:flex}}
 #ov.fit{overflow:hidden;justify-content:center}#lobw{display:flex;flex-direction:column;align-items:center;gap:10px;transform-origin:center center}#lob{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}#lob>div{min-width:150px}#qrw{width:116px;height:116px;margin:4px auto 0}
 @media (max-height:480px){#lobh,#lobp{display:none}#lob{flex-wrap:nowrap;gap:22px}#ov{padding:8px;gap:6px}#qr{width:96px;height:96px;min-width:96px;min-height:96px;padding:4px}#qr img,#qr canvas{width:88px!important;height:88px!important}#qrw{width:96px;height:96px}.b{font-size:22px;padding:8px 24px;min-width:170px}#ov p{font-size:15px}input{font-size:18px}#timer{font-size:48px}}
+.b.sm{font-size:20px;padding:10px 18px;min-width:0;box-shadow:0 5px 0 #1552a8}
+#pubw{display:flex;flex-direction:column;align-items:center;gap:10px}
+#pcnt{font-size:min(8vh,40px);line-height:1;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill;text-shadow:0 3px 0 #1b2a6b}
+#pslots{display:flex;flex-direction:column;gap:6px}
+.slot{display:flex;align-items:center;gap:10px;font-size:20px;min-width:240px;padding:5px 16px;border-radius:12px;background:rgba(255,255,255,.16);text-align:left}
+.slot.e{opacity:.5;background:rgba(255,255,255,.06)}.slot.e .dot{background:transparent;animation:wt 1s infinite}
+@keyframes wt{50%{opacity:.25}}
+#pcd{font-size:22px;min-height:28px}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -88,7 +96,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,lastPub=0,hb=0,noIt=0,mi=0,mus=0,toastT,lastBoard='';
-const PHYS_HZ=60,NET_S=.0155,INTERP_MIN=50,INTERP_MAX=170,EXTRAP_MS=150;
+const PHYS_HZ=60,NET_S=.0155,INTERP_MIN=50,INTERP_MAX=170,EXTRAP_MS=150,PUB_SIZE=5;   /* PUB_SIZE: players needed before a public match starts */
 const S={mode:'menu',gm:0,rn:0,rt:null,bt:null,ov:null,pn:{}},HS={st:'lobby',rn:0,gm:0,ord:[],rt:100},ME=mk(0,700,500);
 ME.alive=true;ME.pc=0;ME.pt=0;ME.ci=0;
 let cam={x:800,y:418,z:.6};
@@ -100,17 +108,19 @@ function jingle(w){(w?[523,659,784,1047,1319]:[392,330,262,196]).forEach((f,i)=>
 function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play')return;const n=[0,3,7,10,12,10,7,3];snd(220*Math.pow(2,n[mi++%8]/12),.22,'triangle',.022);if(mi%2==0)snd(110*Math.pow(2,[0,0,5,7][(mi>>1)%4]/12),.3,'sine',.03)},230)}
 
 /* ---------- screens ---------- */
-function menu(msg){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
+function menu(msg){S.mode='menu';S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<h1>TAG</h1><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b" onclick="enter(1)">Create room</button><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt" style="min-width:120px" onclick="enter(0)">Join</button></div><p id="msg">${msg||'2 to 5 players. Whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p>`)}
+ ovShow(`<h1>TAG</h1><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b" onclick="enterPublic()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div><div class="row"><button class="b alt sm" onclick="enter(1)">Create room</button><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:160px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><p id="msg">${msg||'Tap PLAY for a public match of '+PUB_SIZE+', or make a private room for friends. Whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p>`);fetchStats()}
 async function enter(host){if(S.joining)return;S.joining=1;try{await enter0(host)}finally{S.joining=0}}
-async function enter0(host){
- const nm=$('nm').value.trim().slice(0,12)||'Player';name=nm;try{localStorage.setItem('tagname',nm)}catch(e){}
- code=host?Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random()*32|0]).join(''):$('cd').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
- if(code.length<3)return $('msg').textContent='Enter a room code first.';
+async function enterPublic(){if(S.joining)return;S.joining=1;try{await enter0(0,1)}finally{S.joining=0}}
+function playAgain(){leaveRoom();enterPublic()}
+async function enter0(host,pub){
+ const nmEl=$('nm'),nm=((nmEl?nmEl.value:name)||'').trim().slice(0,12)||'Player';name=nm;try{localStorage.setItem('tagname',nm)}catch(e){}
+ code=pub?'':host?Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random()*32|0]).join(''):$('cd').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+ if(!pub&&code.length<3)return $('msg').textContent='Enter a room code first.';
  try{document.activeElement&&document.activeElement.blur()}catch(e){}scrollTo(0,0);lockLand();startMusic();try{AC&&AC.resume&&AC.resume()}catch(e){}
- $('msg').textContent='Connecting…';
+ $('msg').textContent=pub?'Finding a match…':'Connecting…';
  const WS_URL=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host);
  const FAST={x:1,y:1,vx:1,vy:1,f:1,g:1,ts:1};
  const rm={join(nm,wait){return new Promise((res,rej)=>{let ws,done=0,ok=0,myid='',cbs=[],pcb=[],pl=[],lastRx=Date.now(),hbT=0,to=0;
@@ -122,11 +132,11 @@ async function enter0(host){
   /* apply one presence patch: slow keys (state) -> full sync first, fast keys (movement) -> snapshot */
   const upd=(id,patch)=>{const p=find(id);if(!p||!patch)return;let slow=0,fast=0;for(const k in patch){p.presence[k]=patch[k];if(FAST[k])fast=1;else slow=1}
    if(slow)cbs.forEach(f=>f({peers:pl}));if(fast&&!p.isMe)pcb.forEach(f=>f(p))};
-  ws.onopen=()=>{ws.send(JSON.stringify({t:'join',room:nm}));hbT=setInterval(()=>{if(ws.readyState!=1)return;if(Date.now()-lastRx>10000){ws.close();return}ws.send('{"t":"hb"}')},3000)};
+  ws.onopen=()=>{ws.send(JSON.stringify(nm?{t:'join',room:nm}:{t:'quick'}));hbT=setInterval(()=>{if(ws.readyState!=1)return;if(Date.now()-lastRx>10000){ws.close();return}ws.send('{"t":"hb"}')},3000)};
   ws.onmessage=e=>{lastRx=Date.now();let m;try{m=JSON.parse(e.data)}catch(x){return}
    if(m.t=='hb')return;
    if(m.t=='b'){if(m.u)for(const e of m.u)if(e[0]!=myid)upd(e[0],e[1])}
-   else if(m.t=='hello'){myid=m.id;ok=1;done=1;clearTimeout(to);res(R)}
+   else if(m.t=='hello'){myid=m.id;R.n=m.n|0;ok=1;done=1;clearTimeout(to);res(R)}
    else if(m.t=='full'){pl=m.peers.map(p=>({peer:p.id,presence:p.p,isMe:p.id==myid,sameTab:true,kind:'viewer'}));cbs.forEach(f=>f({peers:pl}))}
    else if(m.t=='u')upd(m.id,m.p)
    else if(m.t=='j'){pl.push({peer:m.id,presence:m.p,isMe:m.id==myid,sameTab:true,kind:'viewer'});cbs.forEach(f=>f({peers:pl}))}
@@ -136,20 +146,22 @@ async function enter0(host){
   ws.onclose=()=>{clearInterval(hbT);clearTimeout(to);if(!ok)fail('closed');else if(room===R)leaveRoom('Disconnected from the server.')}})}};
  let jerr=null;
  for(let at=0;at<3&&!room;at++){
-  try{room=await rm.join('tag-'+code.toLowerCase(),at?25000:12000);jerr=null}
+  try{room=await rm.join(pub?null:'tag-'+code.toLowerCase(),at?25000:12000);jerr=null}
   catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
  if(!room){const c=jerr&&jerr.code;return menu(c=='full'?'Room is full (5 players max).':c=='bad'?'Invalid room code.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
+ if(pub){host=room.n===0;code=''}S.pub=pub?1:0;S.lastN=null;S.psig='';S.mf=0;S.mfGo=0;S.mc=0;
  isHost=!!host;S.gm=0;S.rn=0;S.pn={};S.hostSeen=0;S.cset=0;ME.alive=true;ME.it=0;
  if(host){Object.assign(HS,{st:'lobby',rn:0,gm:0,ord:[]});S.hostSeen=1}
  room.presence({nm:name,t0:Date.now(),host:host?1:0,st:host?'lobby':null,x:0,y:0,alive:true,it:false});
  room.onPeers(sync);room.onPos(fastPos);S.mode='lobby';$('leave').style.display='block';
- if(!host)setTimeout(()=>{if(room&&!S.hostSeen)leaveRoom('Room not found. Check the code.')},6000);
+ if(!host)setTimeout(()=>{if(room&&!S.hostSeen){if(S.pub){leaveRoom();enterPublic()}else leaveRoom('Room not found. Check the code.')}},6000);
  sync()}
 addEventListener('pagehide',()=>{try{room&&room.leave()}catch(e){}});
 function leaveRoom(msg){try{room&&room.leave()}catch(e){}room=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';const k=Math.min(1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);w.style.transform=k<1?'scale('+k+')':'none'}
 addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){
+ if(S.pub)return pubUI(f);
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost;
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
  const list=`Players ${peers.length}/5${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
@@ -163,6 +175,28 @@ function lobbyUI(f){
  const shown=()=>{fitLobby();requestAnimationFrame(()=>requestAnimationFrame(()=>{if($('lobw'))ov.style.opacity='1'}))};
  fitLobby();setTimeout(shown,400);
  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(shown,60))}
+
+/* ---------- public lobby ---------- */
+function pubUI(f){
+ const ps=peers.slice().sort((a,b)=>(a.presence.t0||1e15)-(b.presence.t0||1e15)||(a.peer<b.peer?-1:1)),n=ps.length,full=n>=PUB_SIZE;
+ const sig=ps.map(p=>p.peer+(p.presence.nm||'')+(p.presence.ci||0)).join(),live=!ov.classList.contains('off')&&$('pubw');
+ if(!f&&live&&S.psig===sig)return;S.psig=sig;
+ if(S.lastN!=null&&n>S.lastN)snd(660,.09,'square',.04,200);S.lastN=n;
+ let sl='';for(let i=0;i<PUB_SIZE;i++){const p=ps[i];sl+=p?`<div class="slot"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.isMe?' (you)':''}</div>`:'<div class="slot e"><span class="dot"></span>Searching…</div>'}
+ const head=(full?'Match found!':'Finding players…')+' <span style="opacity:.8">'+n+'/'+PUB_SIZE+'</span>';
+ if(live&&!f){$('pcnt').innerHTML=head;$('pslots').innerHTML=sl;const c=$('pcd');if(c&&!full)c.textContent='Waiting for more players…';fitLobby();return}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="pubw"><div id="pcnt">${head}</div><div id="pslots">${sl}</div><div id="pcd">${full?'Starting…':'Waiting for more players…'}</div></div><button class="b alt sm" onclick="leaveRoom()">Cancel</button></div>`);
+ ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(fitLobby,30))}
+/* full lobby -> 3s countdown on every screen; the host's client then starts the match (if someone left meanwhile it just resets) */
+function lobbyTick(){
+ if(!room)return;
+ if(peers.length<PUB_SIZE){S.mf=0;S.mfGo=0;S.mc=0;return}
+ const now=performance.now();if(!S.mf)S.mf=now;
+ const left=3-(now-S.mf)/1000,c=Math.ceil(left),e=$('pcd'),t=left>0?'Starting in '+c+'…':'Starting…';
+ if(e&&e.textContent!==t)e.textContent=t;
+ if(left>0&&S.mc!==c){S.mc=c;snd(520,.1,'square',.05)}
+ if(left<=0&&isHost&&!S.mfGo){S.mfGo=1;hostStart()}}
+function fetchStats(){if(window.TAG_WS)return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.json()).then(d=>{const e=$('onl');if(e&&S.mode=='menu'&&d.online>0)e.textContent=d.online+' online'+(d.waiting?' · '+d.waiting+' waiting for a match':'')}).catch(()=>{})}catch(e){}}
 
 /* ---------- net ---------- */
 let lastSent={};
@@ -184,7 +218,7 @@ function sync(){
  if(myId&&byT.findIndex(p=>p.peer==myId)>=5)return leaveRoom('Room is full (5 players max).');
  const h=peers.find(p=>p.presence.host==1&&p.peer!=myId);
  if(h)S.hostSeen=1;
- if(!h&&!isHost&&S.hostSeen&&peers[0]&&peers[0].peer==myId){isHost=true;Object.assign(HS,{st:'lobby',rn:0,gm:0,ord:[]});room.presence({host:1,st:'lobby',ord:[]});S.mode='lobby';S.gm=0;ME.alive=true;ME.it=0}
+ if(!h&&!isHost&&S.hostSeen&&peers[0]&&peers[0].peer==myId){isHost=true;Object.assign(HS,{st:'lobby',rn:0,gm:0,ord:[]});room.presence({host:1,st:'lobby',ord:[]});S.mode='lobby';S.gm=0;S.rn=0;S.mf=0;S.mfGo=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent=''}
  if(me&&me.presence.ci==null&&!S.cset){S.cset=1;const used=all.map(p=>p.presence.ci).filter(c=>c!=null);let c=0;while(used.includes(c))c++;ME.ci=c;room.presence({ci:c})}
  else if(me&&me.presence.ci!=null)ME.ci=me.presence.ci;
  const seen={},now=performance.now();
@@ -216,7 +250,7 @@ function apply(H){
   if(H.loser==myId){ME.alive=false;ME.it=0;pub(1);document.body.classList.remove('pl')}
  }else if(H.st=='over'&&S.ov!==H.gm+':'+S.rn){S.ov=H.gm+':'+S.rn;S.mode='over';document.body.classList.remove('pl');
   const mine=H.win==myId,w=mine?name:(rem[H.win]?rem[H.win].nm:'');jingle(mine);
-  ovShow(`<h1 style="font-size:min(13vh,68px)">${w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</h1>${isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>'}<button class="b alt" onclick="leaveRoom()">Leave</button>`)
+  ovShow(`<h1 style="font-size:min(13vh,68px)">${w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</h1>${S.pub?'<button class="b" onclick="playAgain()">Play again</button>':(isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>')}<button class="b alt" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>`)
  }else if((H.st=='lobby'||!H.st)&&S.mode!='lobby'&&S.mode!='menu'){S.mode='lobby';S.gm=0;S.rn=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent='';lobbyUI(1)}}
 function fastPos(p){
  const r=rem[p.peer];if(!r)return;const q=p.presence;if(typeof q.ts!=='number')return;
@@ -317,6 +351,7 @@ function frame(n){
   if(room&&ME.alive&&cd<=0){netAcc+=dt;if(netAcc>=NET_S){netAcc=Math.min(netAcc-NET_S,NET_S*.5);pub(0,n-acc*1000)}}else netAcc=0;   /* fixed 30Hz send, stamped with simulation time */
   const many=!S.H||!S.H.ord||S.H.ord.length>1;if(!many)tleft=100;
   const timerText=many?String(Math.ceil(Math.max(0,tleft))):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
+ if(S.mode=='lobby'&&S.pub)lobbyTick();
  const t=performance.now();for(const k in rem)stepRemote(rem[k],t,dt);
  if(parts.length){
  let w=0;

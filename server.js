@@ -35,6 +35,12 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
     return res.end('ok');
   }
+  if (url === '/stats') {
+    let waiting = 0;
+    for (const r of rooms.values()) if (r.pub && r.st === 'lobby') waiting += r.size;
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ online: wss.clients.size, waiting }));
+  }
   if (url === '/favicon.ico') { res.writeHead(204); return res.end(); }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
   try { if (fs.statSync(FILE).mtimeMs !== mtime) loadHtml(); } catch {}
@@ -155,32 +161,53 @@ wss.on('connection', (ws, req) => {
 
     if (m.t === 'hb') { if (ws.readyState === 1) ws.send('{"t":"hb"}'); return; }
 
-    // ---- join ----
+    // ---- join / quick match ----
+    const mkRoom = (name, pub) => {
+      const r = new Map();
+      r.name = name; r.pend = new Map(); r.hostId = null; r.hadHost = false;
+      r.pub = !!pub; r.st = pub ? 'lobby' : null;
+      rooms.set(name, r);
+      return r;
+    };
+    const joinRoom = (r) => {
+      const others = [...r].map(([oid, c]) => ({ id: oid, p: c.pres }));
+      const mine = { ws, pres: {} };
+      r.set(id, mine);
+      room = r;
+      // n = how many players were already here (0 => you are first, so you become host)
+      ws.send(JSON.stringify({ t: 'hello', id, n: others.length, pub: !!r.pub }));
+      ws.send(JSON.stringify({ t: 'full', peers: others.concat({ id, p: mine.pres }) }));
+      const j = JSON.stringify({ t: 'j', id, p: mine.pres });
+      for (const [oid, c] of r) if (oid !== id) send(c.ws, j);
+    };
+
     if (m.t === 'join' && !room) {
       if (typeof m.room !== 'string' || !/^tag-[a-z0-9]{3,6}$/.test(m.room)) {
         send(ws, '{"t":"err","e":"bad"}'); return ws.close();
       }
       let r = rooms.get(m.room);
-      if (!r) {
-        r = new Map();
-        r.name = m.room;
-        r.pend = new Map();
-        r.hostId = null;
-        rooms.set(m.room, r);
-      }
+      if (r && r.pub) { send(ws, '{"t":"err","e":"bad"}'); return ws.close(); }   // public rooms are matchmaking-only
+      if (!r) r = mkRoom(m.room, false);
       if (r.size >= MAX_ROOM) {
         send(ws, '{"t":"err","e":"full"}'); return ws.close();
       }
+      return joinRoom(r);
+    }
 
-      const others = [...r].map(([oid, c]) => ({ id: oid, p: c.pres }));
-      const mine = { ws, pres: {} };
-      r.set(id, mine);
-      room = r;
-      ws.send(JSON.stringify({ t: 'hello', id }));
-      ws.send(JSON.stringify({ t: 'full', peers: others.concat({ id, p: mine.pres }) }));
-      const j = JSON.stringify({ t: 'j', id, p: mine.pres });
-      for (const [oid, c] of r) if (oid !== id) send(c.ws, j);
-      return;
+    if (m.t === 'quick' && !room) {
+      // Fullest public lobby that has not started yet; otherwise open a fresh one.
+      let best = null;
+      for (const r of rooms.values()) {
+        if (!r.pub || r.size >= MAX_ROOM || r.st !== 'lobby') continue;
+        if (r.hostId === null && r.hadHost) continue;           // host just left, room is re-electing
+        if (!best || r.size > best.size) best = r;
+      }
+      if (!best) {
+        let name;
+        do { name = 'tag-p' + Math.random().toString(36).slice(2, 7); } while (rooms.has(name));
+        best = mkRoom(name, true);
+      }
+      return joinRoom(best);
     }
 
     // ---- presence / state ----
@@ -190,7 +217,7 @@ wss.on('connection', (ws, req) => {
       if (!me) return;
 
       // First client to claim host while the room has none becomes the host.
-      if (m.p.host === 1 && room.hostId === null) room.hostId = id;
+      if (m.p.host === 1 && room.hostId === null) { room.hostId = id; room.hadHost = true; }
       const isHost = room.hostId === id;
 
       const patch = {};
@@ -200,6 +227,7 @@ wss.on('connection', (ws, req) => {
         if (HOSTKEYS.has(k) && !isHost) continue;                      // only the host drives game state
         const v = clean(k, m.p[k]);
         if (v === undefined) continue;
+        if (k === 'st' && isHost && typeof v === 'string') room.st = v;
         me.pres[k] = v;
         patch[k] = v;
         any = true;
