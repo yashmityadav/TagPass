@@ -1,15 +1,35 @@
-// Tag multiplayer server: static index.html + WebSocket room relay.
+// Tag multiplayer server — FULLY SERVER-AUTHORITATIVE.
+// The server owns: physics, positions, tagging, the round timer, eliminations, lobbies and matchmaking.
+// Clients only send their key presses (inputs) and render what the server tells them.
+// => a background tab / frozen phone / laggy host can never pause or alter the match for anyone else,
+//    and nobody can teleport, speed-hack, fake a tag or touch the timer.
 // Run: npm install && npm start
 'use strict';
 const http = require('http'), fs = require('fs'), path = require('path');
 const zlib = require('zlib'), crypto = require('crypto');
+const { performance } = require('perf_hooks');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const MAX_ROOM = 5;
-const FLUSH_MS = 20;          // position batches go out ~50x/s (clients send ~60x/s: smoother remote players, more precise tags)
+
+/* ---------------- tunables ---------------- */
+const MAX_ROOM = 5;            // players per room
+const PUB_SIZE = 5;            // public match starts when this many are waiting
 const MAX_CONN_PER_IP = 12;
-const rooms = new Map();
+const TICK_MS = 1000 / 60;     // simulation rate (must match the client's PHYS_HZ = 60)
+const DT = 1 / 60;
+const SNAP_EVERY = 1;          // send a snapshot every N ticks (1 = 60/s, 2 = 30/s)
+const ROUND_S = +process.env.TAG_ROUND_S || 100;           // seconds per round
+const CD_MS = 2200;            // 3-2-1-GO countdown before each round
+const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
+const BETWEEN_MS = 3200;       // pause after someone is eliminated
+const LOBBY_GO_MS = 3000;      // public lobby full -> match starts after this
+const LOCK_MS = 1200;          // the player who just passed the tag can't take it straight back
+const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
+const STALL_MS = 150;          // wait this long for a late input packet before treating the player as idle
+const QCAP = 12;               // max queued inputs per player (anti speed-hack: input rate is capped at 60/s)
+
+const rooms = new Map();       // key -> room   (private: the room code, public: 'p-xxxx')
 
 /* ---------------- static file (cached + gzipped; reloaded automatically if it changes on disk) ---------------- */
 const FILE = path.join(__dirname, 'index.html');
@@ -30,14 +50,13 @@ loadHtml();
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
 
-  // Health check (use as Render "Health Check Path" and for uptime pingers).
   if (url === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
     return res.end('ok');
   }
   if (url === '/stats') {
     let waiting = 0;
-    for (const r of rooms.values()) if (r.pub && r.st === 'lobby') waiting += r.size;
+    for (const r of rooms.values()) if (r.pub && r.st === 'lobby') waiting += r.players.size;
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ online: wss.clients.size, waiting }));
   }
@@ -64,214 +83,369 @@ const server = http.createServer((req, res) => {
   res.end(req.method === 'HEAD' ? undefined : body);
 });
 
-// Render's proxy keeps connections alive; make sure Node doesn't close them first (avoids sporadic 502s).
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 
-const wss = new WebSocketServer({ server, maxPayload: 8192, perMessageDeflate: false });
+const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: false });
 
-/* ---------------- presence validation ---------------- */
-const FAST = new Set(['x', 'y', 'vx', 'vy', 'f', 'g', 'ts']);               // high-rate keys, batched
-const HOSTKEYS = new Set(['st', 'gm', 'rn', 'ord', 'first', 'loser', 'win', 'rt']); // only the room host may write
-const NUM = new Set(['x', 'y', 'vx', 'vy', 'f', 'g', 't0', 'host', 'ci', 'rt', 'gm', 'rn', 'ts']);
+/* ---------------- world (identical to the client's copy) ---------------- */
+const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
+const PL = [[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a => ({ x: a[0], y: a[1], w: a[2], h: a[1] == 800 ? 36 : 14 }));
+const RAMP = [], CRATE = [{ x: 1383, y: 487, w: 26, h: 25 }, { x: 1409, y: 487, w: 26, h: 25 }, { x: 1409, y: 461, w: 26, h: 26 }];
+[[555, 630, 20, 6.1], [1357, 287, 6, 5.9]].forEach(r => { for (let i = 0; i < r[2]; i++) RAMP.push({ x: r[0] + i * 10, y: r[1] + r[3] * (i + .5), w: 10, h: 14 }); });
+const SOL = PL.concat(RAMP, CRATE);
 
-function clean(k, v) {
-  if (v === null) return null;
-  if (NUM.has(k)) return typeof v === 'number' && isFinite(v) && Math.abs(v) < 1e13 ? v : undefined;
-  switch (k) {
-    case 'nm': return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 12) : undefined;
-    case 'st': return typeof v === 'string' && v.length <= 8 ? v : undefined;
-    case 'first': case 'loser': case 'win':
-      return typeof v === 'string' && v.length <= 16 ? v : undefined;
-    case 'it': case 'alive':
-      return typeof v === 'boolean' || v === 0 || v === 1 ? v : undefined;
-    case 'ord':
-      return Array.isArray(v) && v.length <= MAX_ROOM && v.every(s => typeof s === 'string' && s.length <= 16) ? v : undefined;
-    case 'pn':
-      return v && typeof v === 'object' && typeof v.to === 'string' && v.to.length <= 16 &&
-        typeof v.n === 'number' && isFinite(v.n) ? { to: v.to, n: v.n } : undefined;
+/* One physics step. MUST stay numerically identical to the client's step() (the client uses it for prediction). */
+function step(p, inp, dt) {
+  const m = p.it ? 1.07 : 1, MAX = 340 * m;
+  const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
+  if (ax) { const turn = Math.sign(p.vx) == -ax ? 1.8 : 1; p.vx += ax * (p.g ? 3000 : 2000) * turn * dt; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); p.face = ax; }
+  else { const f = (p.g ? 2800 : 500) * dt; p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f; }
+  const jp = inp.j && !p.pj; p.pj = !!inp.j; if (jp) p.buf = .13; else p.buf -= dt;
+  p.coy = p.g ? .1 : p.coy - dt;
+  if (p.buf > 0 && p.coy > 0) { p.vy = -840; p.buf = p.coy = 0; p.g = 0; p.cut = 0; }
+  if (!inp.j && p.vy < -260 && !p.cut) { p.vy *= .45; p.cut = 1; }
+  if (inp.d && p.g) p.drop = .22; p.drop -= dt;
+  p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);
+  const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
+  const was = p.g; p.x += p.vx * dt;
+  if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
+  for (const q of SOL) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
+  p.g = 0; p.y += p.vy * dt;
+  for (const q of SOL) if (ov(q)) {
+    if (p.vy >= 0) { p.y = q.y - PH; p.vy = 0; p.g = 1; }
+    else { const l = p.x + PW - q.x, r = q.x + q.w - p.x; if (Math.min(l, r) < 10) p.x += l < r ? -l : r; else { p.y = q.y + q.h; p.vy = 0; } }
   }
-  return undefined; // unknown key -> dropped
+}
+const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
+
+/* ---------------- helpers ---------------- */
+const rnd = n => Math.random() * n | 0;
+const r4 = v => Math.round(v * 1e4) / 1e4;
+const r2 = v => Math.round(v * 100) / 100;
+const hex = n => crypto.randomBytes(n).toString('hex');
+const now = () => performance.now();
+
+function cleanName(v) {
+  const s = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 12) : '';
+  return s || 'Player';
 }
 
 function send(ws, s, droppable) {
-  if (ws.readyState !== 1) return;
+  if (!ws || ws.readyState !== 1) return;
   if (ws.bufferedAmount > 1048576) { ws.terminate(); return; }          // hopelessly backed up
-  if (droppable && ws.bufferedAmount > 65536) return;                   // skip stale positions on slow links
+  if (droppable && ws.bufferedAmount > 65536) return;                   // skip stale snapshots on slow links
   ws.send(s);
 }
+const sendP = (p, s, drop) => { if (p.ws) send(p.ws, s, drop); };
+const bcast = (r, s, drop) => { for (const p of r.players.values()) sendP(p, s, drop); };
 
-/* ---------------- batched position relay ---------------- */
-const pendRooms = new Set();
-setInterval(() => {
-  for (const r of pendRooms) {
-    if (!r.pend.size) continue;
-    if (r.size > 1) {
-      const u = [];
-      for (const [pid, p] of r.pend) u.push([pid, p]);
-      const out = JSON.stringify({ t: 'b', u });
-      for (const c of r.values()) send(c.ws, out, true);
-    }
-    r.pend.clear();
+/* ---------------- rooms ---------------- */
+function mkRoom(key, pub) {
+  const r = {
+    key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
+    ord: [], rn: 0, gm: 0, practice: false, first: null,
+    loser: null, ln: null, win: null, wn: null,
+    lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null
+  };
+  rooms.set(key, r);
+  return r;
+}
+
+function newPlayer(nm, ci) {
+  return {
+    id: hex(4), tk: hex(12), ws: null, nm, ci,
+    q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0,
+    alive: false, it: 0, rs: 0,
+    x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1
+  };
+}
+
+function bcastRoom(r) {
+  const t = now();
+  bcast(r, JSON.stringify({
+    t: 'room', code: r.pub ? '' : r.key, pub: r.pub ? 1 : 0, st: r.st, host: r.hostId,
+    rn: r.rn, gm: r.gm, practice: r.practice ? 1 : 0, first: r.first,
+    loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
+    lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
+    pl: [...r.players.values()].map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
+  }));
+}
+
+function updateLobbyGo(r, t) {
+  if (!r.pub || r.st !== 'lobby') return;
+  if (r.players.size >= PUB_SIZE) { if (!r.lobbyGo) r.lobbyGo = t + LOBBY_GO_MS; }
+  else r.lobbyGo = 0;
+}
+
+function spawn(p, k, t) {
+  p.x = 690 + k * 45; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
+  p.rs++; p.q.length = 0; p.lastCmd = t;
+}
+
+function aliveIds(r) {
+  return r.ord.filter(id => { const p = r.players.get(id); return p && p.alive; });
+}
+
+function startRound(r, ids, t) {
+  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice();
+  const first = ids[rnd(ids.length)]; r.first = first;
+  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t); p.alive = true; p.it = id === first ? 1 : 0; });
+  for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
+  r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
+  bcastRoom(r);
+}
+
+function startMatch(r, t) {
+  const ids = [...r.players.keys()].slice(0, MAX_ROOM);
+  if (!ids.length) return;
+  r.gm = 1 + rnd(999999999); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0;
+  startRound(r, ids, t);
+}
+
+function finish(r, id) {
+  const p = id && r.players.get(id);
+  r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.lobbyGo = 0;
+  for (const q of r.players.values()) q.it = 0;
+  bcastRoom(r);
+}
+
+function toLobby(r) {
+  r.st = 'lobby'; r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
+  for (const p of r.players.values()) { p.alive = false; p.it = 0; p.q.length = 0; }
+  updateLobbyGo(r, now());
+  bcastRoom(r);
+}
+
+function expire(r, t, holder) {
+  r.loser = holder.id; r.ln = holder.nm; holder.alive = false; holder.it = 0;
+  r.st = 'between'; r.betweenEnd = t + BETWEEN_MS;
+  bcastRoom(r);
+}
+
+function removePlayer(r, p, t) {
+  if (r.players.get(p.id) !== p) return;
+  r.players.delete(p.id);
+  if (!r.players.size) { rooms.delete(r.key); return; }
+  if (r.hostId === p.id) r.hostId = r.pub ? null : r.players.keys().next().value;   // oldest remaining player hosts
+  if (r.st === 'lobby') updateLobbyGo(r, t);
+  else if (r.st === 'play' && p.alive) {
+    const al = aliveIds(r);
+    if (!r.practice && al.length < 2) { finish(r, al[0]); return; }
+    if (p.it && al.length) { const nh = r.players.get(al[rnd(al.length)]); if (nh) { nh.it = 1; r.lk = null; } }
   }
-  pendRooms.clear();
-}, FLUSH_MS);
+  bcastRoom(r);
+}
+
+/* ---------------- simulation ---------------- */
+// Returns the input bit-mask to apply this tick, or -1 = "wait, the next input packet is probably in flight".
+function consume(p, t) {
+  const c = p.q.shift();
+  if (c) { p.lastSeq = c.s; p.lastCmd = t; return c.b; }
+  if (t - p.lastCmd < STALL_MS) return -1;   // short wait keeps us in lock-step with the client's prediction
+  return 0;                                    // client is silent (hidden tab / lost signal): stand still, but keep playing
+}
+
+function simRoom(r, t) {
+  const cd = r.st === 'play' && t < r.cdEnd;
+  for (const p of r.players.values()) {
+    if (!p.alive) continue;
+    let b = consume(p, t);
+    if (b === -1) continue;
+    if (cd) b = 0;
+    step(p, { l: b & 1, r: b & 2, j: b & 4, d: b & 8 }, DT);
+    if (p.y > WH + 200) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.rs++; }
+  }
+
+  if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
+  if (r.st !== 'play' || cd) return;
+
+  let holder = null;
+  for (const p of r.players.values()) if (p.alive && p.it) { holder = p; break; }
+  if (!holder) {   // safety net: there must always be exactly one holder
+    const al = aliveIds(r);
+    if (al.length) { holder = r.players.get(al[rnd(al.length)]); holder.it = 1; }
+  }
+  if (!holder) return;
+
+  // the passer can't take the tag straight back until they've separated (or 1.2 s passed)
+  if (r.lk) {
+    const a = r.players.get(r.lk.from), b = r.players.get(r.lk.to);
+    if (!a || !b || t > r.lk.until || !hit(a, b, -8)) r.lk = null;
+  }
+  if (t >= r.tagFrom) {
+    for (const q of r.players.values()) {
+      if (!q.alive || q.it || q === holder) continue;
+      if (!hit(holder, q, 3)) continue;                                   // real overlap only, never from a distance
+      if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
+      holder.it = 0; q.it = 1;
+      r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS };
+      bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id }));
+      holder = q;
+      break;
+    }
+  }
+  if (!r.practice && t >= r.deadline) expire(r, t, holder);
+}
+
+function snapshot(r, t, tt) {
+  const arr = [];
+  for (const p of r.players.values()) if (p.alive) arr.push([p.id, r2(p.x), r2(p.y), r2(p.vx), r2(p.vy), p.face, p.g ? 1 : 0, p.it ? 1 : 0]);
+  const cd = Math.max(0, (r.cdEnd - t) / 1000);
+  const tl = r.practice ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
+  const head = '{"t":"s","ts":' + tt.toFixed(1) + ',"tl":' + tl + ',"cd":' + cd.toFixed(2) + ',"p":' + JSON.stringify(arr);
+  for (const p of r.players.values()) {
+    if (!p.ws) continue;
+    // full state of the receiver, used for client-side prediction + reconciliation
+    const a = p.alive ? ',"a":' + JSON.stringify({ x: r4(p.x), y: r4(p.y), vx: r4(p.vx), vy: r4(p.vy), g: p.g ? 1 : 0, coy: r4(p.coy), buf: r4(p.buf), pj: p.pj, cut: p.cut ? 1 : 0, drop: r4(p.drop), face: p.face, it: p.it ? 1 : 0, q: p.lastSeq, rs: p.rs }) : '';
+    send(p.ws, head + a + '}', true);
+  }
+}
+
+let tickN = 0, nextTick = now();
+function tickAll(t, tt) {
+  tickN++;
+  for (const r of rooms.values()) {
+    for (const p of r.players.values()) if (p.dc && t - p.dc > GRACE_MS) removePlayer(r, p, t);   // dropped and never came back
+    if (!rooms.has(r.key)) continue;
+    if (r.st === 'lobby') {
+      if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (r.players.size >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
+    } else if (r.st === 'play' || r.st === 'between') {
+      simRoom(r, t);
+      if (rooms.has(r.key) && (r.st === 'play' || r.st === 'between') && tickN % SNAP_EVERY === 0) snapshot(r, t, tt);
+    }
+  }
+}
+setInterval(() => {
+  const t = now();
+  let n = 0;
+  while (nextTick <= t && n++ < 5) { tickAll(t, nextTick); nextTick += TICK_MS; }   // fixed 60 Hz, catches up after a hiccup
+  if (nextTick < t - 100) nextTick = t;
+}, 4);
 
 /* ---------------- connections ---------------- */
 const perIp = new Map();
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 wss.on('connection', (ws, req) => {
-  try { req.socket.setNoDelay(true); } catch {}   // no Nagle: send small packets immediately
+  try { req.socket.setNoDelay(true); } catch {}
 
   const ip = String((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
   const n = (perIp.get(ip) || 0) + 1;
   if (n > MAX_CONN_PER_IP) { ws.close(); return; }
   perIp.set(ip, n);
 
-  const id = Math.random().toString(36).slice(2, 10);
   ws.lastSeen = Date.now();
   ws.on('pong', () => { ws.lastSeen = Date.now(); });
 
-  let room = null, count = 0, winStart = Date.now();
+  let r = null, p = null, cnt = 0, winStart = Date.now();
+  const err = e => { send(ws, '{"t":"err","e":"' + e + '"}'); ws.close(); };
 
-  const leave = () => {
-    if (!room) return;
-    room.delete(id);
-    room.pend.delete(id);
-    if (room.hostId === id) room.hostId = null;
-
-    if (!room.size) {
-      rooms.delete(room.name);
-    } else {
-      const out = JSON.stringify({ t: 'l', id });
-      for (const c of room.values()) send(c.ws, out);
-    }
-    room = null;
+  const attach = (rr, pp) => {
+    r = rr; p = pp; pp.ws = ws; pp.dc = 0;
+    send(ws, JSON.stringify({ t: 'hello', id: pp.id, tk: pp.tk, rk: rr.key, code: rr.pub ? '' : rr.key, pub: rr.pub ? 1 : 0 }));
+  };
+  const addPlayer = (rr, nm) => {
+    const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++;
+    const pp = newPlayer(nm, ci);
+    rr.players.set(pp.id, pp);
+    if (!rr.pub && !rr.hostId) rr.hostId = pp.id;
+    attach(rr, pp);
+    updateLobbyGo(rr, now());
+    bcastRoom(rr);
   };
 
   ws.on('message', (raw, isBinary) => {
-    const now = Date.now();
-    ws.lastSeen = now;
-    if (now - winStart >= 1000) { winStart = now; count = 0; }
-    if (++count > 150 || isBinary) return;      // per-connection rate limit
+    const t = Date.now();
+    ws.lastSeen = t;
+    if (t - winStart >= 1000) { winStart = t; cnt = 0; }
+    if (++cnt > 200 || isBinary) return;           // per-connection rate limit
 
     let m;
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object') return;
 
-    if (m.t === 'hb') { if (ws.readyState === 1) ws.send('{"t":"hb"}'); return; }
-
-    // ---- join / quick match ----
-    const mkRoom = (name, pub) => {
-      const r = new Map();
-      r.name = name; r.pend = new Map(); r.hostId = null; r.hadHost = false;
-      r.pub = !!pub; r.st = pub ? 'lobby' : null;
-      rooms.set(name, r);
-      return r;
-    };
-    const joinRoom = (r) => {
-      const others = [...r].map(([oid, c]) => ({ id: oid, p: c.pres }));
-      const mine = { ws, pres: {} };
-      r.set(id, mine);
-      room = r;
-      // n = how many players were already here (0 => you are first, so you become host)
-      ws.send(JSON.stringify({ t: 'hello', id, n: others.length, pub: !!r.pub }));
-      ws.send(JSON.stringify({ t: 'full', peers: others.concat({ id, p: mine.pres }) }));
-      const j = JSON.stringify({ t: 'j', id, p: mine.pres });
-      for (const [oid, c] of r) if (oid !== id) send(c.ws, j);
-    };
-
-    if (m.t === 'join' && !room) {
-      if (typeof m.room !== 'string' || !/^tag-[a-z0-9]{3,6}$/.test(m.room)) {
-        send(ws, '{"t":"err","e":"bad"}'); return ws.close();
+    /* ---- inputs: the ONLY thing a client controls ---- */
+    if (m.t === 'in') {
+      if (!p || !p.alive || !Array.isArray(m.c)) return;
+      const c = m.c;
+      for (let i = 0; i < c.length && i < 8; i++) {
+        const e = c[i];
+        if (!Array.isArray(e)) continue;
+        const s = e[0], b = e[1];
+        if (!Number.isInteger(s) || !Number.isInteger(b) || b < 0 || b > 15 || s <= p.lastIn) continue;
+        p.lastIn = s;
+        if (p.q.length < QCAP) p.q.push({ s, b });
       }
-      let r = rooms.get(m.room);
-      if (r && r.pub) { send(ws, '{"t":"err","e":"bad"}'); return ws.close(); }   // public rooms are matchmaking-only
-      if (!r) r = mkRoom(m.room, false);
-      if (r.size >= MAX_ROOM) {
-        send(ws, '{"t":"err","e":"full"}'); return ws.close();
+      return;
+    }
+    if (m.t === 'hb') { send(ws, '{"t":"hb"}'); return; }
+
+    /* ---- joining ---- */
+    if (!r) {
+      if (m.t === 'create') {
+        let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
+        return addPlayer(mkRoom(code, false), cleanName(m.nm));
       }
-      return joinRoom(r);
+      if (m.t === 'join') {
+        const code = typeof m.code === 'string' ? m.code.toUpperCase() : '';
+        if (!/^[A-Z0-9]{3,6}$/.test(code)) return err('bad');
+        const rr = rooms.get(code);
+        if (!rr || rr.pub) return err('nf');
+        if (rr.players.size >= MAX_ROOM) return err('full');
+        return addPlayer(rr, cleanName(m.nm));          // joining a running match = spectate until the next game
+      }
+      if (m.t === 'quick') {
+        let best = null;
+        for (const rr of rooms.values()) {
+          if (!rr.pub || rr.st !== 'lobby' || rr.players.size >= PUB_SIZE) continue;
+          if (!best || rr.players.size > best.players.size) best = rr;   // fullest lobby first
+        }
+        if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true); }
+        return addPlayer(best, cleanName(m.nm));
+      }
+      if (m.t === 'resume') {                           // reconnect after a dropped connection
+        const rr = typeof m.rk === 'string' && m.rk.length <= 16 ? rooms.get(m.rk) : null;
+        const pp = rr && typeof m.id === 'string' ? rr.players.get(m.id) : null;
+        if (!pp || pp.tk !== m.tk) return err('gone');
+        if (pp.ws && pp.ws !== ws) { const old = pp.ws; pp.ws = null; try { old.terminate(); } catch {} }
+        attach(rr, pp);
+        bcastRoom(rr);
+      }
+      return;
     }
 
-    if (m.t === 'quick' && !room) {
-      // Fullest public lobby that has not started yet; otherwise open a fresh one.
-      let best = null;
-      for (const r of rooms.values()) {
-        if (!r.pub || r.size >= MAX_ROOM || r.st !== 'lobby') continue;
-        if (r.hostId === null && r.hadHost) continue;           // host just left, room is re-electing
-        if (!best || r.size > best.size) best = r;
-      }
-      if (!best) {
-        let name;
-        do { name = 'tag-p' + Math.random().toString(36).slice(2, 7); } while (rooms.has(name));
-        best = mkRoom(name, true);
-      }
-      return joinRoom(best);
-    }
-
-    // ---- presence / state ----
-    if (m.t === 'pres' && room && m.p && typeof m.p === 'object' && !Array.isArray(m.p)) {
-      if (raw.length > 1500) return;
-      const me = room.get(id);
-      if (!me) return;
-
-      // First client to claim host while the room has none becomes the host.
-      if (m.p.host === 1 && room.hostId === null) { room.hostId = id; room.hadHost = true; }
-      const isHost = room.hostId === id;
-
-      const patch = {};
-      let slow = false, any = false;
-      for (const k of Object.keys(m.p)) {
-        if (k === 'host' && m.p.host === 1 && !isHost) continue;      // rejected host claim
-        if (HOSTKEYS.has(k) && !isHost) continue;                      // only the host drives game state
-        const v = clean(k, m.p[k]);
-        if (v === undefined) continue;
-        if (k === 'st' && isHost && typeof v === 'string') room.st = v;
-        me.pres[k] = v;
-        patch[k] = v;
-        any = true;
-        if (!FAST.has(k)) slow = true;
-      }
-      if (!any) return;
-
-      if (!slow) {
-        // Pure movement: merge into the next batch instead of relaying immediately.
-        const prev = room.pend.get(id);
-        room.pend.set(id, prev ? Object.assign(prev, patch) : patch);
-        pendRooms.add(room);
-        return;
-      }
-
-      // State change: send now (carrying any queued movement so ordering is preserved).
-      const q = room.pend.get(id);
-      if (q) { Object.assign(q, patch); room.pend.delete(id); Object.assign(patch, q); }
-      const out = JSON.stringify({ t: 'u', id, p: patch });
-      for (const c of room.values()) send(c.ws, out);
-    }
+    /* ---- room controls ---- */
+    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) return startMatch(r, now());
+    if (m.t === 'lobby' && r.st === 'over' && !r.pub && r.hostId === p.id) return toLobby(r);
   });
 
   ws.on('close', () => {
     const left = (perIp.get(ip) || 1) - 1;
     if (left <= 0) perIp.delete(ip); else perIp.set(ip, left);
-    leave();
+    if (r && p && p.ws === ws) {
+      p.ws = null;
+      if (r.st === 'play' || r.st === 'between') p.dc = now();   // keep the character for a while: the player may just be reconnecting
+      else removePlayer(r, p, now());
+    }
   });
 
   ws.on('error', () => {});
 });
 
-// Drop dead connections (closed browser, lost signal, frozen tab) so ghost players disappear.
+// Drop dead sockets (closed browser, lost signal) and keep proxies from idling the connection out.
 setInterval(() => {
-  const now = Date.now();
+  const t = Date.now();
   for (const ws of wss.clients) {
-    if (now - ws.lastSeen > 15000) { ws.terminate(); continue; }
+    if (t - ws.lastSeen > 15000) { ws.terminate(); continue; }
     try { ws.ping(); } catch {}
+    send(ws, '{"t":"hb"}');
   }
 }, 5000);
 
 /* ---------------- lifecycle ---------------- */
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('Tag multiplayer server running on port ' + PORT);
+  console.log('Tag multiplayer server (authoritative) running on port ' + PORT);
 });
 
 function shutdown() {
