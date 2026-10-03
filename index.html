@@ -138,8 +138,8 @@ async function enter0(kind){
  let o=null,jerr=null;
  for(let at=0;at<3&&!o;at++){
   try{o=await openWS(WS_URL,first,at?25000:12000)}
-  catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'||e.code=='nf'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
- if(!o){const c=jerr&&jerr.code;return menu(c=='full'?'Room is full (5 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
+  catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'||e.code=='nf'||e.code=='busy'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
+ if(!o){const c=jerr&&jerr.code;return menu(c=='full'?'Room is full (5 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':c=='busy'?'Servers are busy right now. Try again in a minute.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
  const h=o.hello;myId=h.id;
  room={ws:o.ws,id:h.id,tk:h.tk,rk:h.rk,url:WS_URL,left:0,rx:Date.now(),resuming:0};
  code=h.code||'';resetMatch();S.pub=h.pub?1:0;S.mode='lobby';$('leave').style.display='block';
@@ -155,8 +155,10 @@ async function tryResume(){
   catch(e){if(e&&e.code=='gone')break;await new Promise(r=>setTimeout(r,700))}}
  R.resuming=0;if(room===R)leaveRoom('Disconnected from the server.')}
 setInterval(()=>{if(room&&!room.left&&room.ws&&room.ws.readyState==1&&Date.now()-room.rx>12000)try{room.ws.close()}catch(e){}},3000);   /* silent socket watchdog */
-addEventListener('pagehide',()=>{try{if(room){room.left=1;room.ws.close()}}catch(e){}});
-function leaveRoom(msg){if(room){room.left=1;try{room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
+addEventListener('pagehide',()=>{try{if(room){room.left=1;netSend({t:'leave'});room.ws.close()}}catch(e){}});
+/* coming back to a tab (phones often kill sockets in the background): reconnect at once instead of waiting for a watchdog */
+document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
+function leaveRoom(msg){if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';const k=Math.min(1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);w.style.transform=k<1?'scale('+k+')':'none'}
 addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){

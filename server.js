@@ -15,7 +15,11 @@ const PORT = process.env.PORT || 3000;
 /* ---------------- tunables ---------------- */
 const MAX_ROOM = 5;            // players per room
 const PUB_SIZE = 5;            // public match starts when this many are waiting
-const MAX_CONN_PER_IP = 12;
+const MAX_CONN_PER_IP = 20;
+const MAX_CLIENTS = 2000;       // hard caps so a flood can never exhaust memory
+const MAX_ROOMS = 600;
+const LOBBY_GRACE_MS = 10000;  // a dropped connection in a lobby / results screen is held this long (brief blips don't kick you)
+const ALLOWED = (process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);   // optional: restrict which sites may open a socket
 const TICK_MS = 1000 / 60;     // simulation rate (must match the client's PHYS_HZ = 60)
 const DT = 1 / 60;
 const SNAP_EVERY = 1;          // send a snapshot every N ticks (1 = 60/s, 2 = 30/s)
@@ -71,7 +75,9 @@ const server = http.createServer((req, res) => {
     'ETag': etag,
     'Vary': 'Accept-Encoding',
     'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'no-referrer'
+    'Referrer-Policy': 'no-referrer',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'"
   };
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
 
@@ -148,14 +154,15 @@ function mkRoom(key, pub) {
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null
   };
-  rooms.set(key, r);
-  return r;
+  return r;   // not registered yet: addPlayer() registers it together with its first player, so an empty room can never be left behind
 }
+
+const conn = r => { let n = 0; for (const p of r.players.values()) if (p.ws) n++; return n; };
 
 function newPlayer(nm, ci) {
   return {
     id: hex(4), tk: hex(12), ws: null, nm, ci,
-    q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0,
+    q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1
   };
@@ -168,13 +175,13 @@ function bcastRoom(r) {
     rn: r.rn, gm: r.gm, practice: r.practice ? 1 : 0, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
-    pl: [...r.players.values()].map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
+    pl: [...r.players.values()].filter(p => p.ws || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
   }));
 }
 
 function updateLobbyGo(r, t) {
   if (!r.pub || r.st !== 'lobby') return;
-  if (r.players.size >= PUB_SIZE) { if (!r.lobbyGo) r.lobbyGo = t + LOBBY_GO_MS; }
+  if (conn(r) >= PUB_SIZE) { if (!r.lobbyGo) r.lobbyGo = t + LOBBY_GO_MS; }
   else r.lobbyGo = 0;
 }
 
@@ -197,7 +204,7 @@ function startRound(r, ids, t) {
 }
 
 function startMatch(r, t) {
-  const ids = [...r.players.keys()].slice(0, MAX_ROOM);
+  const ids = [...r.players.values()].filter(p => p.ws).map(p => p.id).slice(0, MAX_ROOM);   // only players who are actually connected
   if (!ids.length) return;
   r.gm = 1 + rnd(999999999); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0;
   startRound(r, ids, t);
@@ -246,15 +253,20 @@ function consume(p, t) {
   return 0;                                    // client is silent (hidden tab / lost signal): stand still, but keep playing
 }
 
+function advance(p, b) {
+  step(p, { l: b & 1, r: b & 2, j: b & 4, d: b & 8 }, DT);
+  if (p.y > WH + 200) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.rs++; }
+}
+
 function simRoom(r, t) {
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
     if (!p.alive) continue;
     let b = consume(p, t);
-    if (b === -1) continue;
-    if (cd) b = 0;
-    step(p, { l: b & 1, r: b & 2, j: b & 4, d: b & 8 }, DT);
-    if (p.y > WH + 200) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.rs++; }
+    if (b === -1) { p.credit = Math.min(8, p.credit + 1); continue; }   // a late packet: the player earns ONE catch-up step (never more than 1 per missed tick)
+    advance(p, cd ? 0 : b);
+    // after a lag spike a burst of inputs arrives: spend earned credit to catch up. A flooding cheater has no credit, so they can't go faster than 60 steps/s.
+    while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(p, cd ? 0 : c2.b); } }
   }
 
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
@@ -306,10 +318,10 @@ let tickN = 0, nextTick = now();
 function tickAll(t, tt) {
   tickN++;
   for (const r of rooms.values()) {
-    for (const p of r.players.values()) if (p.dc && t - p.dc > GRACE_MS) removePlayer(r, p, t);   // dropped and never came back
+    for (const p of [...r.players.values()]) if (p.dc && t - p.dc > p.gr) removePlayer(r, p, t);   // dropped and never came back
     if (!rooms.has(r.key)) continue;
     if (r.st === 'lobby') {
-      if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (r.players.size >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
+      if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (conn(r) >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
     } else if (r.st === 'play' || r.st === 'between') {
       simRoom(r, t);
       if (rooms.has(r.key) && (r.st === 'play' || r.st === 'between') && tickN % SNAP_EVERY === 0) snapshot(r, t, tt);
@@ -329,8 +341,10 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 wss.on('connection', (ws, req) => {
   try { req.socket.setNoDelay(true); } catch {}
+  if (wss.clients.size > MAX_CLIENTS) { ws.close(); return; }
+  if (ALLOWED.length) { const o = String(req.headers.origin || ''); if (!ALLOWED.some(a => o === a || o.endsWith('.' + a.replace(/^https?:\/\//, '')))) { ws.close(); return; } }
 
-  const ip = String((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
+  const ip = String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   const n = (perIp.get(ip) || 0) + 1;
   if (n > MAX_CONN_PER_IP) { ws.close(); return; }
   perIp.set(ip, n);
@@ -346,6 +360,12 @@ wss.on('connection', (ws, req) => {
     send(ws, JSON.stringify({ t: 'hello', id: pp.id, tk: pp.tk, rk: rr.key, code: rr.pub ? '' : rr.key, pub: rr.pub ? 1 : 0 }));
   };
   const addPlayer = (rr, nm) => {
+    if (rr.players.size >= MAX_ROOM && rr.st === 'lobby') {                  // a disconnected "ghost" never blocks a real player from a lobby
+      for (const q of rr.players.values()) if (!q.ws) { rr.players.delete(q.id); break; }
+    }
+    if (rr.players.size >= MAX_ROOM) return err('full');                       // single choke point: no path can exceed the room limit
+    if (rr.pub && rr.st !== 'lobby') return err('full');                       // public matches in progress are closed
+    if (!rooms.has(rr.key)) rooms.set(rr.key, rr);
     const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++;
     const pp = newPlayer(nm, ci);
     rr.players.set(pp.id, pp);
@@ -380,10 +400,12 @@ wss.on('connection', (ws, req) => {
       return;
     }
     if (m.t === 'hb') { send(ws, '{"t":"hb"}'); return; }
+    if (m.t === 'leave' && r && p) { removePlayer(r, p, now()); p.ws = null; r = null; p = null; return; }   // deliberate exit: no grace period
 
     /* ---- joining ---- */
     if (!r) {
       if (m.t === 'create') {
+        if (rooms.size >= MAX_ROOMS) return err('busy');
         let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
         return addPlayer(mkRoom(code, false), cleanName(m.nm));
       }
@@ -398,9 +420,10 @@ wss.on('connection', (ws, req) => {
       if (m.t === 'quick') {
         let best = null;
         for (const rr of rooms.values()) {
-          if (!rr.pub || rr.st !== 'lobby' || rr.players.size >= PUB_SIZE) continue;
-          if (!best || rr.players.size > best.players.size) best = rr;   // fullest lobby first
+          if (!rr.pub || rr.st !== 'lobby' || conn(rr) >= MAX_ROOM) continue;
+          if (!best || conn(rr) > conn(best)) best = rr;   // fullest lobby first
         }
+        if (!best && rooms.size >= MAX_ROOMS) return err('busy');
         if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true); }
         return addPlayer(best, cleanName(m.nm));
       }
@@ -424,9 +447,10 @@ wss.on('connection', (ws, req) => {
     const left = (perIp.get(ip) || 1) - 1;
     if (left <= 0) perIp.delete(ip); else perIp.set(ip, left);
     if (r && p && p.ws === ws) {
-      p.ws = null;
-      if (r.st === 'play' || r.st === 'between') p.dc = now();   // keep the character for a while: the player may just be reconnecting
-      else removePlayer(r, p, now());
+      p.ws = null; p.dc = now();                                  // keep the character for a while: the player may just be reconnecting
+      p.gr = (r.st === 'play' || r.st === 'between') ? GRACE_MS : LOBBY_GRACE_MS;
+      if (r.st === 'lobby') updateLobbyGo(r, now());              // a ghost never counts towards starting a match
+      bcastRoom(r);
     }
   });
 
@@ -442,6 +466,24 @@ setInterval(() => {
     send(ws, '{"t":"hb"}');
   }
 }, 5000);
+
+/* ---------------- housekeeping ---------------- */
+// Safety net: any room with nobody connected for a while is deleted, whatever state it is in.
+setInterval(() => {
+  const t = now();
+  for (const r of rooms.values()) {
+    if (!r.players.size) { rooms.delete(r.key); continue; }
+    if (conn(r)) { r.idle = 0; continue; }
+    if (!r.idle) r.idle = t;
+    else if (t - r.idle > GRACE_MS + 5000) rooms.delete(r.key);
+  }
+}, 10000).unref();
+
+// Render's free plan puts a service to sleep after ~15 min without traffic, which makes the next player wait ~1 min.
+// Pinging our own public URL counts as traffic. Disable with KEEPALIVE=0.
+if (process.env.RENDER_EXTERNAL_URL && process.env.KEEPALIVE !== '0' && typeof fetch === 'function') {
+  setInterval(() => { fetch(process.env.RENDER_EXTERNAL_URL + '/healthz').catch(() => {}); }, 10 * 60 * 1000).unref();
+}
 
 /* ---------------- lifecycle ---------------- */
 server.listen(PORT, '0.0.0.0', () => {
