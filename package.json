@@ -1,9 +1,19 @@
 {
   "name": "tag-game",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "dependencies": { "ws": "^8.18.0" },
-  "engines": { "node": ">=18" }
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.8",
+    "utf-8-validate": "^6.0.4"
+  }
 }

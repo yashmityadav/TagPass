@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#3d9bf7"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{--pink:#ff2d7a;--blue:#3d9bf7}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
@@ -65,7 +65,7 @@ input::placeholder{color:#8a94c4}
 if(window.CanvasRenderingContext2D&&!CanvasRenderingContext2D.prototype.roundRect)CanvasRenderingContext2D.prototype.roundRect=f;
 if(window.Path2D&&!Path2D.prototype.roundRect)Path2D.prototype.roundRect=f})();
 var MUTE=false,QF=1,QUIET=0;
-const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
+const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false,desynchronized:true}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
 const $=id=>document.getElementById(id);
 let W,H,DPR,sky;
 function rs(){W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1800000?1:area>1000000?1.15:area>600000?1.35:2;DPR=Math.min(raw,maxDpr)*QF;cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
@@ -84,7 +84,8 @@ let AC;function snd(f,d,t='square',v=.05,s=0){if(MUTE||QUIET)return;try{AC=AC||n
 
 /* ---------- input ---------- */
 const K={},T={};
-addEventListener('keydown',e=>{K[e.code]=1;if(e.code.startsWith('Arrow')||e.code=='Space')e.preventDefault()});
+const typing=e=>{const t=e.target;return t&&(t.tagName=='INPUT'||t.tagName=='TEXTAREA')};
+addEventListener('keydown',e=>{if(typing(e))return;K[e.code]=1;if(e.code.startsWith('Arrow')||e.code=='Space')e.preventDefault()});
 addEventListener('keyup',e=>K[e.code]=0);
 document.querySelectorAll('#tc button').forEach(b=>{const k=b.dataset.k,on=e=>{e.preventDefault();T[k]=1;b.classList.add('on')},off=e=>{T[k]=0;b.classList.remove('on')};b.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(n=>b.addEventListener(n,off))});
 addEventListener('blur',()=>{for(const k in K)K[k]=0;for(const k in T)T[k]=0;document.querySelectorAll('#tc button.on').forEach(b=>b.classList.remove('on'))});
@@ -108,7 +109,7 @@ function jingle(w){(w?[523,659,784,1047,1319]:[392,330,262,196]).forEach((f,i)=>
 function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play')return;const n=[0,3,7,10,12,10,7,3];snd(220*Math.pow(2,n[mi++%8]/12),.22,'triangle',.022);if(mi%2==0)snd(110*Math.pow(2,[0,0,5,7][(mi>>1)%4]/12),.3,'sine',.03)},230)}
 
 /* ---------- screens ---------- */
-function menu(msg){S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
+function menu(msg){warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
  ovShow(`<h1>TAG</h1><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b" onclick="enterPublic()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div><div class="row"><button class="b alt sm" onclick="enter(1)">Create room</button><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:160px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><p id="msg">${msg||'Tap PLAY for a public match of '+PUB_SIZE+', or make a private room for friends. Whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p>`);fetchStats()}
@@ -116,17 +117,24 @@ async function enter(host){if(S.joining)return;S.joining=1;try{await enter0(host
 async function enterPublic(){if(S.joining)return;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
 function playAgain(){leaveRoom();enterPublic()}
 /* open a socket and send the first message (quick / create / join / resume); resolves on the server's "hello". Later messages go to onMsg. */
+/* pre-warm: open the socket while the player is still typing their name, so pressing Play skips the TCP/TLS handshake (and wakes a sleeping server early) */
+let WARM=null,WARM_URL='';
+function warm(){if(WARM&&WARM.readyState<=1)return;
+ try{const u=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host),w=new WebSocket(u);WARM=w;WARM_URL=u;w.onerror=()=>{};w.onmessage=()=>{};w.onclose=()=>{if(WARM===w)WARM=null}}catch(e){WARM=null}}
+function takeWarm(url){const w=WARM;if(w&&w.readyState===1&&WARM_URL===url){WARM=null;return w}return null}
 function openWS(url,first,wait){return new Promise((resolve,reject)=>{
  let ws,done=0,to=0;
  const fail=c=>{if(done)return;done=1;clearTimeout(to);try{ws&&ws.close()}catch(e){}reject({code:c})};
- try{ws=new WebSocket(url)}catch(e){return reject({code:'ws'})}
+ const pre=takeWarm(url);
+ try{ws=pre||new WebSocket(url)}catch(e){return reject({code:'ws'})}
  to=setTimeout(()=>fail('timeout'),wait||12000);
  ws.onopen=()=>{try{ws.send(JSON.stringify(first))}catch(e){fail('send')}};
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(!done){if(m.t=='hello'){done=1;clearTimeout(to);resolve({ws,hello:m})}else if(m.t=='err')fail(m.e||'closed');return}
   onMsg(m,ws)};
  ws.onerror=()=>{if(!done)fail('connect')};
- ws.onclose=()=>{if(!done)fail('closed');else onClose(ws)}})}
+ ws.onclose=()=>{if(!done)fail('closed');else onClose(ws)};
+ if(pre)ws.onopen()})}
 async function enter0(kind){
  const nmEl=$('nm'),nm=((nmEl?nmEl.value:name)||'').trim().slice(0,12)||'Player';name=nm;try{localStorage.setItem('tagname',nm)}catch(e){}
  let jc='';
@@ -155,7 +163,7 @@ async function tryResume(){
   catch(e){if(e&&e.code=='gone')break;await new Promise(r=>setTimeout(r,700))}}
  R.resuming=0;if(room===R)leaveRoom('Disconnected from the server.')}
 setInterval(()=>{if(room&&!room.left&&room.ws&&room.ws.readyState==1&&Date.now()-room.rx>12000)try{room.ws.close()}catch(e){}},3000);   /* silent socket watchdog */
-addEventListener('pagehide',()=>{try{if(room){room.left=1;netSend({t:'leave'});room.ws.close()}}catch(e){}});
+addEventListener('pagehide',e=>{if(e.persisted)return;try{if(room){room.left=1;netSend({t:'leave'});room.ws.close()}}catch(x){}});
 /* coming back to a tab (phones often kill sockets in the background): reconnect at once instead of waiting for a watchdog */
 document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
 function leaveRoom(msg){if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
@@ -203,7 +211,7 @@ function toLobby(){netSend({t:'lobby'})}
 function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:INTERP_MIN+6,late:0,rt:null,has:0}}
 function onMsg(m,ws){
  if(!room||room.ws!==ws)return;room.rx=Date.now();
- switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break}}
+ switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
 function toLobbyView(){S.mode='lobby';S.rn=0;S.gm=0;S.rs=-1;PEND.length=0;OUT.length=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent='';lobbyUI(1)}
 function playView(m,meP){S.rn=m.rn;S.gm=m.gm;S.mode='play';ovHide();ME.alive=!!meP&&meP.al!==0;document.body.classList.toggle('pl',ME.alive)}
 function applyRoom(m){
