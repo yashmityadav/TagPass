@@ -7,7 +7,7 @@ const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
 const MAX_ROOM = 5;
-const FLUSH_MS = 33;          // position batches go out ~30x/s (fewer syscalls on the 0.1 CPU free tier)
+const FLUSH_MS = 20;          // position batches go out ~50x/s (clients send ~60x/s: smoother remote players, more precise tags)
 const MAX_CONN_PER_IP = 12;
 const rooms = new Map();
 

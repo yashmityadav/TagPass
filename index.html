@@ -88,10 +88,11 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,lastPub=0,hb=0,noIt=0,mi=0,mus=0,toastT,lastBoard='';
-const PHYS_HZ=60,NET_S=1/30,INTERP_MIN=80,INTERP_MAX=200,EXTRAP_MS=150;
+const PHYS_HZ=60,NET_S=.0155,INTERP_MIN=50,INTERP_MAX=170,EXTRAP_MS=150;
 const S={mode:'menu',gm:0,rn:0,rt:null,bt:null,ov:null,pn:{}},HS={st:'lobby',rn:0,gm:0,ord:[],rt:100},ME=mk(0,700,500);
 ME.alive=true;ME.pc=0;ME.pt=0;ME.ci=0;
 let cam={x:800,y:418,z:.6};
+const LK={},AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* LK: peers I just passed the tag to (can't re-tag them until we separate). AR: the glide of the arrow between heads */
 const ovShow=h=>{ov.innerHTML=h;ov.classList.remove('off','fit');ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>ov.classList.add('off');
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
@@ -191,17 +192,18 @@ function sync(){
   if(!r)r=rem[p.peer]={x:q.x||0,y:q.y||0,vx:q.vx||0,vy:q.vy||0,face:q.f||1,g:q.g,sq:1,it:0,alive:true,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:INTERP_MIN+20,late:0,rt:null,has:0};
   r.it=q.it?1:0;r.alive=q.alive!==false;r.nm=String(q.nm||'Player').slice(0,12);r.ci=q.ci||0;
   if(r.snaps.length){const l=r.snaps[r.snaps.length-1];l.it=r.it;l.alive=r.alive}
+  /* pn = {to:oldHolder,n}: that peer touched the holder and took the arrow. I just let go of it (no delay, but I can't take it straight back). */
   const pn=q.pn;if(pn&&pn.to==myId&&S.pn[p.peer]!==pn.n){S.pn[p.peer]=pn.n;
-   if(ME.alive&&!ME.it){ME.it=1;ME.pt=1;pub(1);shake=.5;burst(ME.x+15,ME.y+10,20,'#fff',380);snd(300,.2,'sawtooth',.05,200)}}});
+   if(ME.alive&&ME.it&&S.H&&S.H.st=='play'){ME.it=0;ME.dbl=0;LK[p.peer]=time;pub(1);shake=.3;burst(ME.x+15,ME.y+10,14,'#fff',300);snd(300,.2,'sawtooth',.05,200)}}});
  for(const k in rem)if(!seen[k])delete rem[k];
  const H=isHost?HS:(h?h.presence:null);
  if(H){S.H=H;apply(H)}
  if(S.mode=='lobby')lobbyUI();
  board()}
 function apply(H){
- if(H.gm&&H.gm!==S.gm){S.gm=H.gm;S.rn=0;S.ov=null;ME.alive=true;ME.it=0}
+ if(H.gm&&H.gm!==S.gm){S.gm=H.gm;S.rn=0;S.ov=null;ME.alive=true;ME.it=0;ME.pn=null;for(const k in LK)delete LK[k]}
  if(H.st=='play'){
-  if(H.rn!==S.rn){S.rn=H.rn;S.rt=H.rt;const k=(H.ord||[]).indexOf(myId);
+  if(H.rn!==S.rn){S.rn=H.rn;S.rt=H.rt;ME.pn=null;ME.dbl=0;AR.h=null;for(const k in LK)delete LK[k];const k=(H.ord||[]).indexOf(myId);
    if(k<0){ME.alive=false;ME.it=0}else{ME.alive=true;ME.x=690+k*45;ME.y=502;ME.vx=ME.vy=0;ME.it=H.first==myId?1:0;ME.pt=.3;pub(1)}
    if(!H.ord||H.ord.length>1)tleft=H.rt==null?100:H.rt;else tleft=100;
    cd=2.2;cdS=9;S.mode='play';ovHide();document.body.classList.toggle('pl',ME.alive);
@@ -219,11 +221,12 @@ function apply(H){
 function fastPos(p){
  const r=rem[p.peer];if(!r)return;const q=p.presence;if(typeof q.ts!=='number')return;
  const now=performance.now(),s=r.snaps,ts=q.ts,smp=now-ts;
+ r.lx=q.x||0;r.ly=q.y||0;r.lvx=q.vx||0;r.lvy=q.vy||0;r.lg=q.g;r.lt=now;   /* newest packet, not delayed by the interpolation buffer */
  /* clock offset = fastest observed transit (leaky minimum); lateness above it = jitter */
  if(r.off===null||Math.abs(smp-r.off)>1500){r.off=smp;r.late=0;r.rt=null;s.length=0}
  else if(smp<r.off)r.off=smp;else r.off+=(smp-r.off)*.02;
  const late=Math.max(0,smp-r.off);r.late=Math.max(late,r.late*.97);
- const tg=Math.min(INTERP_MAX,Math.max(INTERP_MIN,70+r.late*.8));r.dly+=(tg-r.dly)*(tg>r.dly?.25:.01);   /* adaptive jitter buffer */
+ const tg=Math.min(INTERP_MAX,Math.max(INTERP_MIN,42+r.late*.9));r.dly+=(tg-r.dly)*(tg>r.dly?.25:.01);   /* adaptive jitter buffer */
  if(s.length&&ts<=s[s.length-1].t)return;
  s.push({t:ts,x:q.x||0,y:q.y||0,vx:q.vx||0,vy:q.vy||0,face:q.f||1,g:q.g,it:r.it,alive:r.alive});
  if(s.length>24)s.shift();
@@ -251,8 +254,8 @@ function stepRemote(r,now,dt){
   else{const lead=Math.min(EXTRAP_MS,Math.max(0,rt-e.t))/1000;const ex=lead-lead*lead/(2*EXTRAP_MS/1000);tx=e.x+e.vx*ex;ty=e.g?e.y:e.y+e.vy*ex;vx=e.vx;vy=e.vy;face=e.face;g=e.g;it=e.it;alive=e.alive}
  }
  if(Math.abs(tx-r.x)>220||Math.abs(ty-r.y)>220){r.x=tx;r.y=ty}
- else{const k=1-Math.exp(-dt*50),cap=(Math.hypot(vx,vy)+260)*dt;let dx=(tx-r.x)*k,dy=(ty-r.y)*k;const m=Math.hypot(dx,dy);if(m>cap){dx*=cap/m;dy*=cap/m}r.x+=dx;r.y+=dy}   /* ~20ms low-pass + speed-capped catch-up: no visible snaps */
- r.vx=vx;r.vy=vy;r.face=face;r.g=g;r.it=it;r.alive=alive;
+ else{const k=1-Math.exp(-dt*60),cap=(Math.hypot(vx,vy)+260)*dt;let dx=(tx-r.x)*k,dy=(ty-r.y)*k;const m=Math.hypot(dx,dy);if(m>cap){dx*=cap/m;dy*=cap/m}r.x+=dx;r.y+=dy}   /* ~20ms low-pass + speed-capped catch-up: no visible snaps */
+ r.vx=vx;r.vy=vy;r.face=face;r.g=g;
  r.sq=r.g?1:(r.vy<-100?1.25:(r.vy>200?.85:1));
  if(r.g&&Math.abs(r.vx)>90&&r.alive&&S.mode=='play'){r.st-=dt;if(r.st<=0){r.st=.1;dust(r.x+15-Math.sign(r.vx)*8,r.y+PH,2)}}}
 function board(){
@@ -325,14 +328,36 @@ function frame(n){
  
  const ax=ME.x,ay=ME.y,al=Math.min(1,acc*PHYS_HZ);
  if(S.mode=='play'&&ME.alive&&ME.px!==undefined&&Math.abs(ax-ME.px)<80&&Math.abs(ay-ME.py)<80){ME.x=ME.px+(ax-ME.px)*al;ME.y=ME.py+(ay-ME.py)*al}
- camUpd(dt);draw();ME.x=ax;ME.y=ay}
+ arrowUpd(dt);camUpd(dt);draw();ME.x=ax;ME.y=ay}
 function upd(dt){
  ME.px=ME.x;ME.py=ME.y;
  if(cd>0){cd-=dt;const n=cd>.4?Math.ceil((cd-.4)/.6):0;if(n!==cdS){cdS=n;snd(n>0?520:880,.12,'square',.05)}if(ME.alive)step(ME,{},dt);return}
  if(!ME.alive)return;
  step(ME,human(),dt);ME.pt-=dt;
- if(ME.it&&ME.pt<=0&&S.H&&S.H.st=='play')for(const k in rem){const r=rem[k];if(!r.alive||r.it)continue;
-  if(ME.x<r.x+PW&&ME.x+PW>r.x&&ME.y<r.y+PH&&ME.y+PH>r.y){ME.it=0;ME.pn={to:k,n:++ME.pc};ME.pt=1;r.it=1;pub(1);shake=.5;burst(r.x+15,r.y+10,22,'#fff',380);snd(700,.18,'square',.07,-400);snd(300,.2,'sawtooth',.05,200);break}}}
+ if(S.H&&S.H.st=='play'){
+  if(!ME.it){
+   if(ME.pt<=0)for(const k in rem){const r=rem[k];if(!r.alive||!r.it||!r.has)continue;
+    if(LK[k]!==undefined){if(time-LK[k]>1.2||apart(r))delete LK[k];else continue}   /* I just gave them the arrow: wait until we've actually separated */
+    if(touching(r)){takeTag(k,r);break}}}
+  else{   /* rare: two holders at once (3+ players touching) -> the larger id yields, deterministically on every screen */
+   let o=null;for(const k in rem){const r=rem[k];if(r.alive&&r.it&&k<myId){o=k;break}}
+   if(o){ME.dbl=(ME.dbl||0)+dt;if(ME.dbl>.35){ME.dbl=0;ME.it=0;LK[o]=time;pub(1)}}else ME.dbl=0}}}
+/* ---- touch tests ---- */
+function fresh(r){if(!r.lt)return{x:r.x,y:r.y};const l=Math.min(.08,(performance.now()-r.lt)/1000);return{x:r.lx+r.lvx*l,y:r.lg?r.ly:r.ly+r.lvy*l}}
+function hit(a,b,pad){return a.x<b.x+PW-pad&&a.x+PW>b.x+pad&&a.y<b.y+PH-pad&&a.y+PH>b.y+pad}
+/* a tag needs real overlap both where I SEE them and where they most recently WERE (never a tag from a distance) */
+function touching(r){return hit(ME,r,2)&&hit(ME,fresh(r),2)}
+function apart(r){return !hit(ME,r,-8)&&!hit(ME,fresh(r),-8)}
+function takeTag(k,r){ME.it=1;ME.dbl=0;ME.pn={to:k,n:++ME.pc};pub(1);shake=.35;burst((ME.x+r.x)/2+15,(ME.y+r.y)/2+10,22,'#fff',380);snd(700,.18,'square',.07,-400);snd(300,.2,'sawtooth',.05,200)}
+/* the arrow keeps a decaying offset from its holder: it glides head-to-head on a hand-off but never trails behind a running player */
+function arrowUpd(dt){
+ let h=null;
+ if(S.mode=='play'||S.mode=='over'){if(ME.alive&&ME.it)h=ME;else for(const k in rem){const r=rem[k];if(r.alive&&r.it){h=r;break}}}
+ if(!h){AR.h=null;return}
+ const tx=h.x+PW/2,ty=h.y+PH;
+ if(AR.h&&AR.h!==h){AR.ox=AR.px-tx;AR.oy=AR.py-ty;AR.pop=1;if(Math.hypot(AR.ox,AR.oy)>650)AR.ox=AR.oy=0}
+ else if(!AR.h)AR.ox=AR.oy=0;
+ AR.h=h;const k=Math.exp(-dt*16);AR.ox*=k;AR.oy*=k;AR.px=tx+AR.ox;AR.py=ty+AR.oy;AR.pop=Math.max(0,AR.pop-dt*4)}
 function camUpd(dt){
  const fit=Math.min(W/1600,H/836),mx=fit*2.3;let tx=800,ty=418,tz=fit;
  const L=(ME.alive?[ME]:[]);
@@ -404,7 +429,7 @@ function draw(){
   const nm=p===ME?name:p.nm;
   cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80)});
  cx.setTransform(s,0,0,s,TX,TY);drawOps(FG);
- L.forEach(p=>{if(p.it){const P=piv(p),bob=Math.sin(time*7)*4;cx.setTransform(s,0,0,s,P[0],P[1]);cx.fillStyle='#fff';cx.strokeStyle='#dfe9ff';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();cx.moveTo(-16,-74+bob);cx.lineTo(16,-74+bob);cx.lineTo(0,-58+bob);cx.closePath();cx.fill();cx.stroke()}});
+ if(AR.h){const bob=Math.sin(time*7)*4,pk=1+AR.pop*.45;cx.setTransform(s*pk,0,0,s*pk,Math.round(TX+AR.px*s),Math.round(TY+AR.py*s+(-66+bob)*s));cx.fillStyle='#fff';cx.strokeStyle='#dfe9ff';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();cx.moveTo(-16,-8);cx.lineTo(16,-8);cx.lineTo(0,8);cx.closePath();cx.fill();cx.stroke()}
  if(S.mode=='play'&&cd>0){cx.setTransform(DPR,0,0,DPR,0,0);cx.font='bold '+Math.round(60+(cd%.6)*60)+'px "Lilita One",Impact';cx.textAlign='center';cx.strokeStyle='#1b2a6b';cx.lineWidth=6;cx.lineJoin='round';cx.fillStyle='#fff';const t=cd>.4?String(Math.ceil((cd-.4)/.6)):'GO!';cx.strokeText(t,W/2,H*.42);cx.fillText(t,W/2,H*.42)}
 }
 buildWorld();menu();requestAnimationFrame(frame);
