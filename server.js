@@ -35,6 +35,14 @@ const STALL_MS = 150;          // wait this long for a late input packet before 
 const LOBBY_IDLE_MS = +process.env.TAG_LOBBY_IDLE_MS || 10 * 60 * 1000;   // a seat in a public lobby is held at most this long (no permanent idlers)
 const QCAP = 12;               // max queued inputs per player (anti speed-hack: input rate is capped at 60/s)
 
+/* ---- abilities ---- */
+const DASH_V = 1000, DASH_T = 0.16, DASH_CD = 15;   // dash (everyone): speed px/s, duration s, cooldown s
+const AB_CD = 30;                                    // cooldown (s) of the ability each player picks before the match
+const FAKE_T = 5, SMOKE_T = 5, TRAP_T = 5;           // how long each effect lasts (s)
+const TRAP_W = 110, TRAP_IMM = 1;                    // trap width (px); its owner is immune for the first second so they can step off it
+const SLOW_K = 0.4, JUMP_K = 0.8;                    // speed / jump multipliers while standing in a trap
+const ABIL = new Set(['fake', 'smoke', 'trap']);
+
 const rooms = new Map();       // key -> room   (private: the room code, public: 'p-xxxx')
 
 /* ---------------- static file (cached + gzipped; reloaded automatically if it changes on disk) ---------------- */
@@ -107,16 +115,20 @@ const SOL = PL.concat(RAMP, CRATE);
 
 /* One physics step. MUST stay numerically identical to the client's step() (the client uses it for prediction). */
 function step(p, inp, dt) {
-  const m = p.it ? 1.07 : 1, MAX = 340 * m;
+  const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
-  if (ax) { const turn = Math.sign(p.vx) == -ax ? 1.8 : 1; p.vx += ax * (p.g ? 3000 : 2000) * turn * dt; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); p.face = ax; }
+  const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
+  if (p.dcd > 0) p.dcd -= dt;
+  if (ds && p.dcd <= .001 && p.dash <= 0) { p.dash = DASH_T; p.dcd = DASH_CD; p.dd = ax || p.face; p.face = p.dd; }
+  if (p.dash > 0) { p.dash -= dt; p.vx = p.dd * DASH_V; if (p.dash <= 0) { p.dash = 0; p.vx = p.dd * MAX; } }
+  else if (ax) { const turn = Math.sign(p.vx) == -ax ? 1.8 : 1; p.vx += ax * (p.g ? 3000 : 2000) * turn * dt; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); p.face = ax; }
   else { const f = (p.g ? 2800 : 500) * dt; p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f; }
   const jp = inp.j && !p.pj; p.pj = !!inp.j; if (jp) p.buf = .13; else p.buf -= dt;
   p.coy = p.g ? .1 : p.coy - dt;
-  if (p.buf > 0 && p.coy > 0) { p.vy = -840; p.buf = p.coy = 0; p.g = 0; p.cut = 0; }
+  if (p.buf > 0 && p.coy > 0) { p.vy = -840 * (p.slow ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
   if (!inp.j && p.vy < -260 && !p.cut) { p.vy *= .45; p.cut = 1; }
   if (inp.d && p.g) p.drop = .22; p.drop -= dt;
-  p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);
+  if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);   // air-dash: no gravity while dashing
   const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
   const was = p.g; p.x += p.vx * dt;
   if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
@@ -157,7 +169,8 @@ function mkRoom(key, pub) {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
     ord: [], rn: 0, gm: 0, practice: false, first: null,
     loser: null, ln: null, win: null, wn: null,
-    lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null
+    lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
+    dec: [], pj: [], sm: [], tr: [], fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
   };
   return r;   // not registered yet: addPlayer() registers it together with its first player, so an empty room can never be left behind
 }
@@ -169,7 +182,8 @@ function newPlayer(nm, ci) {
     id: hex(4), tk: hex(12), ws: null, nm, ci,
     q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
     alive: false, it: 0, rs: 0,
-    x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1
+    x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
+    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0      // dash / ability state
   };
 }
 
@@ -193,6 +207,7 @@ function updateLobbyGo(r, t) {
 function spawn(p, k, t) {
   p.x = 690 + k * 45; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0;   // every round starts with dash + ability ready
 }
 
 function aliveIds(r) {
@@ -200,7 +215,7 @@ function aliveIds(r) {
 }
 
 function startRound(r, ids, t) {
-  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice();
+  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r);
   const first = ids[rnd(ids.length)]; r.first = first;
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t); p.alive = true; p.it = id === first ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
@@ -217,13 +232,13 @@ function startMatch(r, t) {
 
 function finish(r, id) {
   const p = id && r.players.get(id);
-  r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.lobbyGo = 0;
+  r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.lobbyGo = 0; clearFx(r);
   for (const q of r.players.values()) q.it = 0;
   bcastRoom(r);
 }
 
 function toLobby(r) {
-  r.st = 'lobby'; r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
+  r.st = 'lobby'; clearFx(r); r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
   for (const p of r.players.values()) { p.alive = false; p.it = 0; p.q.length = 0; }
   updateLobbyGo(r, now());
   bcastRoom(r);
@@ -231,7 +246,7 @@ function toLobby(r) {
 
 function expire(r, t, holder) {
   r.loser = holder.id; r.ln = holder.nm; holder.alive = false; holder.it = 0;
-  r.st = 'between'; r.betweenEnd = t + BETWEEN_MS;
+  r.st = 'between'; r.betweenEnd = t + BETWEEN_MS; clearFx(r);
   bcastRoom(r);
 }
 
@@ -264,6 +279,64 @@ function destroyRoom(r) {
   r.players.clear();
 }
 
+/* ---------------- abilities ---------------- */
+function clearFx(r) { r.dec.length = 0; r.pj.length = 0; r.sm.length = 0; r.tr.length = 0; }
+
+// Is this (grounded) player standing in a trap? Must match the client's slowAt().
+function inTrap(r, p) {
+  if (!r.tr.length || !p.g) return 0;
+  for (const t of r.tr) {
+    if (t.o === p.id && TRAP_T - t.life < TRAP_IMM) continue;                       // the owner may step off their own trap
+    if (p.x + PW > t.x - TRAP_W / 2 && p.x < t.x + TRAP_W / 2 && Math.abs(p.y + PH - t.y) < 36) return 1;
+  }
+  return 0;
+}
+
+// The chosen ability was pressed (rising edge). The server owns the cooldown, so it can't be skipped.
+function useAbility(r, p) {
+  if (r.st !== 'play' || p.acd > 0) return;
+  const k = p.ab;
+  if (k === 'fake') {
+    r.dec.push({ id: 'd' + (++r.fxn), o: p.id, life: FAKE_T, x: p.x, y: p.y, vx: p.vx, vy: p.vy, g: p.g, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: p.face,
+      it: p.it, dir: p.face, stuck: 0, ps: false, dash: 0, dd: 1, dcd: 0, slow: 0 });
+  } else if (k === 'smoke') {
+    r.pj.push({ x: p.x + PW / 2, y: p.y + 8, vx: p.face * 520 + p.vx * .4, vy: -420, t: 0 });
+  } else if (k === 'trap') {
+    if (!p.g) return;                                                               // a trap needs floor under your feet (no cooldown is spent)
+    r.tr.push({ id: ++r.fxn, x: Math.round(p.x + PW / 2), y: Math.round(p.y + PH), o: p.id, life: TRAP_T });
+  } else return;
+  p.acd = AB_CD;
+  bcast(r, JSON.stringify({ t: 'abu', o: p.id, k }));
+}
+
+// Moves decoys / grenades and ages every effect (called once per tick while a round is running).
+function tickFx(r) {
+  for (let i = r.dec.length - 1; i >= 0; i--) {
+    const d = r.dec[i], o = r.players.get(d.o);
+    d.life -= DT; d.it = o && o.it ? 1 : 0;
+    step(d, { l: d.dir < 0 ? 1 : 0, r: d.dir > 0 ? 1 : 0, j: 0, d: 0, s: 0 }, DT);          // a decoy runs along using the real physics
+    if (Math.abs(d.vx) < 25) { if (++d.stuck > 10) { d.dir = -d.dir; d.stuck = 0; } } else d.stuck = 0;   // hit a wall: turn around
+    if (d.life <= 0 || d.y > WH + 100) r.dec.splice(i, 1);
+  }
+  for (let i = r.pj.length - 1; i >= 0; i--) {
+    const j = r.pj[i]; j.t += DT;
+    let boom = j.t > 1.4, hitSolid = false;
+    for (let s = 0; s < 4 && !boom; s++) {                                          // sub-steps: a fast grenade can't tunnel through a thin platform
+      const ox = j.x, oy = j.y, h = DT / 4;
+      j.vy = Math.min(1000, j.vy + 1500 * h); j.x += j.vx * h; j.y += j.vy * h;
+      if (j.x < LX || j.x > RX) { j.x = ox; j.vx = -j.vx * .4; }
+      for (const q of SOL) if (j.x > q.x && j.x < q.x + q.w && j.y > q.y && j.y < q.y + q.h) { j.x = ox; j.y = oy; boom = true; hitSolid = j.vy > 0; break; }   // landed on a floor (not a ceiling / side)
+      if (j.y > WH + 40) boom = true;
+    }
+    if (boom) {
+      r.pj.splice(i, 1);
+      r.sm.push({ id: ++r.fxn, x: j.x, y: Math.min(j.y, WH - 60) - (hitSolid ? 38 : 0), life: SMOKE_T });
+    }
+  }
+  for (let i = r.sm.length - 1; i >= 0; i--) if ((r.sm[i].life -= DT) <= 0) r.sm.splice(i, 1);
+  for (let i = r.tr.length - 1; i >= 0; i--) if ((r.tr[i].life -= DT) <= 0) r.tr.splice(i, 1);
+}
+
 /* ---------------- simulation ---------------- */
 // Returns the input bit-mask to apply this tick, or -1 = "wait, the next input packet is probably in flight".
 function consume(p, t) {
@@ -273,24 +346,30 @@ function consume(p, t) {
   return 0;                                    // client is silent (hidden tab / lost signal): stand still, but keep playing
 }
 
-function advance(p, b) {
-  step(p, { l: b & 1, r: b & 2, j: b & 4, d: b & 8 }, DT);
-  if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
+function advance(r, p, b) {
+  step(p, { l: b & 1, r: b & 2, j: b & 4, d: b & 8, s: b & 16 }, DT);
+  const ab = (b & 32) ? 1 : 0;                                                       // ability button: acts on the rising edge only
+  if (ab && !p.pa) useAbility(r, p);
+  p.pa = ab;
+  if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
 }
 
 function simRoom(r, t) {
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
     if (!p.alive) continue;
+    if (p.acd > 0) p.acd -= DT;                                           // ability cooldown
+    p.slow = inTrap(r, p);                                                // standing in a trap?
     let b = consume(p, t);
     if (b === -1) { p.credit = Math.min(8, p.credit + 1); continue; }   // a late packet: the player earns ONE catch-up step (never more than 1 per missed tick)
-    advance(p, cd ? 0 : b);
+    advance(r, p, cd ? 0 : b);
     // after a lag spike a burst of inputs arrives: spend earned credit to catch up. A flooding cheater has no credit, so they can't go faster than 60 steps/s.
-    while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(p, cd ? 0 : c2.b); } }
+    while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(r, p, cd ? 0 : c2.b); } }
   }
 
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
   if (r.st !== 'play' || cd) return;
+  tickFx(r);
 
   let holder = null;
   for (const p of r.players.values()) if (p.alive && p.it) { holder = p; break; }
@@ -317,6 +396,8 @@ function simRoom(r, t) {
       break;
     }
   }
+  // the arrow holder who runs into a decoy pops it (the holder's own decoys are ignored)
+  for (let i = r.dec.length - 1; i >= 0; i--) if (r.dec[i].o !== holder.id && hit(holder, r.dec[i], 3)) r.dec.splice(i, 1);
   if (!r.practice && t >= r.deadline) expire(r, t, holder);
 }
 
@@ -324,11 +405,16 @@ function snapshot(r, t, tt) {
   let arr = '';
   for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ']';
   const tl = r.practice ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
-  const head = '{"t":"s","ts":' + tt.toFixed(1) + ',"tl":' + tl + ',"cd":' + Math.max(0, (r.cdEnd - t) / 1000).toFixed(2) + ',"p":[' + arr + ']';
+  let fx = '';                                                           // ability effects (only when something is active)
+  if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
+  if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
+  if (r.sm.length) fx += ',"s":[' + r.sm.map(s => '[' + s.id + ',' + ri(s.x) + ',' + ri(s.y) + ',' + r1(s.life) + ']').join(',') + ']';
+  if (r.tr.length) fx += ',"tr":[' + r.tr.map(x => '[' + x.id + ',' + x.x + ',' + x.y + ',' + r1(x.life) + ',"' + x.o + '"]').join(',') + ']';
+  const head = '{"t":"s","ts":' + tt.toFixed(1) + ',"tl":' + tl + ',"cd":' + Math.max(0, (r.cdEnd - t) / 1000).toFixed(2) + ',"p":[' + arr + ']' + fx;
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
@@ -389,7 +475,7 @@ wss.on('connection', (ws, req) => {
 
   const attach = (rr, pp) => {
     r = rr; p = pp; pp.ws = ws; pp.dc = 0; ws.joined = 1;
-    send(ws, JSON.stringify({ t: 'hello', id: pp.id, tk: pp.tk, rk: rr.key, code: rr.pub ? '' : rr.key, pub: rr.pub ? 1 : 0 }));
+    send(ws, JSON.stringify({ t: 'hello', id: pp.id, tk: pp.tk, rk: rr.key, code: rr.pub ? '' : rr.key, pub: rr.pub ? 1 : 0, ab: pp.ab }));
   };
   const addPlayer = (rr, nm) => {
     if (rr.players.size >= MAX_ROOM && rr.st === 'lobby') {                  // a disconnected "ghost" never blocks a real player from a lobby
@@ -425,7 +511,7 @@ wss.on('connection', (ws, req) => {
         const e = c[i];
         if (!Array.isArray(e)) continue;
         const s = e[0], b = e[1];
-        if (!Number.isInteger(s) || !Number.isInteger(b) || b < 0 || b > 15 || s <= p.lastIn) continue;
+        if (!Number.isInteger(s) || !Number.isInteger(b) || b < 0 || b > 63 || s <= p.lastIn) continue;
         p.lastIn = s;
         if (p.q.length < QCAP) p.q.push({ s, b });
       }
@@ -470,6 +556,9 @@ wss.on('connection', (ws, req) => {
       }
       return;
     }
+
+    /* ---- ability choice: in the lobby (spectators waiting for the next match may pick too) ---- */
+    if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 
     /* ---- room controls ---- */
     if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) return startMatch(r, now());
