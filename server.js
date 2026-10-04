@@ -41,6 +41,12 @@ const AB_CD = 30;                                    // cooldown (s) of the abil
 const FAKE_T = 5, SMOKE_T = 5, TRAP_T = 5;           // how long each effect lasts (s)
 const TRAP_W = 110, TRAP_IMM = 1;                    // trap width (px); its owner is immune for the first second so they can step off it
 const SLOW_K = 0.4, JUMP_K = 0.8;                    // speed / jump multipliers while standing in a trap
+/* ---- grab: hold the button next to a player to latch on and drag them along (Human-Fall-Flat style). Everyone has it. ---- */
+const GRAB_REACH = 46, GRAB_REACH_T = 0.7;           // how far (px beyond the body) the hand reaches / how long (s) the hands stay out before it counts as a miss
+const GRAB_MAX = 2.5, GRAB_MIN = 0.25;               // longest hold (s) / shortest hold (a tap or a lag blip can't drop the grip instantly)
+const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hold / after a miss
+const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
+const HELD_K = 0.5, CARRY_K = 0.8;                   // speed multiplier of the player who is held / of the player who is carrying
 const ABIL = new Set(['fake', 'smoke', 'trap']);
 
 const rooms = new Map();       // key -> room   (private: the room code, public: 'p-xxxx')
@@ -115,7 +121,7 @@ const SOL = PL.concat(RAMP, CRATE);
 
 /* One physics step. MUST stay numerically identical to the client's step() (the client uses it for prediction). */
 function step(p, inp, dt) {
-  const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1);
+  const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
   const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
   if (p.dcd > 0) p.dcd -= dt;
@@ -125,7 +131,7 @@ function step(p, inp, dt) {
   else { const f = (p.g ? 2800 : 500) * dt; p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f; }
   const jp = inp.j && !p.pj; p.pj = !!inp.j; if (jp) p.buf = .13; else p.buf -= dt;
   p.coy = p.g ? .1 : p.coy - dt;
-  if (p.buf > 0 && p.coy > 0) { p.vy = -840 * (p.slow ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
+  if (p.buf > 0 && p.coy > 0) { p.vy = -840 * ((p.slow || p.hb) ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
   if (!inp.j && p.vy < -260 && !p.cut) { p.vy *= .45; p.cut = 1; }
   if (inp.d && p.g) p.drop = .22; p.drop -= dt;
   if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);   // air-dash: no gravity while dashing
@@ -183,7 +189,8 @@ function newPlayer(nm, ci) {
     q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
-    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0      // dash / ability state
+    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0,     // dash / ability state
+    gt: '', hb: '', gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
   };
 }
 
@@ -207,7 +214,7 @@ function updateLobbyGo(r, t) {
 function spawn(p, k, t) {
   p.x = 690 + k * 45; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
-  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0;   // every round starts with dash + ability ready
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
 }
 
 function aliveIds(r) {
@@ -280,7 +287,7 @@ function destroyRoom(r) {
 }
 
 /* ---------------- abilities ---------------- */
-function clearFx(r) { r.dec.length = 0; r.pj.length = 0; r.sm.length = 0; r.tr.length = 0; }
+function clearFx(r) { r.dec.length = 0; r.pj.length = 0; r.sm.length = 0; r.tr.length = 0; for (const p of r.players.values()) resetGrab(p); }
 
 // Is this (grounded) player standing in a trap? Must match the client's slowAt().
 function inTrap(r, p) {
@@ -337,6 +344,75 @@ function tickFx(r) {
   for (let i = r.tr.length - 1; i >= 0; i--) if ((r.tr[i].life -= DT) <= 0) r.tr.splice(i, 1);
 }
 
+/* ---------------- grab ---------------- */
+function resetGrab(p) { p.gt = ''; p.hb = ''; p.gs = 0; p.gl = 0; p.gcd = 0; p.gimm = 0; p.pg = false; p.ge = 0; p.gin = 0; }
+
+// p lets go of whoever they hold; cd = seconds before p may grab again. The freed player is briefly immune to being re-grabbed.
+function ungrab(r, p, cd) {
+  const q = p.gt && r.players.get(p.gt);
+  if (q && q.hb === p.id) { q.hb = ''; q.gimm = GRAB_IMM; }
+  p.gt = ''; p.gs = 0; p.gl = 0; p.gcd = cd;
+}
+
+const inSolid = p => { for (const s of SOL) if (p.x < s.x + s.w && p.x + PW > s.x && p.y < s.y + s.h && p.y + PH > s.y) return true; return false; };
+
+// the nearest player inside p's reach that nobody is holding yet
+function grabTarget(r, p) {
+  let best = null, bd = 1e9;
+  for (const q of r.players.values()) {
+    if (q === p || !q.alive || q.hb || q.gimm > 0) continue;
+    if (!hit(p, q, -GRAB_REACH)) continue;                       // negative pad = the hitbox grown by the reach
+    const d = Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+    if (d < bd) { bd = d; best = q; }
+  }
+  return best;
+}
+
+// Drag q by (mx,my) but never into a wall / floor: try the full move, then x only, then y only.
+function dragBy(q, mx, my) {
+  const ox = q.x, oy = q.y;
+  q.x = Math.max(LX, Math.min(RX - PW, ox + mx)); q.y = oy + my;
+  if (!inSolid(q)) return;
+  q.y = oy; if (!inSolid(q)) return;
+  q.x = ox; q.y = oy + my; if (!inSolid(q)) return;
+  q.x = ox; q.y = oy;
+}
+
+// Runs once per tick while a round is live (after everybody moved).
+function grabTick(r) {
+  for (const p of r.players.values()) {
+    if (p.gcd > 0) p.gcd -= DT;
+    if (p.gimm > 0) p.gimm -= DT;
+    // links go stale when someone leaves / is out; a held player who DASHES breaks free
+    if (p.hb) { const h = r.players.get(p.hb); if (!h || !h.alive || h.gt !== p.id) p.hb = ''; else if (p.dash > 0) ungrab(r, h, GRAB_CD); }
+    if (p.gt) { const q = r.players.get(p.gt); if (!p.alive || !q || !q.alive || q.hb !== p.id) { p.gt = ''; p.gs = 0; p.gl = 0; p.gcd = GRAB_CD; } }
+    if (!p.alive) continue;
+
+    if (p.gs === 0 && p.ge && p.gcd <= 0 && !p.hb) { p.gs = 1; p.gl = GRAB_REACH_T; }   // button pressed: hands out
+    p.ge = 0;
+    if (p.gs === 1) {
+      const q = p.hb ? null : grabTarget(r, p);
+      if (q) { p.gs = 2; p.gt = q.id; q.hb = p.id; p.gl = GRAB_MAX; bcast(r, JSON.stringify({ t: 'grab', a: p.id, b: q.id })); }
+      else { p.gl -= DT; if (!p.gin || p.gl <= 0 || p.hb) { p.gs = 0; p.gl = 0; p.gcd = GRAB_MISS_CD; } }   // nobody in reach: a miss
+    } else if (p.gs === 2) {
+      p.gl -= DT;
+      if (p.gl <= 0 || (!p.gin && GRAB_MAX - p.gl >= GRAB_MIN)) ungrab(r, p, GRAB_CD);            // time's up / button let go
+    }
+  }
+  // the rope: whoever is held can't get further than GRAB_ROPE from the grabber, so they get dragged along
+  for (const p of r.players.values()) {
+    if (p.gs !== 2) continue;
+    const q = r.players.get(p.gt); if (!q) continue;
+    const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+    if (d > GRAB_BREAK) { ungrab(r, p, GRAB_CD); continue; }       // stretched too far (fell off the map, got stuck behind a wall): the grip snaps
+    if (d <= GRAB_ROPE) continue;
+    const k = (d - GRAB_ROPE) / d;
+    dragBy(q, -dx * k, -dy * k);
+    const ux = dx / d, uy = dy / d, vr = q.vx * ux + q.vy * uy;      // remove the part of q's velocity that points away from the grabber
+    if (vr > 0) { q.vx -= vr * ux; q.vy -= vr * uy; }
+  }
+}
+
 /* ---------------- simulation ---------------- */
 // Returns the input bit-mask to apply this tick, or -1 = "wait, the next input packet is probably in flight".
 function consume(p, t) {
@@ -351,6 +427,9 @@ function advance(r, p, b) {
   const ab = (b & 32) ? 1 : 0;                                                       // ability button: acts on the rising edge only
   if (ab && !p.pa) useAbility(r, p);
   p.pa = ab;
+  const gb = (b & 64) ? 1 : 0;                                                       // grab button: the rising edge starts a grab, holding keeps it
+  if (gb && !p.pg) p.ge = 1;
+  p.pg = gb; p.gin = gb;
   if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
 }
 
@@ -370,6 +449,7 @@ function simRoom(r, t) {
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
   if (r.st !== 'play' || cd) return;
   tickFx(r);
+  grabTick(r);
 
   let holder = null;
   for (const p of r.players.values()) if (p.alive && p.it) { holder = p; break; }
@@ -390,6 +470,7 @@ function simRoom(r, t) {
       if (!hit(holder, q, 3)) continue;                                   // real overlap only, never from a distance
       if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
       holder.it = 0; q.it = 1;
+      if (holder.gt === q.id) ungrab(r, holder, GRAB_CD); else if (q.gt === holder.id) ungrab(r, q, GRAB_CD);   // a tag ends the grip between the two
       r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS };
       bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id }));
       holder = q;
@@ -410,11 +491,14 @@ function snapshot(r, t, tt) {
   if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
   if (r.sm.length) fx += ',"s":[' + r.sm.map(s => '[' + s.id + ',' + ri(s.x) + ',' + ri(s.y) + ',' + r1(s.life) + ']').join(',') + ']';
   if (r.tr.length) fx += ',"tr":[' + r.tr.map(x => '[' + x.id + ',' + x.x + ',' + x.y + ',' + r1(x.life) + ',"' + x.o + '"]').join(',') + ']';
+  let gb = '', gr = '';                                                  // who is holding whom / who has their hands out
+  for (const p of r.players.values()) { if (!p.alive) continue; if (p.gs === 2 && p.gt) gb += (gb ? ',' : '') + '["' + p.id + '","' + p.gt + '"]'; else if (p.gs === 1) gr += (gr ? ',' : '') + '"' + p.id + '"'; }
+  if (gb) fx += ',"gb":[' + gb + ']'; if (gr) fx += ',"gr":[' + gr + ']';
   const head = '{"t":"s","ts":' + tt.toFixed(1) + ',"tl":' + tl + ',"cd":' + Math.max(0, (r.cdEnd - t) / 1000).toFixed(2) + ',"p":[' + arr + ']' + fx;
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
@@ -511,7 +595,7 @@ wss.on('connection', (ws, req) => {
         const e = c[i];
         if (!Array.isArray(e)) continue;
         const s = e[0], b = e[1];
-        if (!Number.isInteger(s) || !Number.isInteger(b) || b < 0 || b > 63 || s <= p.lastIn) continue;
+        if (!Number.isInteger(s) || !Number.isInteger(b) || b < 0 || b > 127 || s <= p.lastIn) continue;
         p.lastIn = s;
         if (p.q.length < QCAP) p.q.push({ s, b });
       }
