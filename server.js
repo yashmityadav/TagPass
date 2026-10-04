@@ -119,9 +119,36 @@ const RAMP = [], CRATE = [{ x: 1383, y: 487, w: 26, h: 25 }, { x: 1409, y: 487, 
 [[555, 630, 20, 6.1], [1357, 287, 6, 5.9]].forEach(r => { for (let i = 0; i < r[2]; i++) RAMP.push({ x: r[0] + i * 10, y: r[1] + r[3] * (i + .5), w: 10, h: 14 }); });
 const SOL = PL.concat(RAMP, CRATE);
 
+/* ---- MAP FEATURES (the client has an identical copy; both run inside step()) ----
+   PADS   : launch pads. vx=0 -> straight up; vx!=0 -> a cannon that also shoots you sideways.
+   LANES  : speed lanes. Faster conveyor + a short speed boost for you.
+   BELTS  : plain conveyor belts.
+   PORTS  : portals, paired by colour (o = index of the partner). Walk into one, come out of the other. Step out and back in to use it again.
+   MOON   : a low-gravity bubble. */
+const PADS = [
+  { x: 296, y: 536, w: 36, vy: 1200, vx: 0 }, { x: 450, y: 451, w: 44, vy: 1250, vx: 0 }, { x: 1062, y: 712, w: 44, vy: 1050, vx: 0 },
+  { x: 926, y: 277, w: 44, vy: 900, vx: 500 }, { x: 1470, y: 399, w: 44, vy: 1000, vx: -500 }, { x: 105, y: 304, w: 44, vy: 900, vx: 500 }
+];
+const LANES = [{ x: 830, y: 800, w: 200, d: 1 }, { x: 1180, y: 512, w: 180, d: -1 }, { x: 1030, y: 354, w: 200, d: 1 }, { x: 335, y: 626, w: 200, d: 1 }];
+const BELTS = [{ x: 40, y: 536, w: 230, d: 1 }, { x: 915, y: 536, w: 100, d: -1 }, { x: 1190, y: 712, w: 260, d: -1 }, { x: 395, y: 800, w: 150, d: 1 }];
+const PORTS = [];
+[[60, 304, 1530, 800, 0], [240, 707, 835, 277, 1], [620, 354, 1290, 622, 2]].forEach(a => { const n = PORTS.length; PORTS.push({ x: a[0] - 17, y: a[1] - 64, w: 34, h: 64, t: a[1], o: n + 1, c: a[4] }, { x: a[2] - 17, y: a[3] - 64, w: 34, h: 64, t: a[3], o: n, c: a[4] }); });
+const MOON = { x: 1300, y: 420, w: 270, h: 380 };
+const BELT_V = 140, LANE_V = 320, BST_T = 1, BST_K = 1.5, PAD_BST = .9, PORT_CD = .5, MOON_K = .4;
+const onTop = (p, b) => Math.abs(p.y + PH - b.y) < 1.5 && p.x + PW > b.x + 4 && p.x < b.x + b.w - 4;
+const inMoon = p => { const mx = p.x + PW / 2, my = p.y + PH / 2; return mx > MOON.x && mx < MOON.x + MOON.w && my > MOON.y && my < MOON.y + MOON.h; };
+
 /* One physics step. MUST stay numerically identical to the client's step() (the client uses it for prediction). */
 function step(p, inp, dt) {
-  const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1);
+  if (p.bst > 0) p.bst -= dt;
+  if (p.pcd > 0) p.pcd -= dt;
+  let bv = 0;                                                                 // conveyor belt / speed lane under my feet
+  if (p.g) {
+    for (const b of BELTS) if (onTop(p, b)) { bv = b.d * BELT_V; break; }
+    for (const b of LANES) if (onTop(p, b)) { bv = b.d * LANE_V; p.bst = BST_T; break; }
+  }
+  p.bv = bv;
+  const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
   const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
   if (p.dcd > 0) p.dcd -= dt;
@@ -134,15 +161,27 @@ function step(p, inp, dt) {
   if (p.buf > 0 && p.coy > 0) { p.vy = -840 * ((p.slow || p.hb) ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
   if (!inp.j && p.vy < -260 && !p.cut) { p.vy *= .45; p.cut = 1; }
   if (inp.d && p.g) p.drop = .22; p.drop -= dt;
-  if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);   // air-dash: no gravity while dashing
+  const gz = inMoon(p) ? MOON_K : 1;                                          // low-gravity bubble
+  if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt * gz, gz < 1 ? 690 : 1150);   // air-dash: no gravity while dashing
   const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
-  const was = p.g; p.x += p.vx * dt;
+  const was = p.g; p.x += (p.vx + bv) * dt;
   if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
   for (const q of SOL) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
   p.g = 0; p.y += p.vy * dt;
   for (const q of SOL) if (ov(q)) {
     if (p.vy >= 0) { p.y = q.y - PH; p.vy = 0; p.g = 1; }
     else { const l = p.x + PW - q.x, r = q.x + q.w - p.x; if (Math.min(l, r) < 10) p.x += l < r ? -l : r; else { p.y = q.y + q.h; p.vy = 0; } }
+  }
+  if (p.g) for (const q of PADS) if (Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x + 4 && p.x < q.x + q.w - 4) {      // launch pad / cannon
+    p.vy = -q.vy; p.g = 0; p.coy = 0; p.buf = 0; p.cut = 1; p.dash = 0;
+    if (q.vx) { p.vx = q.vx; p.face = q.vx > 0 ? 1 : -1; p.bst = PAD_BST; }
+    break;
+  }
+  let ip = -1;                                                                // portals
+  for (let i = 0; i < PORTS.length; i++) { const q = PORTS[i]; if (p.x + PW > q.x + 6 && p.x < q.x + q.w - 6 && p.y + PH > q.y + 4 && p.y < q.y + q.h) { ip = i; break; } }
+  if (ip >= 0) {
+    if (p.pcd > 0) p.pcd = Math.max(p.pcd, .12);                              // still standing in a portal: stay locked until you step out
+    else { const sp = PORTS[ip], d = PORTS[sp.o], off = Math.max(0, Math.min(28, sp.t - (p.y + PH))); p.x = d.x + d.w / 2 - PW / 2; p.y = d.t - PH - off; if (off > 1) p.g = 0; p.pcd = PORT_CD; }
   }
 }
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
@@ -189,7 +228,7 @@ function newPlayer(nm, ci) {
     q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
-    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0,     // dash / ability state
+    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0,     // dash / ability / map-feature state
     gt: '', hb: '', gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
   };
 }
@@ -214,7 +253,7 @@ function updateLobbyGo(r, t) {
 function spawn(p, k, t) {
   p.x = 690 + k * 45; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
-  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
 }
 
 function aliveIds(r) {
@@ -305,7 +344,7 @@ function useAbility(r, p) {
   const k = p.ab;
   if (k === 'fake') {
     r.dec.push({ id: 'd' + (++r.fxn), o: p.id, life: FAKE_T, x: p.x, y: p.y, vx: p.vx, vy: p.vy, g: p.g, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: p.face,
-      it: p.it, dir: p.face, stuck: 0, ps: false, dash: 0, dd: 1, dcd: 0, slow: 0 });
+      it: p.it, dir: p.face, stuck: 0, ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, bst: 0, pcd: 0, bv: 0 });
   } else if (k === 'smoke') {
     r.pj.push({ x: p.x + PW / 2, y: p.y + 8, vx: p.face * 520 + p.vx * .4, vy: -420, t: 0 });
   } else if (k === 'trap') {
@@ -430,7 +469,7 @@ function advance(r, p, b) {
   const gb = (b & 64) ? 1 : 0;                                                       // grab button: the rising edge starts a grab, holding keeps it
   if (gb && !p.pg) p.ge = 1;
   p.pg = gb; p.gin = gb;
-  if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
+  if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
 }
 
 function simRoom(r, t) {
@@ -484,10 +523,10 @@ function simRoom(r, t) {
 
 function snapshot(r, t, tt) {
   let arr = '';
-  for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ']';
+  for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx + p.bv) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ']';
   const tl = r.practice ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
   let fx = '';                                                           // ability effects (only when something is active)
-  if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
+  if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx + d.bv) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
   if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
   if (r.sm.length) fx += ',"s":[' + r.sm.map(s => '[' + s.id + ',' + ri(s.x) + ',' + ri(s.y) + ',' + r1(s.life) + ']').join(',') + ']';
   if (r.tr.length) fx += ',"tr":[' + r.tr.map(x => '[' + x.id + ',' + x.x + ',' + x.y + ',' + r1(x.life) + ',"' + x.o + '"]').join(',') + ']';
@@ -498,7 +537,7 @@ function snapshot(r, t, tt) {
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
