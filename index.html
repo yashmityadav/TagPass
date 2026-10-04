@@ -101,15 +101,9 @@ const RAMP=[],CRATE=[{x:1383,y:487,w:26,h:25},{x:1409,y:487,w:26,h:25},{x:1409,y
 [[555,630,20,6.1],[1357,287,6,5.9]].forEach(r=>{for(let i=0;i<r[2];i++)RAMP.push({x:r[0]+i*10,y:r[1]+r[3]*(i+.5),w:10,h:14})});
 const SOL=PL.concat(RAMP,CRATE);
 
-/* map features: launch pads / cannons, speed lanes, conveyor belts, portals, low-gravity bubble (identical copy on the server) */
-const PADS=[{x:296,y:536,w:36,vy:1200,vx:0},{x:450,y:451,w:44,vy:1250,vx:0},{x:1062,y:712,w:44,vy:1050,vx:0},{x:926,y:277,w:44,vy:900,vx:500},{x:1470,y:399,w:44,vy:1000,vx:-500},{x:105,y:304,w:44,vy:900,vx:500}];
-const LANES=[{x:830,y:800,w:200,d:1},{x:1180,y:512,w:180,d:-1},{x:1030,y:354,w:200,d:1},{x:335,y:626,w:200,d:1}];
-const BELTS=[{x:40,y:536,w:230,d:1},{x:915,y:536,w:100,d:-1},{x:1190,y:712,w:260,d:-1},{x:395,y:800,w:150,d:1}];
-const PORTS=[];[[60,304,1530,800,0],[240,707,835,277,1],[620,354,1290,622,2]].forEach(a=>{const n=PORTS.length;PORTS.push({x:a[0]-17,y:a[1]-64,w:34,h:64,t:a[1],o:n+1,c:a[4]},{x:a[2]-17,y:a[3]-64,w:34,h:64,t:a[3],o:n,c:a[4]})});
-const MOON={x:1300,y:420,w:270,h:380};
-const BELT_V=140,LANE_V=320,BST_T=1,BST_K=1.5,PAD_BST=.9,PORT_CD=.5,MOON_K=.4;
-const onTop=(p,b)=>Math.abs(p.y+PH-b.y)<1.5&&p.x+PW>b.x+4&&p.x<b.x+b.w-4;
-const inMoon=p=>{const mx=p.x+PW/2,my=p.y+PH/2;return mx>MOON.x&&mx<MOON.x+MOON.w&&my>MOON.y&&my<MOON.y+MOON.h};
+/* map features: only simple vertical jump pads; the server has the identical physics */
+const PADS=[{x:1500,y:800,w:44,vy:1050,vx:0},{x:450,y:451,w:44,vy:1050,vx:0}];
+const PAD_BST=.9;
 /* abilities (the server has the same numbers) */
 const DASH_V=1000,DASH_T=.16,DASH_CD=15,AB_CD=30,SMOKE_T=5,SMOKE_R=190,TRAP_T=5,TRAP_W=110,TRAP_IMM=1,SLOW_K=.4,JUMP_K=.8,HELD_K=.5,CARRY_K=.8,GRAB_REACH=46;
 
@@ -283,7 +277,7 @@ function onSnap(m){
  const live={};
  for(const e of m.p){const id=e[0];live[id]=1;if(id==myId)continue;const r=rem[id];if(!r)continue;r.alive=true;r.it=e[7]?1:0;pushSnap(r,e,m.ts,now)}
  for(const k in rem)if(!live[k])rem[k].alive=false;
- FX.j=m.j||[];FX.s=m.s||[];FX.t=m.tr||[];FX.g=m.gb||[];FX.r=m.gr||[];
+ FX.j=m.j||[];FX.s=m.s||[];FX.t=m.tr||[];FX.g=m.gb||[];FX.r=m.gr||[];FX.p=m.tp||null;
  const sd={};
  if(m.d)for(const e of m.d){const id=e[0];sd[id]=1;let r=DEC[id];if(!r){r=DEC[id]=newRem();r.o=e[8]}r.alive=true;pushSnap(r,e,m.ts,now)}
  for(const k in DEC)if(!sd[k]){const r=DEC[k];burst(r.x+15,r.y+17,16,'#ffffff',280);delete DEC[k]}   /* a decoy ran out / got popped */
@@ -360,11 +354,11 @@ function board(){
 /* ---------- abilities ---------- */
 const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5 s'},smoke:{n:'Smoke',i:'💨',d:'Throw a smoke cloud that hides everyone inside it for 5 s'},trap:{n:'Trap',i:'🕸️',d:'Sticky goo on the floor that slows anyone standing on it for 5 s'}};
 const FX={j:[],s:[],t:[],g:[],r:[]},DEC={};let MYAB='fake',lastHud='';
-function clearFx(){FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];for(const k in DEC)delete DEC[k];lastHud=''}
+function clearFx(){FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];FX.p=null;for(const k in DEC)delete DEC[k];lastHud=''}
 /* standing in a trap? (same rule as the server, so my prediction matches) */
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
-function abHTML(){return`<div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD} s cooldown<br>Everyone also has ⚡ Dash (${DASH_CD} s cooldown) and ✊ Grab: hold it next to a player to latch on and drag them along (they're slowed; a dash breaks the grip).<br>Keys: Shift = dash, E = ability, Q = grab<br>Map: yellow pads launch you up, orange cannons fling you sideways, portals come in pairs of the same colour, cyan lanes boost you, belts carry you, the purple bubble is low gravity.</div>`}
+function abHTML(){return`<div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD} s cooldown<br>Everyone also has ⚡ Dash (${DASH_CD} s cooldown) and ✊ Grab: hold it next to a player to latch on and drag them along (they're slowed; a dash breaks the grip).<br>Keys: Shift = dash, E = ability, Q = grab<br>Map: simple yellow jump pads launch you upward. A temporary teleport portal appears at random times and places.</div>`}
 function pickAb(k){if(!AB[k]||S.mode!='lobby')return;MYAB=k;try{localStorage.setItem('tagab',k)}catch(e){}netSend({t:'ab',k});snd(660,.07,'square',.04,120);const w=$('abw');if(w){w.innerHTML=abHTML();fitLobby()}}
 function hudUpd(){const dc=Math.max(0,ME.dcd||0),ac=Math.max(0,(ME.ac||0)-(performance.now()-(ME.acAt||0))/1000),gc=Math.max(0,(ME.gc||0)-(performance.now()-(ME.gcAt||0))/1000),sig=Math.ceil(dc)+'|'+Math.ceil(ac)+'|'+Math.ceil(gc)+'|'+(ME.gs||0)+'|'+MYAB;if(sig===lastHud)return;lastHud=sig;
  const set=(b,c)=>{b.classList.toggle('cool',c>0);b.querySelector('.cdn').textContent=c>0?Math.ceil(c):''};set($('hd'),dc);set($('ha'),ac);set($('hg'),gc);$('hg').classList.toggle('act',!!ME.gs);$('ha').querySelector('.ic').textContent=AB[MYAB].i}
@@ -409,42 +403,30 @@ function drawChar(p,s,TX,TY,al){
  cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);cx.globalAlpha=1}
 
 /* ---------- map features: drawing ---------- */
-const PCOL=['#35c8ff','#ffa534','#37f08a'];
-function band(b,base,arrow,sp){const H=8;cx.fillStyle=base;cx.fillRect(b.x,b.y-1,b.w,H);cx.save();cx.beginPath();cx.rect(b.x,b.y-1,b.w,H);cx.clip();cx.strokeStyle=arrow;cx.lineWidth=2;cx.lineCap='round';cx.lineJoin='round';const g=16,o=(((time*sp*b.d)%g)+g)%g;for(let x=b.x-g+o;x<b.x+b.w+g;x+=g){cx.beginPath();cx.moveTo(x-b.d*3,b.y+.5);cx.lineTo(x+b.d*3,b.y+3);cx.lineTo(x-b.d*3,b.y+5.5);cx.stroke()}cx.restore();cx.lineCap='butt'}
-function drawLane(b){
- cx.globalAlpha=.14+.06*Math.sin(time*6);cx.fillStyle='#2df0ff';cx.fillRect(b.x,b.y-28,b.w,28);cx.globalAlpha=1;
- band(b,'#0b5f7c','#8ffcff',110);
- cx.strokeStyle='#bffcff';cx.lineWidth=3;cx.lineCap='round';cx.lineJoin='round';
- const g=40,o=(((time*120*b.d)%g)+g)%g;
- for(let x=b.x-g+o;x<b.x+b.w;x+=g){const a=Math.max(0,Math.min(1,(x-b.x)/30,(b.x+b.w-x)/30));if(a<=0)continue;cx.globalAlpha=.75*a;cx.beginPath();cx.moveTo(x-b.d*6,b.y-20);cx.lineTo(x+b.d*6,b.y-13);cx.lineTo(x-b.d*6,b.y-6);cx.stroke()}
- cx.globalAlpha=1;cx.lineCap='butt'}
 function drawPad(q){
- const pu=Math.max(0,Math.sin(time*6+q.x*.05))*3,col=q.vx?'#ff7a2d':'#ffe14d',X=q.x+q.w/2,d=q.vx?Math.sign(q.vx):0;
+ const pu=Math.max(0,Math.sin(time*6+q.x*.05))*3,X=q.x+q.w/2;
  cx.fillStyle='#1b2a6b';cx.fillRect(q.x-3,q.y-4,q.w+6,6);
  cx.strokeStyle='#1b2a6b';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();for(let i=0;i<=4;i++)cx.lineTo(q.x+q.w*(i%2?.78:.22),q.y-4-i*(3.5-pu*.15));cx.stroke();
- cx.fillStyle=col;cx.beginPath();cx.roundRect(q.x-2,q.y-20-pu,q.w+4,8,4);cx.fill();
+ cx.fillStyle='#ffe14d';cx.beginPath();cx.roundRect(q.x-2,q.y-20-pu,q.w+4,8,4);cx.fill();
  cx.fillStyle='rgba(255,255,255,.55)';cx.fillRect(q.x+3,q.y-19-pu,q.w-6,2);
- cx.strokeStyle=col;cx.lineWidth=3;cx.lineCap='round';
- for(let i=0;i<3;i++){const a=((time*1.6+i/3)%1),dist=a*40;cx.save();cx.translate(X+d*dist*.7,q.y-30-dist*(d?.7:1));cx.rotate(d*.78);cx.globalAlpha=Math.sin(a*3.1416)*.9;cx.beginPath();cx.moveTo(-8,5);cx.lineTo(0,-4);cx.lineTo(8,5);cx.stroke();cx.restore()}
+ cx.strokeStyle='#ffe14d';cx.lineWidth=3;cx.lineCap='round';
+ for(let i=0;i<3;i++){const a=((time*1.6+i/3)%1),dist=a*40;cx.save();cx.translate(X,q.y-30-dist);cx.globalAlpha=Math.sin(a*3.1416)*.9;cx.beginPath();cx.moveTo(-8,5);cx.lineTo(0,-4);cx.lineTo(8,5);cx.stroke();cx.restore()}
  cx.globalAlpha=1;cx.lineCap='butt'}
 function drawPortal(q){
- const X=q.x+q.w/2,Y=q.y+q.h/2,col=PCOL[q.c],rw=q.w/2,rh=q.h/2;
- cx.globalAlpha=.22+.08*Math.sin(time*4+q.c);cx.fillStyle=col;cx.beginPath();cx.ellipse(X,Y,rw*1.7,rh*1.15,0,0,7);cx.fill();
+ const X=q.x+q.w/2,Y=q.y+q.h/2,rw=q.w/2,rh=q.h/2,life=Math.max(0,Math.min(1,q.life/4.5));
+ cx.globalAlpha=.18+.10*Math.sin(time*5);cx.fillStyle='#b34cff';cx.beginPath();cx.ellipse(X,Y,rw*1.8,rh*1.25,0,0,7);cx.fill();
  cx.globalAlpha=1;cx.fillStyle='#120a2e';cx.beginPath();cx.ellipse(X,Y,rw,rh,0,0,7);cx.fill();
- cx.strokeStyle=col;cx.lineWidth=5;cx.beginPath();cx.ellipse(X,Y,rw,rh,0,0,7);cx.stroke();
+ cx.strokeStyle='#c46cff';cx.lineWidth=5;cx.beginPath();cx.ellipse(X,Y,rw,rh,0,0,7);cx.stroke();
  cx.lineWidth=2.5;cx.lineCap='round';
- for(let i=0;i<3;i++){const a=time*(3+i*.6)+i*2.1;cx.globalAlpha=.9-i*.2;cx.beginPath();cx.ellipse(X,Y,rw*(.78-i*.2),rh*(.78-i*.2),a,0,4.2);cx.stroke()}
+ for(let i=0;i<3;i++){const a=time*(3+i*.6)+i*2.1;cx.globalAlpha=(.9-i*.2)*life;cx.beginPath();cx.ellipse(X,Y,rw*(.78-i*.2),rh*(.78-i*.2),a,0,4.2);cx.stroke()}
  cx.fillStyle='#fff';
- for(let i=0;i<4;i++){const a=time*1.5+i*1.57;cx.globalAlpha=.8;cx.beginPath();cx.arc(X+Math.cos(a)*rw*1.5,Y+Math.sin(a)*rh*1.05,1.6+.5+.5*Math.sin(time*2+i),0,7);cx.fill()}
- cx.globalAlpha=1;cx.lineCap='butt'}
-function drawMoon(){
- const z=MOON;cx.save();cx.beginPath();cx.roundRect(z.x,z.y,z.w,z.h,26);cx.fillStyle='rgba(176,140,255,.14)';cx.fill();
- cx.setLineDash([10,9]);cx.lineDashOffset=-time*14;cx.strokeStyle='rgba(222,205,255,.75)';cx.lineWidth=3;cx.stroke();cx.setLineDash([]);cx.clip();
- cx.fillStyle='#fff';
- for(let i=0;i<16;i++){const f=Math.sin(i*91.7)*.5+.5,g=Math.sin(i*37.3)*.5+.5,y=z.y+z.h-((time*(14+f*26)+i*61)%z.h);cx.globalAlpha=.35;cx.beginPath();cx.arc(z.x+12+g*(z.w-24)+Math.sin(time+i)*6,y,3+f*5,0,7);cx.fill()}
- cx.restore();
- cx.globalAlpha=.6;cx.font='18px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.fillStyle='#fff';cx.fillText('LOW GRAVITY',z.x+z.w/2,z.y+30);cx.globalAlpha=1}
-function drawFeatures(){drawMoon();for(const b of BELTS)band(b,'#2b3158','#9fb0ff',40);for(const b of LANES)drawLane(b);for(const q of PADS)drawPad(q);for(const q of PORTS)drawPortal(q)}
+ for(let i=0;i<4;i++){const a=time*1.5+i*1.57;cx.globalAlpha=.8*life;cx.beginPath();cx.arc(X+Math.cos(a)*rw*1.5,Y+Math.sin(a)*rh*1.05,1.6+.5*Math.sin(time*2+i),0,7);cx.fill()}
+ cx.globalAlpha=1;cx.lineCap='butt';
+ cx.font='14px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.fillStyle='#fff';cx.fillText(Math.ceil(q.life)+'s',X,Y+rh+20)}
+function drawFeatures(){
+ for(const q of PADS)drawPad(q);
+ if(FX.p)drawPortal(FX.p);
+}
 
 /* ---------- fx ---------- */
 function burst(x,y,n,c,sp){for(let i=0;i<n;i++){const a=Math.random()*6.28,s=Math.random()*sp;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-100,l:.5+Math.random()*.4,m:.9,c,r:2+Math.random()*4})}if(parts.length>100)parts.splice(0,parts.length-100)}
@@ -452,8 +434,8 @@ function dust(x,y,n){if(QUIET)return;for(let i=0;i<n;i++)parts.push({x:x+(Math.r
 
 /* ---------- physics ---------- */
 function step(p,inp,dt){
- if(p.bst>0)p.bst-=dt;if(p.pcd>0)p.pcd-=dt;
- let bv=0;if(p.g){for(const b of BELTS)if(onTop(p,b)){bv=b.d*BELT_V;break}for(const b of LANES)if(onTop(p,b)){bv=b.d*LANE_V;p.bst=BST_T;break}}p.bv=bv;
+ if(p.bst>0)p.bst-=dt;
+ let bv=0;p.bv=bv;
  const m=(p.it?1.07:1)*(p.bot?.94:1),MAX=340*m*(p.slow?SLOW_K:1)*(p.hb?HELD_K:1)*(p.gt?CARRY_K:1)*(p.bst>0?BST_K:1);
  let ax=(inp.r?1:0)-(inp.l?1:0);
  const ds=inp.s&&!p.ps;p.ps=!!inp.s;
@@ -467,7 +449,7 @@ function step(p,inp,dt){
  if(p.buf>0&&p.coy>0){p.vy=-840*((p.slow||p.hb)?JUMP_K:1);p.buf=p.coy=0;p.g=0;p.cut=0;p.sq=1.35;if(p.dash>0){p.dash=0;p.vx=Math.max(-MAX,Math.min(MAX,p.vx))}dust(p.x+15,p.y+PH,6);snd(380,.14,'square',.04,320)}
  if(!inp.j&&p.vy<-260&&!p.cut){p.vy*=.45;p.cut=1}
  if(inp.d&&p.g)p.drop=.22;p.drop-=dt;
- const gz=inMoon(p)?MOON_K:1;
+ const gz=1;
  if(p.dash>0&&!p.g)p.vy=0;else p.vy=Math.min(p.vy+(p.vy>0?3400:2300)*dt*gz,gz<1?690:1150);
  const ov=q=>p.x<q.x+q.w&&p.x+PW>q.x&&p.y<q.y+q.h&&p.y+PH>q.y;
  const was=p.g;p.x+=(p.vx+bv)*dt;
@@ -477,19 +459,10 @@ function step(p,inp,dt){
  for(const q of SOL)if(ov(q)){
   if(p.vy>=0){p.y=q.y-PH;if(!was&&p.vy>350){p.sq=.65;dust(p.x+15,q.y,8);snd(120,.07,'triangle',.06)}p.vy=0;p.g=1}
   else{const l=p.x+PW-q.x,r=q.x+q.w-p.x;if(Math.min(l,r)<10)p.x+=l<r?-l:r;else{p.y=q.y+q.h;p.vy=0}}}
- if(p.g)for(const q of PADS)if(Math.abs(p.y+PH-q.y)<3&&p.x+PW>q.x+4&&p.x<q.x+q.w-4){   /* launch pad / cannon */
+ if(p.g)for(const q of PADS)if(Math.abs(p.y+PH-q.y)<3&&p.x+PW>q.x+4&&p.x<q.x+q.w-4){
   p.vy=-q.vy;p.g=0;p.coy=0;p.buf=0;p.cut=1;p.dash=0;p.sq=1.5;
-  if(q.vx){p.vx=q.vx;p.face=q.vx>0?1:-1;p.bst=PAD_BST}
-  if(!QUIET){burst(p.x+15,p.y+PH,q.vx?14:10,q.vx?'#ff9a4d':'#ffe14d',320);snd(q.vx?220:330,.28,'square',.06,q.vx?700:900)}
+  if(!QUIET){burst(p.x+15,p.y+PH,10,'#ffe14d',320);snd(330,.28,'square',.06,900)}
   break}
- let ip=-1;   /* portals */
- for(let i=0;i<PORTS.length;i++){const q=PORTS[i];if(p.x+PW>q.x+6&&p.x<q.x+q.w-6&&p.y+PH>q.y+4&&p.y<q.y+q.h){ip=i;break}}
- if(ip>=0){
-  if(p.pcd>0)p.pcd=Math.max(p.pcd,.12);
-  else{const sp=PORTS[ip],d=PORTS[sp.o],off=Math.max(0,Math.min(28,sp.t-(p.y+PH)));
-   if(!QUIET){burst(p.x+15,p.y+17,16,PCOL[sp.c],300);snd(900,.25,'sine',.06,-600)}
-   p.x=d.x+d.w/2-PW/2;p.y=d.t-PH-off;if(off>1)p.g=0;p.pcd=PORT_CD;
-   if(!QUIET){burst(p.x+15,p.y+17,16,PCOL[sp.c],300);snd(500,.25,'sine',.05,500)}}}
  if(p.g&&Math.abs(p.vx)>90){p.st=(p.st||0)-dt;if(p.st<=0){p.st=.1;dust(p.x+15-Math.sign(p.vx)*8,p.y+PH,2);if(Math.random()<.18)snd(80+Math.random()*30,.035,'triangle',.012)}}
  p.sq+=(1-p.sq)*Math.min(1,dt*14);
  if(p.y>WH+200){p.y=WH+200;p.vy=0}   /* the server respawns me */
