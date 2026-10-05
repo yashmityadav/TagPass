@@ -122,12 +122,12 @@ const SOL = PL;                                                             // s
    ZIPS : ziplines, completely optional. Tap JUMP in the air next to a cable to grab it and ride it (left/right picks the direction),
           tap JUMP again to hop off, or just ride to the end. Every cable must run left -> right (x1 < x2). */
 const PADS = [
-  { x: 1122, y: 712, w: 44, vy: 1200, vx: -600 },   // bottom-right cannon: fires you up and left into the middle of the map
-  { x: 252, y: 536, w: 44, vy: 1400, vx: 450 }       // left-tower cannon: fires you up and right, straight at the sky cable
+  { x: 1524, y: 800, w: 44, vy: 1500, vx: 0 },       // bottom-right corner of the floor: straight up (steer left in the air to land on the right-side decks)
+  { x: 417, y: 451, w: 44, vy: 1300, vx: 0 }         // middle of the platform up-right of the left tower: straight up, right through the diagonal cable
 ];
 const ZIPS = [
-  { x1: 216, y1: 314, x2: 1503, y2: 314 },    // SKY RAIL: threads the whole middle of the map, left tower <-> far-right perch
-  { x1: 796, y1: 700, x2: 1467, y2: 642 }      // SUBWAY: skims over the floor and under the middle platforms, floor <-> bottom-right deck
+  { x1: 170, y1: 473, x2: 844, y2: 167 },      // LEFT DIAGONAL: from the left-side deck up to the top-centre platform
+  { x1: 1181, y1: 457, x2: 1505, y2: 289 }     // RIGHT DIAGONAL: from the right-middle deck up to the far-right perch
 ].map(z => { const dx = z.x2 - z.x1, dy = z.y2 - z.y1, len = Math.hypot(dx, dy); return { x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2, len, ux: dx / len, uy: dy / len }; });
 const BST_K = 1.5, PAD_BST = .9;
 const ZIP_V = 640, ZIP_R = 44, ZIP_HANG = 8, ZIP_CD = .35, ZIP_HOP = 640, ZIP_OUT = 520;

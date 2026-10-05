@@ -102,7 +102,7 @@ const SOL=PL;   /* solid rectangles: just the platforms, the arena is wide open 
 /* map features (identical copy on the server): 2 launch pads / cannons and 2 optional ziplines.
    ZIPLINES: tap JUMP in the air next to a cable to grab it, hold left/right to ride that way, tap JUMP to hop off. */
 const PADS=[{x:1524,y:800,w:44,vy:1500,vx:0},{x:417,y:451,w:44,vy:1300,vx:0}];
-const ZIPS=[{x1:152,y1:481,x2:844,y2:167},{x1:1181,y1:457,x2:1505,y2:289}].map(z=>{const dx=z.x2-z.x1,dy=z.y2-z.y1,len=Math.hypot(dx,dy);return{x1:z.x1,y1:z.y1,x2:z.x2,y2:z.y2,len,ux:dx/len,uy:dy/len}});
+const ZIPS=[{x1:170,y1:473,x2:844,y2:167},{x1:1181,y1:457,x2:1505,y2:289}].map(z=>{const dx=z.x2-z.x1,dy=z.y2-z.y1,len=Math.hypot(dx,dy);return{x1:z.x1,y1:z.y1,x2:z.x2,y2:z.y2,len,ux:dx/len,uy:dy/len}});
 const BST_K=1.5,PAD_BST=.9;
 const ZIP_V=640,ZIP_R=44,ZIP_HANG=8,ZIP_CD=.35,ZIP_HOP=640,ZIP_OUT=520;
 const zh={i:-1,s:0};
