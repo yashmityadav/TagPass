@@ -115,39 +115,61 @@ const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: f
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
 const PL = [[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a => ({ x: a[0], y: a[1], w: a[2], h: a[1] == 800 ? 36 : 14 }));
-const RAMP = [], CRATE = [{ x: 1383, y: 487, w: 26, h: 25 }, { x: 1409, y: 487, w: 26, h: 25 }, { x: 1409, y: 461, w: 26, h: 26 }];
-[[555, 630, 20, 6.1], [1357, 287, 6, 5.9]].forEach(r => { for (let i = 0; i < r[2]; i++) RAMP.push({ x: r[0] + i * 10, y: r[1] + r[3] * (i + .5), w: 10, h: 14 }); });
-const SOL = PL.concat(RAMP, CRATE);
+const SOL = PL;                                                             // solid rectangles: just the platforms, the arena is wide open
 
 /* ---- MAP FEATURES (the client has an identical copy; both run inside step()) ----
-   PADS   : launch pads. vx=0 -> straight up; vx!=0 -> a cannon that also shoots you sideways.
-   LANES  : speed lanes. Faster conveyor + a short speed boost for you.
-   BELTS  : plain conveyor belts.
-   PORTS  : portals, paired by colour (o = index of the partner). Walk into one, come out of the other. Step out and back in to use it again.
-   MOON   : a low-gravity bubble. */
+   PADS : launch pads. vx=0 -> straight up; vx!=0 -> a cannon that also shoots you sideways.
+   ZIPS : ziplines, completely optional. Tap JUMP in the air next to a cable to grab it and ride it (left/right picks the direction),
+          tap JUMP again to hop off, or just ride to the end. Every cable must run left -> right (x1 < x2). */
 const PADS = [
-  { x: 296, y: 536, w: 36, vy: 1200, vx: 0 }, { x: 450, y: 451, w: 44, vy: 1250, vx: 0 }, { x: 1062, y: 712, w: 44, vy: 1050, vx: 0 },
-  { x: 926, y: 277, w: 44, vy: 900, vx: 500 }, { x: 1470, y: 399, w: 44, vy: 1000, vx: -500 }, { x: 105, y: 304, w: 44, vy: 900, vx: 500 }
+  { x: 1122, y: 712, w: 44, vy: 1200, vx: -600 },   // bottom-right cannon: fires you up and left into the middle of the map
+  { x: 252, y: 536, w: 44, vy: 1400, vx: 450 }       // left-tower cannon: fires you up and right, straight at the sky cable
 ];
-const LANES = [{ x: 830, y: 800, w: 200, d: 1 }, { x: 1180, y: 512, w: 180, d: -1 }, { x: 1030, y: 354, w: 200, d: 1 }, { x: 335, y: 626, w: 200, d: 1 }];
-const BELTS = [{ x: 40, y: 536, w: 230, d: 1 }, { x: 915, y: 536, w: 100, d: -1 }, { x: 1190, y: 712, w: 260, d: -1 }, { x: 395, y: 800, w: 150, d: 1 }];
-const PORTS = [];
-[[60, 304, 1530, 800, 0], [240, 707, 835, 277, 1], [620, 354, 1290, 622, 2]].forEach(a => { const n = PORTS.length; PORTS.push({ x: a[0] - 17, y: a[1] - 64, w: 34, h: 64, t: a[1], o: n + 1, c: a[4] }, { x: a[2] - 17, y: a[3] - 64, w: 34, h: 64, t: a[3], o: n, c: a[4] }); });
-const MOON = { x: 1300, y: 420, w: 270, h: 380 };
-const BELT_V = 140, LANE_V = 320, BST_T = 1, BST_K = 1.5, PAD_BST = .9, PORT_CD = .5, MOON_K = .4;
-const onTop = (p, b) => Math.abs(p.y + PH - b.y) < 1.5 && p.x + PW > b.x + 4 && p.x < b.x + b.w - 4;
-const inMoon = p => { const mx = p.x + PW / 2, my = p.y + PH / 2; return mx > MOON.x && mx < MOON.x + MOON.w && my > MOON.y && my < MOON.y + MOON.h; };
+const ZIPS = [
+  { x1: 216, y1: 314, x2: 1503, y2: 314 },    // SKY RAIL: threads the whole middle of the map, left tower <-> far-right perch
+  { x1: 796, y1: 700, x2: 1467, y2: 642 }      // SUBWAY: skims over the floor and under the middle platforms, floor <-> bottom-right deck
+].map(z => { const dx = z.x2 - z.x1, dy = z.y2 - z.y1, len = Math.hypot(dx, dy); return { x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2, len, ux: dx / len, uy: dy / len }; });
+const BST_K = 1.5, PAD_BST = .9;
+const ZIP_V = 640, ZIP_R = 44, ZIP_HANG = 8, ZIP_CD = .35, ZIP_HOP = 640, ZIP_OUT = 520;
+const zh = { i: -1, s: 0 };
+function zipFind(p) {                                                       // nearest cable point within reach of my hands (result in zh)
+  const hx = p.x + PW / 2, hy = p.y + ZIP_HANG; let bi = -1, bd = ZIP_R, bs = 0;
+  for (let i = 0; i < ZIPS.length; i++) {
+    const z = ZIPS[i], s = Math.max(0, Math.min(z.len, (hx - z.x1) * z.ux + (hy - z.y1) * z.uy));
+    const d = Math.hypot(hx - (z.x1 + z.ux * s), hy - (z.y1 + z.uy * s));
+    if (d < bd) { bd = d; bi = i; bs = s; }
+  }
+  zh.i = bi; zh.s = bs; return bi;
+}
+function zipPose(p) {                                                       // hang from the cable at distance p.zs from its left end
+  const z = ZIPS[p.zip];
+  p.x = z.x1 + z.ux * p.zs - PW / 2; p.y = z.y1 + z.uy * p.zs - ZIP_HANG;
+  p.vx = p.zd * ZIP_V * z.ux; p.vy = p.zd * ZIP_V * z.uy; p.g = 0;
+  p.face = p.vx > 0 ? 1 : -1;
+}
 
 /* One physics step. MUST stay numerically identical to the client's step() (the client uses it for prediction). */
 function step(p, inp, dt) {
   if (p.bst > 0) p.bst -= dt;
-  if (p.pcd > 0) p.pcd -= dt;
-  let bv = 0;                                                                 // conveyor belt / speed lane under my feet
-  if (p.g) {
-    for (const b of BELTS) if (onTop(p, b)) { bv = b.d * BELT_V; break; }
-    for (const b of LANES) if (onTop(p, b)) { bv = b.d * LANE_V; p.bst = BST_T; break; }
+  if (p.zcd > 0) p.zcd -= dt;
+  p.bv = 0;
+  if (p.zip >= 0) {                                                           // riding a zipline: the cable owns my movement
+    if (p.dcd > 0) p.dcd -= dt;
+    p.ps = !!inp.s;
+    const jp = inp.j && !p.pj; p.pj = !!inp.j;
+    const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0); if (ax) p.zd = ax;           // steer: hold left/right to ride that way (cables run left -> right, so +1 = toward the right end)
+    const z = ZIPS[p.zip];
+    p.zs += p.zd * ZIP_V * dt;
+    const end = p.zs <= 0 || p.zs >= z.len;
+    p.zs = Math.max(0, Math.min(z.len, p.zs));
+    zipPose(p);
+    if (jp || end || p.hb || p.gt) {                                          // let go: hop off / end of the cable / somebody grabbed me
+      p.zip = -1; p.zcd = ZIP_CD; p.buf = p.coy = 0; p.cut = 1; p.drop = 0;
+      if (jp) { p.vx = Math.max(-ZIP_OUT, Math.min(ZIP_OUT, p.vx)); p.vy = -ZIP_HOP; }   // hop off: keep the speed and fly
+      else { p.vx *= .3; p.vy *= .5; }                                        // cable end (or grabbed): drop off near the end, onto whatever is below
+    }
+    return;
   }
-  p.bv = bv;
   const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
   const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
@@ -159,12 +181,16 @@ function step(p, inp, dt) {
   const jp = inp.j && !p.pj; p.pj = !!inp.j; if (jp) p.buf = .13; else p.buf -= dt;
   p.coy = p.g ? .1 : p.coy - dt;
   if (p.buf > 0 && p.coy > 0) { p.vy = -840 * ((p.slow || p.hb) ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
+  if (p.zcd <= 0 && !p.g && p.buf > 0 && !p.hb && !p.gt && zipFind(p) >= 0) {   // tap JUMP in the air next to a cable = grab it (decoys have no zcd, so they never do)
+    p.zip = zh.i; p.zs = zh.s; p.zd = ax || (zh.s < ZIPS[zh.i].len / 2 ? 1 : -1);
+    p.buf = 0; p.dash = 0; p.cut = 1; p.drop = 0;
+    zipPose(p); return;
+  }
   if (!inp.j && p.vy < -260 && !p.cut) { p.vy *= .45; p.cut = 1; }
   if (inp.d && p.g) p.drop = .22; p.drop -= dt;
-  const gz = inMoon(p) ? MOON_K : 1;                                          // low-gravity bubble
-  if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt * gz, gz < 1 ? 690 : 1150);   // air-dash: no gravity while dashing
+  if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);   // air-dash: no gravity while dashing
   const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
-  const was = p.g; p.x += (p.vx + bv) * dt;
+  const was = p.g; p.x += p.vx * dt;
   if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
   for (const q of SOL) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
   p.g = 0; p.y += p.vy * dt;
@@ -176,12 +202,6 @@ function step(p, inp, dt) {
     p.vy = -q.vy; p.g = 0; p.coy = 0; p.buf = 0; p.cut = 1; p.dash = 0;
     if (q.vx) { p.vx = q.vx; p.face = q.vx > 0 ? 1 : -1; p.bst = PAD_BST; }
     break;
-  }
-  let ip = -1;                                                                // portals
-  for (let i = 0; i < PORTS.length; i++) { const q = PORTS[i]; if (p.x + PW > q.x + 6 && p.x < q.x + q.w - 6 && p.y + PH > q.y + 4 && p.y < q.y + q.h) { ip = i; break; } }
-  if (ip >= 0) {
-    if (p.pcd > 0) p.pcd = Math.max(p.pcd, .12);                              // still standing in a portal: stay locked until you step out
-    else { const sp = PORTS[ip], d = PORTS[sp.o], off = Math.max(0, Math.min(28, sp.t - (p.y + PH))); p.x = d.x + d.w / 2 - PW / 2; p.y = d.t - PH - off; if (off > 1) p.g = 0; p.pcd = PORT_CD; }
   }
 }
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
@@ -228,7 +248,7 @@ function newPlayer(nm, ci) {
     q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
-    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0,     // dash / ability / map-feature state
+    ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
     gt: '', hb: '', gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
   };
 }
@@ -253,7 +273,7 @@ function updateLobbyGo(r, t) {
 function spawn(p, k, t) {
   p.x = 690 + k * 45; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
-  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
 }
 
 function aliveIds(r) {
@@ -469,7 +489,7 @@ function advance(r, p, b) {
   const gb = (b & 64) ? 1 : 0;                                                       // grab button: the rising edge starts a grab, holding keeps it
   if (gb && !p.pg) p.ge = 1;
   p.pg = gb; p.gin = gb;
-  if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
+  if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zcd = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
 }
 
 function simRoom(r, t) {
@@ -537,7 +557,7 @@ function snapshot(r, t, tt) {
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }

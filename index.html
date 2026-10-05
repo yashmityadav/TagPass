@@ -97,19 +97,19 @@ if(matchMedia('(pointer:coarse)').matches)document.body.classList.add('t');
 /* ---------- world ---------- */
 const WW=1600,WH=836,PW=30,PH=34,LX=22,RX=1570,GI=18;
 const PL=[[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a=>({x:a[0],y:a[1],w:a[2],h:a[1]==800?36:14}));
-const RAMP=[],CRATE=[{x:1383,y:487,w:26,h:25},{x:1409,y:487,w:26,h:25},{x:1409,y:461,w:26,h:26}];
-[[555,630,20,6.1],[1357,287,6,5.9]].forEach(r=>{for(let i=0;i<r[2];i++)RAMP.push({x:r[0]+i*10,y:r[1]+r[3]*(i+.5),w:10,h:14})});
-const SOL=PL.concat(RAMP,CRATE);
+const SOL=PL;   /* solid rectangles: just the platforms, the arena is wide open */
 
-/* map features: launch pads / cannons, speed lanes, conveyor belts, portals, low-gravity bubble (identical copy on the server) */
-const PADS=[{x:296,y:536,w:36,vy:1200,vx:0},{x:450,y:451,w:44,vy:1250,vx:0},{x:1062,y:712,w:44,vy:1050,vx:0},{x:926,y:277,w:44,vy:900,vx:500},{x:1470,y:399,w:44,vy:1000,vx:-500},{x:105,y:304,w:44,vy:900,vx:500}];
-const LANES=[{x:830,y:800,w:200,d:1},{x:1180,y:512,w:180,d:-1},{x:1030,y:354,w:200,d:1},{x:335,y:626,w:200,d:1}];
-const BELTS=[{x:40,y:536,w:230,d:1},{x:915,y:536,w:100,d:-1},{x:1190,y:712,w:260,d:-1},{x:395,y:800,w:150,d:1}];
-const PORTS=[];[[60,304,1530,800,0],[240,707,835,277,1],[620,354,1290,622,2]].forEach(a=>{const n=PORTS.length;PORTS.push({x:a[0]-17,y:a[1]-64,w:34,h:64,t:a[1],o:n+1,c:a[4]},{x:a[2]-17,y:a[3]-64,w:34,h:64,t:a[3],o:n,c:a[4]})});
-const MOON={x:1300,y:420,w:270,h:380};
-const BELT_V=140,LANE_V=320,BST_T=1,BST_K=1.5,PAD_BST=.9,PORT_CD=.5,MOON_K=.4;
-const onTop=(p,b)=>Math.abs(p.y+PH-b.y)<1.5&&p.x+PW>b.x+4&&p.x<b.x+b.w-4;
-const inMoon=p=>{const mx=p.x+PW/2,my=p.y+PH/2;return mx>MOON.x&&mx<MOON.x+MOON.w&&my>MOON.y&&my<MOON.y+MOON.h};
+/* map features (identical copy on the server): 2 launch pads / cannons and 2 optional ziplines.
+   ZIPLINES: tap JUMP in the air next to a cable to grab it, hold left/right to ride that way, tap JUMP to hop off. */
+const PADS=[{x:1122,y:712,w:44,vy:1200,vx:-600},{x:252,y:536,w:44,vy:1400,vx:450}];
+const ZIPS=[{x1:216,y1:314,x2:1503,y2:314},{x1:796,y1:700,x2:1467,y2:642}].map(z=>{const dx=z.x2-z.x1,dy=z.y2-z.y1,len=Math.hypot(dx,dy);return{x1:z.x1,y1:z.y1,x2:z.x2,y2:z.y2,len,ux:dx/len,uy:dy/len}});
+const BST_K=1.5,PAD_BST=.9;
+const ZIP_V=640,ZIP_R=44,ZIP_HANG=8,ZIP_CD=.35,ZIP_HOP=640,ZIP_OUT=520;
+const zh={i:-1,s:0};
+function zipFind(p){const hx=p.x+PW/2,hy=p.y+ZIP_HANG;let bi=-1,bd=ZIP_R,bs=0;
+ for(let i=0;i<ZIPS.length;i++){const z=ZIPS[i],s=Math.max(0,Math.min(z.len,(hx-z.x1)*z.ux+(hy-z.y1)*z.uy));const d=Math.hypot(hx-(z.x1+z.ux*s),hy-(z.y1+z.uy*s));if(d<bd){bd=d;bi=i;bs=s}}
+ zh.i=bi;zh.s=bs;return bi}
+function zipPose(p){const z=ZIPS[p.zip];p.x=z.x1+z.ux*p.zs-PW/2;p.y=z.y1+z.uy*p.zs-ZIP_HANG;p.vx=p.zd*ZIP_V*z.ux;p.vy=p.zd*ZIP_V*z.uy;p.g=0;p.face=p.vx>0?1:-1}
 /* abilities (the server has the same numbers) */
 const DASH_V=1000,DASH_T=.16,DASH_CD=15,AB_CD=30,SMOKE_T=5,SMOKE_R=190,TRAP_T=5,TRAP_W=110,TRAP_IMM=1,SLOW_K=.4,JUMP_K=.8,HELD_K=.5,CARRY_K=.8,GRAB_REACH=46;
 
@@ -130,7 +130,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 
 /* ---------- state ---------- */
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6'],BASE=location.origin+location.pathname;
-function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,ac:0,acAt:0,gt:0,hb:0,gs:0,gc:0,gcAt:0}}
+function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,zip:-1,zd:1,zs:0,zcd:0,ac:0,acAt:0,gt:0,hb:0,gs:0,gc:0,gcAt:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,mi=0,mus=0,toastT,lastBoard='';
 const PHYS_HZ=60,SEND_S=0,INTERP_MIN=16,INTERP_MAX=70,EXTRAP_MS=120,PUB_SIZE=5;   /* PUB_SIZE: players needed before a public match starts */
 const S={mode:'menu',gm:0,rn:0,rs:-1,st:'lobby',bt:null,ov:null,rm:null,practice:false,tl:null,tlAt:0,cdl:0,cdAt:0,lc:0,lcAt:0},ME=mk(0,700,500),NEUT={},PEND=[],OUT=[],VO={x:0,y:0};let seq=0;
@@ -292,7 +292,7 @@ function onSnap(m){
 /* server-authoritative reconciliation: take the server's state for me, then replay the inputs it hasn't processed yet */
 function reconcile(a){
  const sx=ME.x,sy=ME.y,fresh=a.rs!==S.rs,wasHb=ME.hb;
- ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
+ ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
  if(fresh){S.rs=a.rs;PEND.length=0;VO.x=VO.y=0;ME.px=ME.x;ME.py=ME.y;ME.sq=1;return}   /* spawn / respawn: hard set */
  while(PEND.length&&PEND[0].s<=a.q)PEND.shift();
  QUIET=1;for(const c of PEND){ME.slow=slowAt(ME);step(ME,c.i,1/PHYS_HZ)}QUIET=0;
@@ -409,15 +409,6 @@ function drawChar(p,s,TX,TY,al){
  cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);cx.globalAlpha=1}
 
 /* ---------- map features: drawing ---------- */
-const PCOL=['#35c8ff','#ffa534','#37f08a'];
-function band(b,base,arrow,sp){const H=8;cx.fillStyle=base;cx.fillRect(b.x,b.y-1,b.w,H);cx.save();cx.beginPath();cx.rect(b.x,b.y-1,b.w,H);cx.clip();cx.strokeStyle=arrow;cx.lineWidth=2;cx.lineCap='round';cx.lineJoin='round';const g=16,o=(((time*sp*b.d)%g)+g)%g;for(let x=b.x-g+o;x<b.x+b.w+g;x+=g){cx.beginPath();cx.moveTo(x-b.d*3,b.y+.5);cx.lineTo(x+b.d*3,b.y+3);cx.lineTo(x-b.d*3,b.y+5.5);cx.stroke()}cx.restore();cx.lineCap='butt'}
-function drawLane(b){
- cx.globalAlpha=.14+.06*Math.sin(time*6);cx.fillStyle='#2df0ff';cx.fillRect(b.x,b.y-28,b.w,28);cx.globalAlpha=1;
- band(b,'#0b5f7c','#8ffcff',110);
- cx.strokeStyle='#bffcff';cx.lineWidth=3;cx.lineCap='round';cx.lineJoin='round';
- const g=40,o=(((time*120*b.d)%g)+g)%g;
- for(let x=b.x-g+o;x<b.x+b.w;x+=g){const a=Math.max(0,Math.min(1,(x-b.x)/30,(b.x+b.w-x)/30));if(a<=0)continue;cx.globalAlpha=.75*a;cx.beginPath();cx.moveTo(x-b.d*6,b.y-20);cx.lineTo(x+b.d*6,b.y-13);cx.lineTo(x-b.d*6,b.y-6);cx.stroke()}
- cx.globalAlpha=1;cx.lineCap='butt'}
 function drawPad(q){
  const pu=Math.max(0,Math.sin(time*6+q.x*.05))*3,col=q.vx?'#ff7a2d':'#ffe14d',X=q.x+q.w/2,d=q.vx?Math.sign(q.vx):0;
  cx.fillStyle='#1b2a6b';cx.fillRect(q.x-3,q.y-4,q.w+6,6);
@@ -427,24 +418,22 @@ function drawPad(q){
  cx.strokeStyle=col;cx.lineWidth=3;cx.lineCap='round';
  for(let i=0;i<3;i++){const a=((time*1.6+i/3)%1),dist=a*40;cx.save();cx.translate(X+d*dist*.7,q.y-30-dist*(d?.7:1));cx.rotate(d*.78);cx.globalAlpha=Math.sin(a*3.1416)*.9;cx.beginPath();cx.moveTo(-8,5);cx.lineTo(0,-4);cx.lineTo(8,5);cx.stroke();cx.restore()}
  cx.globalAlpha=1;cx.lineCap='butt'}
-function drawPortal(q){
- const X=q.x+q.w/2,Y=q.y+q.h/2,col=PCOL[q.c],rw=q.w/2,rh=q.h/2;
- cx.globalAlpha=.22+.08*Math.sin(time*4+q.c);cx.fillStyle=col;cx.beginPath();cx.ellipse(X,Y,rw*1.7,rh*1.15,0,0,7);cx.fill();
- cx.globalAlpha=1;cx.fillStyle='#120a2e';cx.beginPath();cx.ellipse(X,Y,rw,rh,0,0,7);cx.fill();
- cx.strokeStyle=col;cx.lineWidth=5;cx.beginPath();cx.ellipse(X,Y,rw,rh,0,0,7);cx.stroke();
- cx.lineWidth=2.5;cx.lineCap='round';
- for(let i=0;i<3;i++){const a=time*(3+i*.6)+i*2.1;cx.globalAlpha=.9-i*.2;cx.beginPath();cx.ellipse(X,Y,rw*(.78-i*.2),rh*(.78-i*.2),a,0,4.2);cx.stroke()}
- cx.fillStyle='#fff';
- for(let i=0;i<4;i++){const a=time*1.5+i*1.57;cx.globalAlpha=.8;cx.beginPath();cx.arc(X+Math.cos(a)*rw*1.5,Y+Math.sin(a)*rh*1.05,1.6+.5+.5*Math.sin(time*2+i),0,7);cx.fill()}
- cx.globalAlpha=1;cx.lineCap='butt'}
-function drawMoon(){
- const z=MOON;cx.save();cx.beginPath();cx.roundRect(z.x,z.y,z.w,z.h,26);cx.fillStyle='rgba(176,140,255,.14)';cx.fill();
- cx.setLineDash([10,9]);cx.lineDashOffset=-time*14;cx.strokeStyle='rgba(222,205,255,.75)';cx.lineWidth=3;cx.stroke();cx.setLineDash([]);cx.clip();
- cx.fillStyle='#fff';
- for(let i=0;i<16;i++){const f=Math.sin(i*91.7)*.5+.5,g=Math.sin(i*37.3)*.5+.5,y=z.y+z.h-((time*(14+f*26)+i*61)%z.h);cx.globalAlpha=.35;cx.beginPath();cx.arc(z.x+12+g*(z.w-24)+Math.sin(time+i)*6,y,3+f*5,0,7);cx.fill()}
- cx.restore();
- cx.globalAlpha=.6;cx.font='18px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.fillStyle='#fff';cx.fillText('LOW GRAVITY',z.x+z.w/2,z.y+30);cx.globalAlpha=1}
-function drawFeatures(){drawMoon();for(const b of BELTS)band(b,'#2b3158','#9fb0ff',40);for(const b of LANES)drawLane(b);for(const q of PADS)drawPad(q);for(const q of PORTS)drawPortal(q)}
+function drawZip(z){
+ /* pylons: from each cable end down to the platform underneath */
+ for(const [x,y] of [[z.x1,z.y1],[z.x2,z.y2]]){let top=WH;for(const q of PL)if(x>q.x&&x<q.x+q.w&&q.y>y&&q.y<top)top=q.y;
+  cx.fillStyle='#1b2a6b';cx.fillRect(x-3,y,6,top-y);cx.beginPath();cx.roundRect(x-12,top-5,24,7,3);cx.fill()}
+ cx.lineCap='round';cx.strokeStyle='#1b2a6b';cx.lineWidth=7;cx.beginPath();cx.moveTo(z.x1,z.y1);cx.lineTo(z.x2,z.y2);cx.stroke();
+ cx.strokeStyle='#ffd23f';cx.lineWidth=3.5;cx.beginPath();cx.moveTo(z.x1,z.y1);cx.lineTo(z.x2,z.y2);cx.stroke();
+ cx.strokeStyle='rgba(255,255,255,.85)';cx.lineWidth=2;cx.setLineDash([10,46]);cx.lineDashOffset=-time*90;cx.beginPath();cx.moveTo(z.x1,z.y1-1);cx.lineTo(z.x2,z.y2-1);cx.stroke();cx.setLineDash([]);
+ for(const [x,y] of [[z.x1,z.y1],[z.x2,z.y2]]){cx.fillStyle='#ffd23f';cx.strokeStyle='#1b2a6b';cx.lineWidth=3;cx.beginPath();cx.arc(x,y,9,0,7);cx.fill();cx.stroke();cx.fillStyle='#1b2a6b';cx.beginPath();cx.arc(x,y,3,0,7);cx.fill()}
+ const lft=z.uy<-.02;   /* a cable that climbs to the right gets its label on the left of the pylon, clear of the cable */
+ cx.globalAlpha=.75;cx.font='17px "Lilita One",Impact,sans-serif';cx.textAlign=lft?'right':'left';cx.fillStyle='#fff';cx.strokeStyle='#1b2a6b';cx.lineWidth=4;cx.lineJoin='round';
+ const lx=lft?z.x1-16:z.x1+16;cx.strokeText('ZIPLINE  \u00b7  tap JUMP in the air to grab',lx,z.y1-16);cx.fillText('ZIPLINE  \u00b7  tap JUMP in the air to grab',lx,z.y1-16);cx.globalAlpha=1;cx.lineCap='butt'}
+function riding(p){if(p.g)return false;const hx=p.x+PW/2,hy=p.y+ZIP_HANG;for(const z of ZIPS){const s=Math.max(0,Math.min(z.len,(hx-z.x1)*z.ux+(hy-z.y1)*z.uy));if(Math.hypot(hx-(z.x1+z.ux*s),hy-(z.y1+z.uy*s))<6)return true}return false}
+function drawTrolley(p){const x=p.x+PW/2,y=p.y+ZIP_HANG;cx.fillStyle='#1b2a6b';cx.beginPath();cx.roundRect(x-11,y-9,22,9,4);cx.fill();
+ cx.fillStyle='#ff2d7a';cx.beginPath();cx.roundRect(x-9,y-8,18,6,3);cx.fill();cx.fillStyle='#fff';for(const o of[-6,6]){cx.beginPath();cx.arc(x+o,y-11,3.5,0,7);cx.fill()}
+ cx.strokeStyle='#1b2a6b';cx.lineWidth=3;cx.lineCap='round';cx.beginPath();cx.moveTo(x-5,y-1);cx.lineTo(x-4,y+4);cx.moveTo(x+5,y-1);cx.lineTo(x+4,y+4);cx.stroke();cx.lineCap='butt'}
+function drawFeatures(){for(const z of ZIPS)drawZip(z);for(const q of PADS)drawPad(q)}
 
 /* ---------- fx ---------- */
 function burst(x,y,n,c,sp){for(let i=0;i<n;i++){const a=Math.random()*6.28,s=Math.random()*sp;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-100,l:.5+Math.random()*.4,m:.9,c,r:2+Math.random()*4})}if(parts.length>100)parts.splice(0,parts.length-100)}
@@ -452,8 +441,24 @@ function dust(x,y,n){if(QUIET)return;for(let i=0;i<n;i++)parts.push({x:x+(Math.r
 
 /* ---------- physics ---------- */
 function step(p,inp,dt){
- if(p.bst>0)p.bst-=dt;if(p.pcd>0)p.pcd-=dt;
- let bv=0;if(p.g){for(const b of BELTS)if(onTop(p,b)){bv=b.d*BELT_V;break}for(const b of LANES)if(onTop(p,b)){bv=b.d*LANE_V;p.bst=BST_T;break}}p.bv=bv;
+ if(p.bst>0)p.bst-=dt;if(p.zcd>0)p.zcd-=dt;
+ p.bv=0;
+ if(p.zip>=0){   /* riding a zipline: the cable owns my movement */
+  if(p.dcd>0)p.dcd-=dt;
+  p.ps=!!inp.s;
+  const jp=inp.j&&!p.pj;p.pj=!!inp.j;
+  const ax=(inp.r?1:0)-(inp.l?1:0);if(ax)p.zd=ax;
+  const z=ZIPS[p.zip];
+  p.zs+=p.zd*ZIP_V*dt;
+  const end=p.zs<=0||p.zs>=z.len;
+  p.zs=Math.max(0,Math.min(z.len,p.zs));
+  zipPose(p);
+  if(!QUIET&&!end&&Math.random()<.35)parts.push({x:p.x+15+(Math.random()-.5)*8,y:p.y+ZIP_HANG,vx:-p.vx*.15+(Math.random()-.5)*80,vy:40+Math.random()*80,l:.28,m:.28,c:'#ffe14d',r:1.5+Math.random()*2});
+  if(jp||end||p.hb||p.gt){   /* let go: hop off / end of the cable / somebody grabbed me */
+   p.zip=-1;p.zcd=ZIP_CD;p.buf=p.coy=0;p.cut=1;p.drop=0;
+   if(jp){p.vx=Math.max(-ZIP_OUT,Math.min(ZIP_OUT,p.vx));p.vy=-ZIP_HOP;if(!QUIET){burst(p.x+15,p.y+ZIP_HANG,8,'#ffe14d',220);snd(420,.16,'square',.05,420)}}
+   else{p.vx*=.3;p.vy*=.5;if(!QUIET)snd(300,.1,'triangle',.04,-120)}}
+  return}
  const m=(p.it?1.07:1)*(p.bot?.94:1),MAX=340*m*(p.slow?SLOW_K:1)*(p.hb?HELD_K:1)*(p.gt?CARRY_K:1)*(p.bst>0?BST_K:1);
  let ax=(inp.r?1:0)-(inp.l?1:0);
  const ds=inp.s&&!p.ps;p.ps=!!inp.s;
@@ -465,12 +470,16 @@ function step(p,inp,dt){
  const jp=inp.j&&!p.pj;p.pj=!!inp.j;if(jp)p.buf=.13;else p.buf-=dt;
  p.coy=p.g?.1:p.coy-dt;
  if(p.buf>0&&p.coy>0){p.vy=-840*((p.slow||p.hb)?JUMP_K:1);p.buf=p.coy=0;p.g=0;p.cut=0;p.sq=1.35;if(p.dash>0){p.dash=0;p.vx=Math.max(-MAX,Math.min(MAX,p.vx))}dust(p.x+15,p.y+PH,6);snd(380,.14,'square',.04,320)}
+ if(p.zcd<=0&&!p.g&&p.buf>0&&!p.hb&&!p.gt&&zipFind(p)>=0){   /* tap JUMP in the air next to a cable = grab it (decoys have no zcd, so they never do) */
+  p.zip=zh.i;p.zs=zh.s;p.zd=ax||(zh.s<ZIPS[zh.i].len/2?1:-1);
+  p.buf=0;p.dash=0;p.cut=1;p.drop=0;p.sq=1.25;
+  if(!QUIET){burst(p.x+15,p.y+ZIP_HANG,10,'#ffe14d',240);snd(760,.16,'triangle',.06,380)}
+  zipPose(p);return}
  if(!inp.j&&p.vy<-260&&!p.cut){p.vy*=.45;p.cut=1}
  if(inp.d&&p.g)p.drop=.22;p.drop-=dt;
- const gz=inMoon(p)?MOON_K:1;
- if(p.dash>0&&!p.g)p.vy=0;else p.vy=Math.min(p.vy+(p.vy>0?3400:2300)*dt*gz,gz<1?690:1150);
+ if(p.dash>0&&!p.g)p.vy=0;else p.vy=Math.min(p.vy+(p.vy>0?3400:2300)*dt,1150);
  const ov=q=>p.x<q.x+q.w&&p.x+PW>q.x&&p.y<q.y+q.h&&p.y+PH>q.y;
- const was=p.g;p.x+=(p.vx+bv)*dt;
+ const was=p.g;p.x+=p.vx*dt;
  if(p.x<LX){p.x=LX;p.vx=0}if(p.x>RX-PW){p.x=RX-PW;p.vx=0}
  for(const q of SOL)if(ov(q)){if(was&&p.y+PH-q.y<=9)p.y=q.y-PH;else{p.x=p.vx>0?q.x-PW:p.vx<0?q.x+q.w:(p.x+PW/2<q.x+q.w/2?q.x-PW:q.x+q.w);p.vx=0}}
  p.g=0;p.y+=p.vy*dt;
@@ -482,14 +491,6 @@ function step(p,inp,dt){
   if(q.vx){p.vx=q.vx;p.face=q.vx>0?1:-1;p.bst=PAD_BST}
   if(!QUIET){burst(p.x+15,p.y+PH,q.vx?14:10,q.vx?'#ff9a4d':'#ffe14d',320);snd(q.vx?220:330,.28,'square',.06,q.vx?700:900)}
   break}
- let ip=-1;   /* portals */
- for(let i=0;i<PORTS.length;i++){const q=PORTS[i];if(p.x+PW>q.x+6&&p.x<q.x+q.w-6&&p.y+PH>q.y+4&&p.y<q.y+q.h){ip=i;break}}
- if(ip>=0){
-  if(p.pcd>0)p.pcd=Math.max(p.pcd,.12);
-  else{const sp=PORTS[ip],d=PORTS[sp.o],off=Math.max(0,Math.min(28,sp.t-(p.y+PH)));
-   if(!QUIET){burst(p.x+15,p.y+17,16,PCOL[sp.c],300);snd(900,.25,'sine',.06,-600)}
-   p.x=d.x+d.w/2-PW/2;p.y=d.t-PH-off;if(off>1)p.g=0;p.pcd=PORT_CD;
-   if(!QUIET){burst(p.x+15,p.y+17,16,PCOL[sp.c],300);snd(500,.25,'sine',.05,500)}}}
  if(p.g&&Math.abs(p.vx)>90){p.st=(p.st||0)-dt;if(p.st<=0){p.st=.1;dust(p.x+15-Math.sign(p.vx)*8,p.y+PH,2);if(Math.random()<.18)snd(80+Math.random()*30,.035,'triangle',.012)}}
  p.sq+=(1-p.sq)*Math.min(1,dt*14);
  if(p.y>WH+200){p.y=WH+200;p.vy=0}   /* the server respawns me */
@@ -565,23 +566,13 @@ function buildWorld(){
  const R=rec(WORLD);
  R.f('#3d97f7').rect(LX,-600,RX-LX,WH+600);          /* playfield; the screen is pre-filled pink so walls need no abutting shapes */
  const ru=R.f('#4a8ae8',.55);[[42,372,190,140],[370,375,175,80],[568,358,160,190],[830,375,185,120],[1155,375,175,80],[1352,358,120,200]].forEach(r=>ru.roundRect(r[0],r[1],r[2],r[3],10));
- [[775,277,1],[897,451,.62],[1323,512,.7],[128,707,1]].forEach(t=>{const x=t[0],y=t[1],k=t[2];
-  R.f('#c4145f').rect(x-9*k,y-95*k,18*k,95*k);
-  const c=R.f('#22f07a');c.roundRect(x-45*k,y-150*k,90*k,60*k,12*k);c.roundRect(x-68*k,y-105*k,44*k,26*k,12*k);c.roundRect(x+22*k,y-100*k,50*k,26*k,12*k)});
  const FL=[[155,304,9,'#ff2d7a'],[671,354,10,'#ffb830'],[861,277,6,'#ff2d7a'],[1200,354,10,'#ff2d7a'],[73,536,11,'#ffb830'],[666,536,6,'#ff2d7a'],[978,536,10,'#ffb830'],[514,626,6,'#ff2d7a'],[1198,512,6,'#ffb830'],[1397,712,11,'#ffb830'],[334,800,11,'#ff2d7a'],[1089,800,11,'#ff2d7a']];
  const st=R.f('#8a0e46');FL.forEach(f=>st.rect(f[0]-3,f[1]-f[2]*1.4,6,f[2]*1.4));
  ['#ff2d7a','#ffb830'].forEach(col=>{const p=R.f(col);FL.filter(f=>f[3]==col).forEach(f=>{for(let i=0;i<6;i++){const a=i*1.047;pCirc(p,f[0]+Math.cos(a)*f[2]*.7,f[1]-f[2]*1.6+Math.sin(a)*f[2]*.7,f[2]*.55)}})});
  const ce=R.f('#fff');FL.forEach(f=>pCirc(ce,f[0],f[1]-f[2]*1.6,f[2]*.4));
- const bu=R.f('#2df58a');[[45,304,18],[248,536,26],[912,536,18],[1055,354,18]].forEach(b=>{bu.moveTo(b[0]-b[2],b[1]);bu.arc(b[0],b[1],b[2],Math.PI,0);bu.closePath()});
- [[1154,284,[75,40,95,20]],[468,451,[35]],[1216,712,[28]]].forEach(b=>b[2].forEach((h,i)=>bu.roundRect(b[0]+i*44,b[1]-h,32,h,16)));
- [[555,630,200,122],[1357,287,56,33]].forEach(r=>{const L=Math.hypot(r[2],r[3])+4,a=Math.atan2(r[3],r[2]);pPoly(R.f('#ff2d7a'),r[0],r[1],a,0,0,L,12);pPoly(R.f('#39d353'),r[0],r[1],a,0,-1,L,6)});
- const cf=R.f('#ffa53a');CRATE.forEach(c=>cf.roundRect(c.x,c.y,c.w,c.h,4));
- const cs=R.s('#e8781a',3);CRATE.forEach(c=>cs.rect(c.x+5,c.y+5,c.w-10,c.h-10));
  PL.forEach(q=>{const x0=q.x==LX?q.x-400:q.x,w=q.x==LX?q.w+400:q.w;R.f('#ff2d7a').rect(x0,q.y,w,q.h);R.f('#39d353').rect(x0,q.y-2,w,6)});
- /* foreground foliage (drawn over players) */
- const F=rec(FG);const fa=F.f('#2df58a',.94);[[20,722,44],[93,742,44],[162,732,44],[248,742,44]].forEach(h=>fa.roundRect(h[0],h[1],h[2],WH-h[1]+30,22));
- const ft=F.f('#c4145f');ft.rect(218,350,45,34);
- const fl=F.f('#22f07a');fl.roundRect(192,290,98,64,22);fl.roundRect(200,335,14,28,7)}
+ const F=rec(FG);   /* foreground layer: empty on purpose, nothing hides the players */
+}
 function drawOps(list){for(const o of list){cx.globalAlpha=o.a;if(o.k=='f'){cx.fillStyle=o.c;cx.fill(o.p)}else{cx.strokeStyle=o.c;cx.lineWidth=o.lw;cx.stroke(o.p)}}cx.globalAlpha=1}
 function draw(){
  const s=cam.z*DPR;
@@ -602,6 +593,7 @@ function draw(){
  if(inG)for(const k in DEC){const d=DEC[k],o=d.o==myId?ME:rem[d.o];if(!o||!d.has)continue;d.ci=o.ci||0;d.nm=d.o==myId?name:(o.nm||'Player');d.alive=true;L.push(d)}   /* a decoy looks exactly like its owner */
  L.forEach(p=>drawChar(p,s,TX,TY,1));
  cx.setTransform(s,0,0,s,TX,TY);drawOps(FG);
+ if(inG){for(const p of L)if(!p.o&&riding(p))drawTrolley(p)}
  if(AR.h)drawArrow(AR.px,AR.py,1+AR.pop*.45,s,TX,TY);
  if(inG){
   for(const k in DEC){const d=DEC[k],o=d.o==myId?ME:rem[d.o];if(d.has&&o&&o.it&&o.alive!==false)drawArrow(d.x+PW/2,d.y+PH,1,s,TX,TY)}   /* the decoy of the arrow holder carries an arrow too */
