@@ -101,8 +101,8 @@ const SOL=PL;   /* solid rectangles: just the platforms, the arena is wide open 
 
 /* map features (identical copy on the server): 2 launch pads / cannons and 2 optional ziplines.
    ZIPLINES: tap JUMP in the air next to a cable to grab it, hold left/right to ride that way, tap JUMP to hop off. */
-const PADS=[{x:1122,y:712,w:44,vy:1200,vx:-600},{x:252,y:536,w:44,vy:1400,vx:450}];
-const ZIPS=[{x1:216,y1:314,x2:1503,y2:314},{x1:796,y1:700,x2:1467,y2:642}].map(z=>{const dx=z.x2-z.x1,dy=z.y2-z.y1,len=Math.hypot(dx,dy);return{x1:z.x1,y1:z.y1,x2:z.x2,y2:z.y2,len,ux:dx/len,uy:dy/len}});
+const PADS=[{x:1524,y:800,w:44,vy:1500,vx:0},{x:417,y:451,w:44,vy:1300,vx:0}];
+const ZIPS=[{x1:152,y1:481,x2:844,y2:167},{x1:1181,y1:457,x2:1505,y2:289}].map(z=>{const dx=z.x2-z.x1,dy=z.y2-z.y1,len=Math.hypot(dx,dy);return{x1:z.x1,y1:z.y1,x2:z.x2,y2:z.y2,len,ux:dx/len,uy:dy/len}});
 const BST_K=1.5,PAD_BST=.9;
 const ZIP_V=640,ZIP_R=44,ZIP_HANG=8,ZIP_CD=.35,ZIP_HOP=640,ZIP_OUT=520;
 const zh={i:-1,s:0};
@@ -426,9 +426,9 @@ function drawZip(z){
  cx.strokeStyle='#ffd23f';cx.lineWidth=3.5;cx.beginPath();cx.moveTo(z.x1,z.y1);cx.lineTo(z.x2,z.y2);cx.stroke();
  cx.strokeStyle='rgba(255,255,255,.85)';cx.lineWidth=2;cx.setLineDash([10,46]);cx.lineDashOffset=-time*90;cx.beginPath();cx.moveTo(z.x1,z.y1-1);cx.lineTo(z.x2,z.y2-1);cx.stroke();cx.setLineDash([]);
  for(const [x,y] of [[z.x1,z.y1],[z.x2,z.y2]]){cx.fillStyle='#ffd23f';cx.strokeStyle='#1b2a6b';cx.lineWidth=3;cx.beginPath();cx.arc(x,y,9,0,7);cx.fill();cx.stroke();cx.fillStyle='#1b2a6b';cx.beginPath();cx.arc(x,y,3,0,7);cx.fill()}
- const lft=z.uy<-.02;   /* a cable that climbs to the right gets its label on the left of the pylon, clear of the cable */
- cx.globalAlpha=.75;cx.font='17px "Lilita One",Impact,sans-serif';cx.textAlign=lft?'right':'left';cx.fillStyle='#fff';cx.strokeStyle='#1b2a6b';cx.lineWidth=4;cx.lineJoin='round';
- const lx=lft?z.x1-16:z.x1+16;cx.strokeText('ZIPLINE  \u00b7  tap JUMP in the air to grab',lx,z.y1-16);cx.fillText('ZIPLINE  \u00b7  tap JUMP in the air to grab',lx,z.y1-16);cx.globalAlpha=1;cx.lineCap='butt'}
+ const up=z.y1<z.y2?[z.x1,z.y1]:[z.x2,z.y2],rt=up[0]>800;   /* label sits at the upper end, on the open side */
+ cx.globalAlpha=.8;cx.font='16px "Lilita One",Impact,sans-serif';cx.textAlign=rt?'right':'left';cx.fillStyle='#fff';cx.strokeStyle='#1b2a6b';cx.lineWidth=4;cx.lineJoin='round';
+ const lx=rt?up[0]-14:up[0]+14,ly=up[1]-14;cx.strokeText('ZIPLINE \u00b7 tap JUMP in air',lx,ly);cx.fillText('ZIPLINE \u00b7 tap JUMP in air',lx,ly);cx.globalAlpha=1;cx.lineCap='butt'}
 function riding(p){if(p.g)return false;const hx=p.x+PW/2,hy=p.y+ZIP_HANG;for(const z of ZIPS){const s=Math.max(0,Math.min(z.len,(hx-z.x1)*z.ux+(hy-z.y1)*z.uy));if(Math.hypot(hx-(z.x1+z.ux*s),hy-(z.y1+z.uy*s))<6)return true}return false}
 function drawTrolley(p){const x=p.x+PW/2,y=p.y+ZIP_HANG;cx.fillStyle='#1b2a6b';cx.beginPath();cx.roundRect(x-11,y-9,22,9,4);cx.fill();
  cx.fillStyle='#ff2d7a';cx.beginPath();cx.roundRect(x-9,y-8,18,6,3);cx.fill();cx.fillStyle='#fff';for(const o of[-6,6]){cx.beginPath();cx.arc(x+o,y-11,3.5,0,7);cx.fill()}
@@ -566,13 +566,20 @@ function buildWorld(){
  const R=rec(WORLD);
  R.f('#3d97f7').rect(LX,-600,RX-LX,WH+600);          /* playfield; the screen is pre-filled pink so walls need no abutting shapes */
  const ru=R.f('#4a8ae8',.55);[[42,372,190,140],[370,375,175,80],[568,358,160,190],[830,375,185,120],[1155,375,175,80],[1352,358,120,200]].forEach(r=>ru.roundRect(r[0],r[1],r[2],r[3],10));
+ [[775,277,1],[897,451,.62],[1323,512,.7],[128,707,1]].forEach(t=>{const x=t[0],y=t[1],k=t[2];
+  R.f('#c4145f').rect(x-9*k,y-95*k,18*k,95*k);
+  const c=R.f('#22f07a');c.roundRect(x-45*k,y-150*k,90*k,60*k,12*k);c.roundRect(x-68*k,y-105*k,44*k,26*k,12*k);c.roundRect(x+22*k,y-100*k,50*k,26*k,12*k)});
  const FL=[[155,304,9,'#ff2d7a'],[671,354,10,'#ffb830'],[861,277,6,'#ff2d7a'],[1200,354,10,'#ff2d7a'],[73,536,11,'#ffb830'],[666,536,6,'#ff2d7a'],[978,536,10,'#ffb830'],[514,626,6,'#ff2d7a'],[1198,512,6,'#ffb830'],[1397,712,11,'#ffb830'],[334,800,11,'#ff2d7a'],[1089,800,11,'#ff2d7a']];
  const st=R.f('#8a0e46');FL.forEach(f=>st.rect(f[0]-3,f[1]-f[2]*1.4,6,f[2]*1.4));
  ['#ff2d7a','#ffb830'].forEach(col=>{const p=R.f(col);FL.filter(f=>f[3]==col).forEach(f=>{for(let i=0;i<6;i++){const a=i*1.047;pCirc(p,f[0]+Math.cos(a)*f[2]*.7,f[1]-f[2]*1.6+Math.sin(a)*f[2]*.7,f[2]*.55)}})});
  const ce=R.f('#fff');FL.forEach(f=>pCirc(ce,f[0],f[1]-f[2]*1.6,f[2]*.4));
+ const bu=R.f('#2df58a');[[45,304,18],[248,536,26],[912,536,18],[1055,354,18]].forEach(b=>{bu.moveTo(b[0]-b[2],b[1]);bu.arc(b[0],b[1],b[2],Math.PI,0);bu.closePath()});
+ [[1154,284,[75,40,95,20]],[468,451,[35]],[1216,712,[28]]].forEach(b=>b[2].forEach((h,i)=>bu.roundRect(b[0]+i*44,b[1]-h,32,h,16)));
  PL.forEach(q=>{const x0=q.x==LX?q.x-400:q.x,w=q.x==LX?q.w+400:q.w;R.f('#ff2d7a').rect(x0,q.y,w,q.h);R.f('#39d353').rect(x0,q.y-2,w,6)});
- const F=rec(FG);   /* foreground layer: empty on purpose, nothing hides the players */
-}
+ /* foreground foliage (drawn over players) */
+ const F=rec(FG);const fa=F.f('#2df58a',.94);[[20,722,44],[93,742,44],[162,732,44],[248,742,44]].forEach(h=>fa.roundRect(h[0],h[1],h[2],WH-h[1]+30,22));
+ const ft=F.f('#c4145f');ft.rect(218,350,45,34);
+ const fl=F.f('#22f07a');fl.roundRect(192,290,98,64,22);fl.roundRect(200,335,14,28,7)}
 function drawOps(list){for(const o of list){cx.globalAlpha=o.a;if(o.k=='f'){cx.fillStyle=o.c;cx.fill(o.p)}else{cx.strokeStyle=o.c;cx.lineWidth=o.lw;cx.stroke(o.p)}}cx.globalAlpha=1}
 function draw(){
  const s=cam.z*DPR;
