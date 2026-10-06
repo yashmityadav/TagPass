@@ -283,7 +283,7 @@ function onSnap(m){
  const live={};
  for(const e of m.p){const id=e[0];live[id]=1;if(id==myId)continue;const r=rem[id];if(!r)continue;r.alive=true;r.it=e[7]?1:0;pushSnap(r,e,m.ts,now)}
  for(const k in rem)if(!live[k])rem[k].alive=false;
- FX.j=m.j||[];FX.s=m.s||[];FX.t=m.tr||[];FX.g=m.gb||[];FX.r=m.gr||[];
+ FX.j=m.j||[];FX.s=m.s||[];FX.t=m.tr||[];FX.g=m.gb||[];FX.r=m.gr||[];FX.l=m.lt||[];
  const sd={};
  if(m.d)for(const e of m.d){const id=e[0];sd[id]=1;let r=DEC[id];if(!r){r=DEC[id]=newRem();r.o=e[8]}r.alive=true;pushSnap(r,e,m.ts,now)}
  for(const k in DEC)if(!sd[k]){const r=DEC[k];burst(r.x+15,r.y+17,16,'#ffffff',280);delete DEC[k]}   /* a decoy ran out / got popped */
@@ -359,8 +359,8 @@ function board(){
  if(h!==lastBoard){lastBoard=h;b.innerHTML=h}}
 /* ---------- abilities ---------- */
 const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5 s'},smoke:{n:'Smoke',i:'💨',d:'Throw a smoke cloud that hides everyone inside it for 5 s'},trap:{n:'Trap',i:'🕸️',d:'Sticky goo on the floor that slows anyone standing on it for 5 s'}};
-const FX={j:[],s:[],t:[],g:[],r:[]},DEC={};let MYAB='fake',lastHud='';
-function clearFx(){FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];for(const k in DEC)delete DEC[k];lastHud=''}
+const FX={j:[],s:[],t:[],g:[],r:[],l:[]},DEC={},LZ={},LT_R=110,LT_WARN=1,LT_FLASH=.35;let MYAB='fake',lastHud='';
+function clearFx(){FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];FX.l=[];for(const k in LZ)delete LZ[k];for(const k in DEC)delete DEC[k];lastHud=''}
 /* standing in a trap? (same rule as the server, so my prediction matches) */
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
@@ -385,6 +385,14 @@ function drawTraps(){
   cx.globalAlpha=a;cx.fillStyle='#7b2dff';cx.beginPath();cx.ellipse(X,Y-4,TRAP_W/2,8,0,0,7);cx.fill();
   cx.fillStyle='#b06bff';for(let i=0;i<5;i++){const bx=X+(i-2)*20+Math.sin(time*2+i*1.7)*4,br=3.5+Math.sin(time*3+i)*1.2;cx.beginPath();cx.arc(bx,Y-8-Math.abs(Math.sin(time*1.5+i))*4,br,0,7);cx.fill()}
   cx.fillStyle='#d9b8ff';cx.beginPath();cx.ellipse(X-14,Y-6,18,2.5,0,0,7);cx.fill()}
+ cx.globalAlpha=1}
+function drawLightning(){
+ for(const z of FX.l){const age=z[3],X=z[1],Y=z[2];
+  if(age<LT_WARN){const k=age/LT_WARN;cx.globalAlpha=.25+.25*Math.sin(time*(14+16*k));cx.fillStyle='#ffe14d';cx.beginPath();cx.arc(X,Y,LT_R,0,7);cx.fill();
+   cx.globalAlpha=.9;cx.strokeStyle='#fff';cx.lineWidth=4;cx.beginPath();cx.arc(X,Y,LT_R,0,7);cx.stroke();cx.beginPath();cx.arc(X,Y,LT_R*k,0,7);cx.stroke()}
+  else{if(!LZ[z[0]]){LZ[z[0]]=1;shake=Math.max(shake,.8);burst(X,Y,30,'#fff3a0',520)}
+   cx.globalAlpha=Math.max(0,1-(age-LT_WARN)/LT_FLASH);cx.fillStyle='#fffbe0';cx.beginPath();cx.arc(X,Y,LT_R,0,7);cx.fill();
+   cx.strokeStyle='#fff';cx.lineWidth=10;cx.beginPath();cx.moveTo(X,-50);for(let i=1;i<=9;i++)cx.lineTo(i==9?X:X+Math.sin(z[0]*7+i*3.1)*40,-50+(Y+50)*i/9);cx.stroke()}}
  cx.globalAlpha=1}
 function drawSmoke(){
  for(const c of FX.s){const a=Math.max(0,Math.min(1,(SMOKE_T-c[3])/.3,c[3]/.6)),X=c[1],Y=c[2];
@@ -591,7 +599,7 @@ function draw(){
  drawOps(WORLD);drawFeatures();
  if(S.ev&&S.ev.t=='l'&&(S.mode=='play'||S.mode=='over')){const q=PL[S.ev.pi];if(q){if(S.ev.ph==0){cx.globalAlpha=.45+.45*Math.sin(time*18);cx.fillStyle='#ffe14d';cx.fillRect(q.x-3,q.y-4,q.w+6,q.h+6)}else{cx.fillStyle='#ff3b1a';cx.fillRect(q.x,q.y-3,q.w,q.h+3);cx.fillStyle='#ffb830';for(let x=q.x+8;x<q.x+q.w-8;x+=26){cx.beginPath();cx.arc(x,q.y-3,5+Math.sin(time*6+x)*2.5,0,7);cx.fill()}}cx.globalAlpha=1}}
  const inG=S.mode=='play'||S.mode=='over';
- if(inG)drawTraps();
+ if(inG){drawTraps();drawLightning()}
  if(inG)drawGrabs();
  /* particles */
  parts.forEach(q=>{cx.globalAlpha=Math.max(0,q.l/q.m);cx.fillStyle=q.c;cx.beginPath();cx.arc(q.x,q.y,q.r,0,7);cx.fill()});cx.globalAlpha=1;

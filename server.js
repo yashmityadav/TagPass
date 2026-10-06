@@ -48,6 +48,8 @@ const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hol
 const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
 const HELD_K = 0.5, CARRY_K = 0.8;                   // speed multiplier of the player who is held / of the player who is carrying
 const ABIL = new Set(['fake', 'smoke', 'trap']);
+/* ---- lightning: random warning circle, strike after LT_WARN s, launches everyone inside (no damage) ---- */
+const LT_R = 110, LT_WARN = 1, LT_FLASH = .35, LT_MIN = 3, LT_MAX = 6, LT_VY = 1500, LT_VX = 620;
 
 const rooms = new Map();       // key -> room   (private: the room code, public: 'p-xxxx')
 
@@ -237,7 +239,7 @@ function mkRoom(key, pub) {
     ord: [], rn: 0, gm: 0, practice: false, first: null, inf: pub ? (pubN++ & 1) : 0,
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
-    dec: [], pj: [], sm: [], tr: [], fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
+    dec: [], pj: [], sm: [], tr: [], lt: [], ltNext: 2, fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
   };
   return r;   // not registered yet: addPlayer() registers it together with its first player, so an empty room can never be left behind
 }
@@ -348,7 +350,7 @@ function destroyRoom(r) {
 }
 
 /* ---------------- abilities ---------------- */
-function clearFx(r) { r.dec.length = 0; r.pj.length = 0; r.sm.length = 0; r.tr.length = 0; for (const p of r.players.values()) resetGrab(p); }
+function clearFx(r) { r.lt.length = 0; r.ltNext = 2; r.dec.length = 0; r.pj.length = 0; r.sm.length = 0; r.tr.length = 0; for (const p of r.players.values()) resetGrab(p); }
 
 // Is this (grounded) player standing in a trap? Must match the client's slowAt().
 function inTrap(r, p) {
@@ -403,6 +405,25 @@ function tickFx(r) {
   }
   for (let i = r.sm.length - 1; i >= 0; i--) if ((r.sm[i].life -= DT) <= 0) r.sm.splice(i, 1);
   for (let i = r.tr.length - 1; i >= 0; i--) if ((r.tr[i].life -= DT) <= 0) r.tr.splice(i, 1);
+  if ((r.ltNext -= DT) <= 0) {                                                      // new warning circle somewhere random
+    r.ltNext = LT_MIN + Math.random() * (LT_MAX - LT_MIN);
+    r.lt.push({ id: ++r.fxn, x: ri(LX + LT_R + Math.random() * (RX - LX - 2 * LT_R)), y: ri(150 + Math.random() * 640), age: 0, hit: 0 });
+  }
+  for (let i = r.lt.length - 1; i >= 0; i--) {
+    const z = r.lt[i]; z.age += DT;
+    if (!z.hit && z.age >= LT_WARN) {                                               // STRIKE: launch everyone inside the circle
+      z.hit = 1;
+      for (const p of r.players.values()) {
+        if (!p.alive) continue;
+        const dx = p.x + PW / 2 - z.x, dy = p.y + PH / 2 - z.y;
+        if (dx * dx + dy * dy > LT_R * LT_R) continue;
+        if (p.gt) ungrab(r, p, GRAB_CD);
+        if (p.hb) { const h = r.players.get(p.hb); if (h) ungrab(r, h, GRAB_CD); }
+        p.vx = (dx < 0 ? -1 : 1) * LT_VX; p.vy = -LT_VY; p.g = 0; p.coy = p.buf = 0; p.cut = 1; p.dash = 0; p.drop = 0; p.zip = -1; p.bst = .9; p.rs++;
+      }
+    }
+    if (z.age >= LT_WARN + LT_FLASH) r.lt.splice(i, 1);
+  }
 }
 
 /* ---------------- grab ---------------- */
@@ -575,6 +596,7 @@ function snapshot(r, t, tt) {
   if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx + d.bv) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
   if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
   if (r.sm.length) fx += ',"s":[' + r.sm.map(s => '[' + s.id + ',' + ri(s.x) + ',' + ri(s.y) + ',' + r1(s.life) + ']').join(',') + ']';
+  if (r.lt.length) fx += ',"lt":[' + r.lt.map(z => '[' + z.id + ',' + z.x + ',' + z.y + ',' + r1(z.age) + ']').join(',') + ']';
   if (r.tr.length) fx += ',"tr":[' + r.tr.map(x => '[' + x.id + ',' + x.x + ',' + x.y + ',' + r1(x.life) + ',"' + x.o + '"]').join(',') + ']';
   let gb = '', gr = '';                                                  // who is holding whom / who has their hands out
   for (const p of r.players.values()) { if (!p.alive) continue; if (p.gs === 2 && p.gt) gb += (gb ? ',' : '') + '["' + p.id + '","' + p.gt + '"]'; else if (p.gs === 1) gr += (gr ? ',' : '') + '"' + p.id + '"'; }
