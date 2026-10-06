@@ -13,7 +13,7 @@ const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000;
 
 /* ---------------- tunables ---------------- */
-const MAX_ROOM = 5;            // players per room
+const MAX_ROOM = 10;           // players per room
 const PUB_SIZE = 5;            // public match starts when this many are waiting
 const MAX_CONN_PER_IP = +process.env.MAX_CONN_PER_IP || 20;
 const MAX_CLIENTS = 2000;       // hard caps so a flood can never exhaust memory
@@ -229,10 +229,12 @@ const sendP = (p, s, drop) => { if (p.ws) send(p.ws, s, drop); };
 const bcast = (r, s, drop) => { for (const p of r.players.values()) sendP(p, s, drop); };
 
 /* ---------------- rooms ---------------- */
+let pubN = 0;
+const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 5 (alternate classic / infection), private rooms 10
 function mkRoom(key, pub) {
   const r = {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
-    ord: [], rn: 0, gm: 0, practice: false, first: null,
+    ord: [], rn: 0, gm: 0, practice: false, first: null, inf: pub ? (pubN++ & 1) : 0,
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
     dec: [], pj: [], sm: [], tr: [], fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
@@ -257,7 +259,7 @@ function bcastRoom(r) {
   const t = now();
   bcast(r, JSON.stringify({
     t: 'room', code: r.pub ? '' : r.key, pub: r.pub ? 1 : 0, st: r.st, host: r.hostId,
-    rn: r.rn, gm: r.gm, practice: r.practice ? 1 : 0, first: r.first,
+    rn: r.rn, gm: r.gm, practice: r.practice ? 1 : 0, inf: r.inf ? 1 : 0, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
     pl: [...r.players.values()].filter(p => p.ws || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
@@ -271,7 +273,7 @@ function updateLobbyGo(r, t) {
 }
 
 function spawn(p, k, t) {
-  p.x = 690 + k * 45; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
+  p.x = 580 + k * 42; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
   p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
 }
@@ -290,7 +292,7 @@ function startRound(r, ids, t) {
 }
 
 function startMatch(r, t) {
-  const ids = [...r.players.values()].filter(p => p.ws).map(p => p.id).slice(0, MAX_ROOM);   // only players who are actually connected
+  const ids = [...r.players.values()].filter(p => p.ws).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
   r.gm = 1 + rnd(999999999); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0;
   startRound(r, ids, t);
@@ -525,6 +527,14 @@ function simRoom(r, t) {
     }
   }
   grabTick(r);
+  if (r.inf) {   // INFECTION: every infected player spreads it by touch; the last healthy player wins
+    const al = aliveIds(r).map(id => r.players.get(id));
+    if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
+    if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && hit(h, q, 3)) { q.it = 1; r.lastInf = q.id; break; }
+    const hl = al.filter(p => !p.it);
+    if (!r.practice && al.length > 1) { if (!hl.length) finish(r, r.lastInf); else if (t >= r.deadline) finish(r, hl[0].id); }
+    return;
+  }
 
   let holder = null;
   for (const p of r.players.values()) if (p.alive && p.it) { holder = p; break; }
@@ -638,10 +648,10 @@ wss.on('connection', (ws, req) => {
     send(ws, JSON.stringify({ t: 'hello', id: pp.id, tk: pp.tk, rk: rr.key, code: rr.pub ? '' : rr.key, pub: rr.pub ? 1 : 0, ab: pp.ab }));
   };
   const addPlayer = (rr, nm) => {
-    if (rr.players.size >= MAX_ROOM && rr.st === 'lobby') {                  // a disconnected "ghost" never blocks a real player from a lobby
+    if (rr.players.size >= roomMax(rr) && rr.st === 'lobby') {                  // a disconnected "ghost" never blocks a real player from a lobby
       for (const q of rr.players.values()) if (!q.ws) { rr.players.delete(q.id); break; }
     }
-    if (rr.players.size >= MAX_ROOM) return err('full');                       // single choke point: no path can exceed the room limit
+    if (rr.players.size >= roomMax(rr)) return err('full');                       // single choke point: no path can exceed the room limit
     if (rr.pub && rr.st !== 'lobby') return err('full');                       // public matches in progress are closed
     if (!rooms.has(rr.key)) rooms.set(rr.key, rr);
     const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++;
@@ -692,14 +702,14 @@ wss.on('connection', (ws, req) => {
         if (!/^[A-Z0-9]{3,6}$/.test(code)) return err('bad');
         const rr = rooms.get(code);
         if (!rr || rr.pub) return err('nf');
-        if (rr.players.size >= MAX_ROOM) return err('full');
+        if (rr.players.size >= roomMax(rr)) return err('full');
         if (rr.practice && rr.st !== 'lobby') toLobby(rr);   // a solo practice game has no end: someone joining brings everybody back to the lobby
         return addPlayer(rr, cleanName(m.nm));          // joining a running match = spectate until the next game
       }
       if (m.t === 'quick') {
         let best = null;
         for (const rr of rooms.values()) {
-          if (!rr.pub || rr.st !== 'lobby' || conn(rr) >= MAX_ROOM) continue;
+          if (!rr.pub || rr.st !== 'lobby' || conn(rr) >= PUB_SIZE) continue;
           if (!best || conn(rr) > conn(best)) best = rr;   // fullest lobby first
         }
         if (!best && rooms.size >= MAX_ROOMS) return err('busy');
@@ -721,6 +731,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 
     /* ---- room controls ---- */
+    if (m.t === 'mode' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.inf = m.m ? 1 : 0; return bcastRoom(r); }
     if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) return startMatch(r, now());
     if (m.t === 'lobby' && r.st === 'over' && !r.pub && r.hostId === p.id) return toLobby(r);
   });
