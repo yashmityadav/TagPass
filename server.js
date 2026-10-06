@@ -285,7 +285,7 @@ function startRound(r, ids, t) {
   const first = ids[rnd(ids.length)]; r.first = first;
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t); p.alive = true; p.it = id === first ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
-  r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
+  r.evK = -1; r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
 }
 
@@ -492,6 +492,15 @@ function advance(r, p, b) {
   if (p.y > WH + 200 || !(p.x + p.y + p.vx + p.vy < 1e9 && p.x + p.y + p.vx + p.vy > -1e9)) { p.x = 300 + Math.random() * 600; p.y = -60; p.vx = p.vy = 0; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zcd = 0; p.rs++; }   // fell out of the world (or numeric glitch): respawn
 }
 
+// events: every 40 s of play = 30 s normal + 10 s of either blackout or lava (the lava platform is flagged 2 s before)
+function evState(r, t) {
+  const el = (t - r.cdEnd) / 1000; if (el < 0) return null;
+  const k = Math.floor(el / 40), ph = el - k * 40;
+  if (r.evK !== k) { r.evK = k; r.evT = Math.random() < .5 ? 'b' : 'l'; r.evP = rnd(18); }
+  if (r.evT === 'b') return ph >= 30 ? ['b', 1, 0, 40 - ph] : null;
+  return ph >= 28 ? ['l', ph < 30 ? 0 : 1, r.evP, ph < 30 ? 30 - ph : 40 - ph] : null;
+}
+
 function simRoom(r, t) {
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
@@ -508,6 +517,13 @@ function simRoom(r, t) {
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
   if (r.st !== 'play' || cd) return;
   tickFx(r);
+  const ev = evState(r, t);
+  if (ev && ev[0] === 'l' && ev[1] === 1) {
+    const q = PL[ev[2]];
+    for (const p of r.players.values()) if (p.alive && p.g && Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x && p.x < q.x + q.w) {   // standing on lava: burn, respawn on the ground
+      p.x = 300 + Math.random() * 600; p.y = 800 - PH - 1; p.vx = p.vy = 0; p.g = 1; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zcd = 0; resetGrab(p); p.rs++;
+    }
+  }
   grabTick(r);
 
   let holder = null;
@@ -553,6 +569,7 @@ function snapshot(r, t, tt) {
   let gb = '', gr = '';                                                  // who is holding whom / who has their hands out
   for (const p of r.players.values()) { if (!p.alive) continue; if (p.gs === 2 && p.gt) gb += (gb ? ',' : '') + '["' + p.id + '","' + p.gt + '"]'; else if (p.gs === 1) gr += (gr ? ',' : '') + '"' + p.id + '"'; }
   if (gb) fx += ',"gb":[' + gb + ']'; if (gr) fx += ',"gr":[' + gr + ']';
+  if (r.st === 'play') { const ev = evState(r, t); if (ev) fx += ',"ev":["' + ev[0] + '",' + ev[1] + ',' + ev[2] + ',' + r1(ev[3]) + ']'; }
   const head = '{"t":"s","ts":' + tt.toFixed(1) + ',"tl":' + tl + ',"cd":' + Math.max(0, (r.cdEnd - t) / 1000).toFixed(2) + ',"p":[' + arr + ']' + fx;
   for (const p of r.players.values()) {
     if (!p.ws) continue;
