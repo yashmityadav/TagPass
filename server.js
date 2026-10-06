@@ -170,7 +170,7 @@ function step(p, inp, dt) {
     }
     return;
   }
-  const m = p.it ? 1.07 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
+  const m = p.it ? 1.1 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
   const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
   if (p.dcd > 0) p.dcd -= dt;
@@ -285,7 +285,7 @@ function startRound(r, ids, t) {
   const first = ids[rnd(ids.length)]; r.first = first;
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t); p.alive = true; p.it = id === first ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
-  r.evK = -1; r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
+  r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
 }
 
@@ -496,7 +496,7 @@ function advance(r, p, b) {
 function evState(r, t) {
   const el = (t - r.cdEnd) / 1000; if (el < 0) return null;
   const k = Math.floor(el / 40), ph = el - k * 40;
-  if (r.evK !== k) { r.evK = k; r.evT = Math.random() < .5 ? 'b' : 'l'; r.evP = rnd(18); }
+  if (r.evK !== k) { r.evK = k; r.evT = (k + r.evF) % 2 ? 'b' : 'l'; r.evP = rnd(18); }
   if (r.evT === 'b') return ph >= 30 ? ['b', 1, 0, 40 - ph] : null;
   return ph >= 28 ? ['l', ph < 30 ? 0 : 1, r.evP, ph < 30 ? 30 - ph : 40 - ph] : null;
 }

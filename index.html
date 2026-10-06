@@ -459,7 +459,7 @@ function step(p,inp,dt){
    if(jp){p.vx=Math.max(-ZIP_OUT,Math.min(ZIP_OUT,p.vx));p.vy=-ZIP_HOP;if(!QUIET){burst(p.x+15,p.y+ZIP_HANG,8,'#ffe14d',220);snd(420,.16,'square',.05,420)}}
    else{p.vx*=.3;p.vy*=.5;if(!QUIET)snd(300,.1,'triangle',.04,-120)}}
   return}
- const m=(p.it?1.07:1)*(p.bot?.94:1),MAX=340*m*(p.slow?SLOW_K:1)*(p.hb?HELD_K:1)*(p.gt?CARRY_K:1)*(p.bst>0?BST_K:1);
+ const m=(p.it?1.1:1)*(p.bot?.94:1),MAX=340*m*(p.slow?SLOW_K:1)*(p.hb?HELD_K:1)*(p.gt?CARRY_K:1)*(p.bst>0?BST_K:1);
  let ax=(inp.r?1:0)-(inp.l?1:0);
  const ds=inp.s&&!p.ps;p.ps=!!inp.s;
  if(p.dcd>0)p.dcd-=dt;
