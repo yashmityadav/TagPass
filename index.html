@@ -508,7 +508,7 @@ function frame(n){
   cd=cdLeft();const bn=cd>.4?Math.ceil((cd-.4)/.6):0;if(S.st=='play'&&bn!==cdS){snd(bn>0?520:880,.12,'square',.05);cdS=bn}
   netAcc+=dt;if(netAcc>=SEND_S){netAcc=0;flush()}   /* inputs go out ~30x/s in small batches */
   const many=!S.practice;tleft=S.tl==null?100:Math.max(0,S.tl-(performance.now()-S.tlAt)/1000);   /* the clock is the SERVER's clock */
-  const timerText=many?String(Math.ceil(tleft)):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
+  const timerText=S.inf?'':many?String(Math.ceil(tleft)):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&!S.inf&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
  if(S.mode=='play')hudUpd();
  if(S.mode=='lobby'&&S.pub)lobbyTick();
  const t=performance.now();for(const k in rem)stepRemote(rem[k],t,dt);for(const k in DEC)stepRemote(DEC[k],t,dt);

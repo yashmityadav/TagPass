@@ -532,7 +532,7 @@ function simRoom(r, t) {
     if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
     if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && hit(h, q, 3)) { q.it = 1; r.lastInf = q.id; break; }
     const hl = al.filter(p => !p.it);
-    if (!r.practice && al.length > 1) { if (!hl.length) finish(r, r.lastInf); else if (t >= r.deadline) finish(r, hl[0].id); }
+    if (!r.practice && al.length > 1) { if (hl.length <= 1) finish(r, hl.length ? hl[0].id : r.lastInf); }
     return;
   }
 
@@ -570,7 +570,7 @@ function simRoom(r, t) {
 function snapshot(r, t, tt) {
   let arr = '';
   for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx + p.bv) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ']';
-  const tl = r.practice ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
+  const tl = r.practice || r.inf ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
   let fx = '';                                                           // ability effects (only when something is active)
   if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx + d.bv) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
   if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
