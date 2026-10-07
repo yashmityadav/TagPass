@@ -39,7 +39,7 @@ input{background:#fff;font:inherit;font-size:22px;padding:8px 14px;border-radius
 input::placeholder{color:#8a94c4}
 #qr{background:#fff;padding:6px;border-radius:10px;display:inline-block;width:116px;height:116px;min-width:116px;min-height:116px;text-align:center}
 #qr img, #qr canvas{width:104px!important;height:104px!important;display:block;margin:0 auto}
-#rot{display:none;position:fixed;inset:0;z-index:99;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}
+#fsp{display:none;position:fixed;inset:0;z-index:98;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}#rot{display:none;position:fixed;inset:0;z-index:99;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}
 @media (orientation:portrait) and (pointer:coarse){#rot{display:flex}}
 #ov.fit{overflow:hidden;justify-content:center}#lobw{display:flex;flex-direction:column;align-items:center;gap:10px;transform-origin:center center}#lob{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}#lob>div{min-width:150px}#qrw{width:116px;height:116px;margin:4px auto 0}
 @media (max-height:480px){#lobh,#lobp{display:none}#lob{flex-wrap:nowrap;gap:22px}#ov{padding:8px;gap:6px}#qr{width:96px;height:96px;min-width:96px;min-height:96px;padding:4px}#qr img,#qr canvas{width:88px!important;height:88px!important}#qrw{width:96px;height:96px}.b{font-size:22px;padding:8px 24px;min-width:170px}#ov p{font-size:15px}input{font-size:18px}#timer{font-size:48px}}
@@ -99,7 +99,7 @@ input{box-shadow:inset 0 3px 0 rgba(27,42,107,.15)}
 <div id="tc"><button data-k="l" style="left:30px">◀</button><button data-k="r" style="left:120px">▶</button><button data-k="j" style="right:30px;width:92px;height:92px">▲</button></div>
 <div id="hud"><button id="hd" data-k="s"><span class="ic">⚡</span><span class="kh">Shift</span><span class="cdn"></span></button><button id="ha" data-k="a"><span class="ic">👥</span><span class="kh">E</span><span class="cdn"></span></button><button id="hg" data-k="g"><span class="ic">✊</span><span class="kh">Q</span><span class="cdn"></span></button></div>
 <div id="ov"></div>
-<div id="rot"><div style="font-size:64px">⟳</div>Rotate your phone to landscape to play</div>
+<div id="rot"><div style="font-size:64px">⟳</div>Rotate your phone to landscape to play</div><div id="fsp"><div style="font-size:64px">⛶</div>Tap anywhere once to go to full screen</div>
 <script>
 /* roundRect polyfill for older iOS/Android WebViews */
 (function(){const f=function(x,y,w,h,r){if(typeof r==='object'&&r!==null)r=r[0]||0;r=Math.max(0,Math.min(+r||0,Math.abs(w)/2,Math.abs(h)/2));this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath()};
@@ -159,7 +159,9 @@ const AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* AR: the glide of the arrow bet
 const ovShow=h=>{ov.innerHTML=h;ov.classList.remove('off','fit');ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>ov.classList.add('off');
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
-['touchend','click'].forEach(e=>addEventListener(e,()=>{if(!document.fullscreenElement)lockLand()},{passive:true}));   // first tap anywhere (and any tap after leaving fullscreen) goes fullscreen
+let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped)?'flex':'none'}
+['touchend','click'].forEach(e=>addEventListener(e,()=>{fsTapped=1;if(!document.fullscreenElement)lockLand();fsChk()},{passive:true}));
+['resize','orientationchange','fullscreenchange'].forEach(e=>addEventListener(e,()=>setTimeout(fsChk,150)));setTimeout(fsChk,300);   // first tap anywhere (and any tap after leaving fullscreen) goes fullscreen
 if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout(()=>{rs();fitLobby()},60));
 function jingle(w){(w?[523,659,784,1047,1319]:[392,330,262,196]).forEach((f,i)=>setTimeout(()=>snd(f,.25,'square',.06),i*130))}
 function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play')return;const n=[0,3,7,10,12,10,7,3];snd(220*Math.pow(2,n[mi++%8]/12),.22,'triangle',.022);if(mi%2==0)snd(110*Math.pow(2,[0,0,5,7][(mi>>1)%4]/12),.3,'sine',.03)},230)}
@@ -228,11 +230,12 @@ function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';cons
 addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){
  if(S.pub)return pubUI(f);
- const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost+S.md+'/'+(S.sl|0);
+ const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)+(p.presence.rd||0)).join()+isHost+S.md+'/'+(S.sl|0);
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
- const list=`<div class="cap">PLAYERS ${peers.length}/10</div>${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
+ const list=`<div class="cap">PLAYERS ${peers.length}/10</div>${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}${p.presence.rd?' ✔':''}</div>`).join('')}`;
  const mn=MN[S.md|0],mpn=['Random','Classic','Ice','Desert'][S.sl|0];
- const act=isHost?`<div class="opt"><b>MODE</b><button onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">${mn} ↻</button></div><div class="opt"><b>MAP</b><button onclick="netSend({t:'map',m:${((S.sl|0)+1)%4}})">${mpn} ↻</button></div><button class="b go" ${peers.length<MINP[S.md|0]?'disabled style="opacity:.5"':''} onclick="hostStart()">${peers.length<MINP[S.md|0]?'Need '+MINP[S.md|0]+' players ('+peers.length+'/'+MINP[S.md|0]+')':peers.length<2?'▶ Solo practice':'▶ Start game'}</button>`:`<div class="opt"><b>MODE</b><span>${mn}</span></div><div class="opt"><b>MAP</b><span>${mpn}</span></div><div class="cap" style="text-align:center;margin:4px 0 0">Waiting for the host to start…</div>`;
+ const me=peers.find(p=>p.isMe)||{presence:{}},allR=peers.every(p=>p.presence.rd),nR=peers.filter(p=>p.presence.rd).length,rb=`<button class="b sm" style="margin-top:6px" onclick="netSend({t:'ready',v:${me.presence.rd?0:1}})">${me.presence.rd?'✔ Ready (tap to undo)':'Ready'}</button>`;
+ const act=isHost?`<div class="opt"><b>MODE</b><button onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">${mn} ↻</button></div><div class="opt"><b>MAP</b><button onclick="netSend({t:'map',m:${((S.sl|0)+1)%4}})">${mpn} ↻</button></div>${rb}<button class="b go" ${peers.length<MINP[S.md|0]||!allR?'disabled style="opacity:.5"':''} onclick="hostStart()">${peers.length<MINP[S.md|0]?'Need '+MINP[S.md|0]+' players ('+peers.length+'/'+MINP[S.md|0]+')':!allR?'Waiting for ready ('+nR+'/'+peers.length+')':peers.length<2?'▶ Solo practice':'▶ Start game'}</button>`:`<div class="opt"><b>MODE</b><span>${mn}</span></div><div class="opt"><b>MAP</b><span>${mpn}</span></div>${rb}<div class="cap" style="text-align:center;margin:4px 0 0">${allR?'Waiting for the host to start…':'Waiting for everyone to be ready ('+nR+'/'+peers.length+')'}</div>`;
  if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
  S.lobCode=code;
  ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div class="card"><div class="cap">ROOM CODE</div><div class="code">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div class="card"><div id="pl">${list}</div></div><div class="card"><div class="cap">GAME</div><div id="act">${act}</div></div></div><div id="abw" style="width:100%">${abHTML()}</div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
@@ -264,7 +267,7 @@ function lobbyTick(){
 function fetchStats(){if(window.TAG_WS)return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.json()).then(d=>{const e=$('onl');if(e&&S.mode=='menu'&&d.online>0)e.textContent=d.online+' online'+(d.waiting?' · '+d.waiting+' waiting for a match':'')}).catch(()=>{})}catch(e){}}
 
 /* ---------- net: the server owns the game. I send inputs; it sends back the truth ---------- */
-function hostStart(){if(peers.length<MINP[S.md|0])return;netSend({t:'start'})}
+function hostStart(){if(peers.length<MINP[S.md|0]||!peers.every(p=>p.presence.rd))return;netSend({t:'start'})}
 function toLobby(){netSend({t:'lobby'})}
 function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:INTERP_MIN+6,late:0,rt:null,has:0}}
 function onMsg(m,ws){
@@ -276,7 +279,7 @@ function applyRoom(m){
  if(m.md&&m.mp!==CURMP)setMap(m);
  const meP=m.pl.find(p=>p.id==myId);
  code=m.code||code;S.pub=m.pub?1:0;isHost=m.host===myId;S.practice=!!m.practice;S.md=+m.inf||0;S.sl=m.sl|0;S.inf=S.md==1;S.st=m.st;
- peers=m.pl.map(p=>({peer:p.id,isMe:p.id==myId,presence:{nm:p.nm,ci:p.ci,host:p.id==m.host?1:0,alive:p.al!==0}}));
+ peers=m.pl.map(p=>({peer:p.id,isMe:p.id==myId,presence:{nm:p.nm,ci:p.ci,host:p.id==m.host?1:0,alive:p.al!==0,rd:p.rd?1:0}}));
  ME.ci=meP?meP.ci:0;S.lc=m.lc||0;S.lcAt=performance.now();
  const seen={};
  for(const p of peers){if(p.isMe)continue;seen[p.peer]=1;let r=rem[p.peer];if(!r)r=rem[p.peer]=newRem();r.nm=String(p.presence.nm||'Player').slice(0,12);r.ci=p.presence.ci||0}
@@ -290,7 +293,7 @@ function applyRoom(m){
   if(S.mode!='play'){S.bt=null;playView(m,meP)}
   const bk=m.gm+':'+m.rn+':'+m.loser;if(S.bt!==bk){S.bt=bk;
    const lr=m.loser==myId?ME:rem[m.loser];if(lr)burst(lr.x+15,lr.y+17,40,'#ffd23f',500);
-   shake=1;snd(150,.6,'sawtooth',.08,-100);toast('❌ '+(m.loser==myId?'You are':(m.ln||'Someone')+' is')+' eliminated!',3000);
+   shake=1;snd(150,.6,'sawtooth',.08,-100);toast('💀 '+(m.loser==myId?'You are':(m.ln||'Someone')+' is')+' eliminated!',3000);
    if(m.loser==myId){ME.alive=false;ME.it=0;document.body.classList.remove('pl')}}
  }else if(m.st=='over'){
   if(S.ov!==m.gm+':'+m.rn){S.ov=m.gm+':'+m.rn;S.mode='over';document.body.classList.remove('pl');

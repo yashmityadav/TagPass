@@ -314,7 +314,7 @@ const conn = r => { let n = 0; for (const p of r.players.values()) if (p.ws) n++
 function newPlayer(nm, ci) {
   return {
     id: hex(4), tk: hex(12), ws: null, nm, ci,
-    q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
+    rdy: 0, q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
     ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
@@ -329,7 +329,7 @@ function bcastRoom(r) {
     rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf, sl: r.sel, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
-    pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
+    pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0, rd: p.rdy ? 1 : 0 }))
   }));
 }
 
@@ -441,7 +441,7 @@ function startRound(r, ids, t) {
 function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
-  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
+  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
   startRound(r, ids, t);
 }
 
@@ -454,7 +454,7 @@ function finish(r, id) {
 
 function toLobby(r) {
   r.st = 'lobby'; clearFx(r); r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
-  for (const p of [...r.players.values()]) { if (p.bot) { r.players.delete(p.id); continue; } p.alive = false; p.it = 0; p.q.length = 0; }
+  for (const p of [...r.players.values()]) { if (p.bot) { r.players.delete(p.id); continue; } p.alive = false; p.it = 0; p.q.length = 0; p.rdy = 0; }
   updateLobbyGo(r, now());
   bcastRoom(r);
 }
@@ -936,9 +936,10 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 
     /* ---- room controls ---- */
+    if (m.t === 'ready' && r.st === 'lobby' && !r.pub) { p.rdy = m.v ? 1 : 0; return bcastRoom(r); }
     if (m.t === 'map' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.sel = Math.max(0, Math.min(MAPS.length, m.m | 0)); return bcastRoom(r); }
     if (m.t === 'mode' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.inf = Math.max(0, Math.min(2, m.m | 0)); return bcastRoom(r); }
-    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { if (conn(r) < (r.inf === 1 ? 4 : r.inf === 2 ? 3 : 1)) return; return startMatch(r, now()); }   // infection needs 4+ players, freeze tag 3+
+    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { if (conn(r) < (r.inf === 1 ? 4 : r.inf === 2 ? 3 : 1)) return; if ([...r.players.values()].some(q => q.ws && !q.rdy)) return; return startMatch(r, now()); }   // infection needs 4+ players, freeze tag 3+
     if (m.t === 'lobby' && r.st === 'over' && !r.pub && r.hostId === p.id) return toLobby(r);
   });
 
