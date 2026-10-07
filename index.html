@@ -87,7 +87,7 @@ input::placeholder{color:#8a94c4}
 if(window.CanvasRenderingContext2D&&!CanvasRenderingContext2D.prototype.roundRect)CanvasRenderingContext2D.prototype.roundRect=f;
 if(window.Path2D&&!Path2D.prototype.roundRect)Path2D.prototype.roundRect=f})();
 var MUTE=false,QF=1,QUIET=0;
-const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false,desynchronized:true}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
+const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
 const $=id=>document.getElementById(id);
 let W,H,DPR,sky;
 function rs(){W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1800000?1:area>1000000?1.15:area>600000?1.35:2;DPR=Math.min(raw,maxDpr)*QF;cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
@@ -97,7 +97,7 @@ if(matchMedia('(pointer:coarse)').matches)document.body.classList.add('t');
 /* ---------- world ---------- */
 const WW=1600,WH=836,PW=30,PH=34,LX=22,RX=1570,GI=18;
 const PL=[[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a=>({x:a[0],y:a[1],w:a[2],h:a[1]==800?36:14}));
-const SOL=PL;   /* solid rectangles: just the platforms, the arena is wide open */
+const SOL=PL;const CW=40,CRS=[];let SX=SOL;   /* solid rectangles: just the platforms, the arena is wide open */
 
 /* map features (identical copy on the server): 2 launch pads / cannons and 2 optional ziplines.
    ZIPLINES: tap JUMP in the air next to a cable to grab it, hold left/right to ride that way, tap JUMP to hop off. */
@@ -130,7 +130,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 
 /* ---------- state ---------- */
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6','#ff8a3d','#ff6fd8','#29d3ff','#b6e03a','#ffffff'],BASE=location.origin+location.pathname;
-function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,zip:-1,zd:1,zs:0,zcd:0,ac:0,acAt:0,gt:0,hb:0,gs:0,gc:0,gcAt:0}}
+function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,zip:-1,zd:1,zs:0,zcd:0,ac:0,acAt:0,gt:0,gk:0,hb:0,gs:0,gc:0,gcAt:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,mi=0,mus=0,toastT,lastBoard='';
 const PHYS_HZ=60,SEND_S=0,INTERP_MIN=16,INTERP_MAX=70,EXTRAP_MS=120,PUB_SIZE=5;   /* PUB_SIZE: players needed before a public match starts */
 const S={mode:'menu',gm:0,rn:0,rs:-1,st:'lobby',bt:null,ov:null,rm:null,practice:false,tl:null,tlAt:0,cdl:0,cdAt:0,lc:0,lcAt:0},ME=mk(0,700,500),NEUT={},PEND=[],OUT=[],VO={x:0,y:0};let seq=0;
@@ -287,12 +287,13 @@ function onSnap(m){
  const sd={};
  if(m.d)for(const e of m.d){const id=e[0];sd[id]=1;let r=DEC[id];if(!r){r=DEC[id]=newRem();r.o=e[8]}r.alive=true;pushSnap(r,e,m.ts,now)}
  for(const k in DEC)if(!sd[k]){const r=DEC[k];burst(r.x+15,r.y+17,16,'#ffffff',280);delete DEC[k]}   /* a decoy ran out / got popped */
+ if(m.c){let ch=0;for(const e of m.c){let k=CRS.find(z=>z.id==e[0]);if(!k){k={id:e[0],w:CW,h:CW,x:e[1],y:e[2],dx:e[1],dy:e[2],hb:0};CRS.push(k);ch=1}k.x=e[1];k.y=e[2];k.hb=e[3]||0}if(ch)SX=SOL.concat(CRS)}
  if(m.a)reconcile(m.a);
  else if(ME.alive&&S.mode=='play'){ME.alive=false;ME.it=0;document.body.classList.remove('pl')}}
 /* server-authoritative reconciliation: take the server's state for me, then replay the inputs it hasn't processed yet */
 function reconcile(a){
  const sx=ME.x,sy=ME.y,fresh=a.rs!==S.rs,wasHb=ME.hb;
- ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
+ ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gk=a.gk||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
  if(fresh){S.rs=a.rs;PEND.length=0;VO.x=VO.y=0;ME.px=ME.x;ME.py=ME.y;ME.sq=1;return}   /* spawn / respawn: hard set */
  while(PEND.length&&PEND[0].s<=a.q)PEND.shift();
  QUIET=1;for(const c of PEND){ME.slow=slowAt(ME);step(ME,c.i,1/PHYS_HZ)}QUIET=0;
@@ -360,11 +361,11 @@ function board(){
 /* ---------- abilities ---------- */
 const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5 s'},smoke:{n:'Smoke',i:'💨',d:'Throw a smoke cloud that hides everyone inside it for 5 s'},trap:{n:'Trap',i:'🕸️',d:'Sticky goo on the floor that slows anyone standing on it for 5 s'}};
 const FX={j:[],s:[],t:[],g:[],r:[],l:[]},DEC={},LZ={},LT_R=110,LT_WARN=1,LT_FLASH=.35;let MYAB='fake',lastHud='';
-function clearFx(){FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];FX.l=[];for(const k in LZ)delete LZ[k];for(const k in DEC)delete DEC[k];lastHud=''}
+function clearFx(){CRS.length=0;SX=SOL;FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];FX.l=[];for(const k in LZ)delete LZ[k];for(const k in DEC)delete DEC[k];lastHud=''}
 /* standing in a trap? (same rule as the server, so my prediction matches) */
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
-function abHTML(){return`<div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD} s cooldown<br>Everyone also has ⚡ Dash (${DASH_CD} s cooldown) and ✊ Grab: hold it next to a player to latch on and drag them along (they're slowed; a dash breaks the grip).<br>Keys: Shift = dash, E = ability, Q = grab<br>Map: yellow pads launch you up, orange cannons fling you sideways, portals come in pairs of the same colour, cyan lanes boost you, belts carry you, the purple bubble is low gravity.</div>`}
+function abHTML(){return`<div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD} s cooldown<br>Everyone also has ⚡ Dash (${DASH_CD} s cooldown) and ✊ Grab: hold it next to a player to latch on and drag them along (they're slowed; a dash breaks the grip). It also drags 📦 crates.<br>Keys: Shift = dash, E = ability, Q = grab<br>Map: yellow pads launch you up, orange cannons fling you sideways, portals come in pairs of the same colour, cyan lanes boost you, belts carry you, the purple bubble is low gravity.</div>`}
 function pickAb(k){if(!AB[k]||S.mode!='lobby')return;MYAB=k;try{localStorage.setItem('tagab',k)}catch(e){}netSend({t:'ab',k});snd(660,.07,'square',.04,120);const w=$('abw');if(w){w.innerHTML=abHTML();fitLobby()}}
 function hudUpd(){const dc=Math.max(0,ME.dcd||0),ac=Math.max(0,(ME.ac||0)-(performance.now()-(ME.acAt||0))/1000),gc=Math.max(0,(ME.gc||0)-(performance.now()-(ME.gcAt||0))/1000),sig=Math.ceil(dc)+'|'+Math.ceil(ac)+'|'+Math.ceil(gc)+'|'+(ME.gs||0)+'|'+MYAB;if(sig===lastHud)return;lastHud=sig;
  const set=(b,c)=>{b.classList.toggle('cool',c>0);b.querySelector('.cdn').textContent=c>0?Math.ceil(c):''};set($('hd'),dc);set($('ha'),ac);set($('hg'),gc);$('hg').classList.toggle('act',!!ME.gs);$('ha').querySelector('.ic').textContent=AB[MYAB].i}
@@ -379,7 +380,11 @@ function drawGrabs(){
  const arm=(x1,y1,x2,y2,col)=>{cx.strokeStyle='#1b2a6b';cx.lineWidth=11;cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();cx.strokeStyle=col;cx.lineWidth=6;cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();cx.fillStyle='#1b2a6b';cx.beginPath();cx.arc(x2,y2,9,0,7);cx.fill();cx.fillStyle='#fff';cx.beginPath();cx.arc(x2,y2,6,0,7);cx.fill()};
  for(const g of FX.g){const A=g[0]==myId?ME:rem[g[0]],B=g[1]==myId?ME:rem[g[1]];if(!A||!B)continue;arm(A.x+PW/2,A.y+PH*.55,B.x+PW/2,B.y+PH*.55,COLS[A.ci||0])}
  for(const id of FX.r){const P=id==myId?ME:rem[id];if(!P)continue;const y=P.y+PH*.55;arm(P.x+PW/2,y,P.x+PW/2+(P.face||1)*(PW/2+GRAB_REACH*.8),y,COLS[P.ci||0])}
+ for(const k of CRS)if(k.hb){const A=k.hb==myId?ME:rem[k.hb];if(A)arm(A.x+PW/2,A.y+PH*.55,k.dx+k.w/2,k.dy+k.h/2,COLS[A.ci||0])}
  cx.lineCap='butt'}
+function drawCrates(){
+ for(const k of CRS){const x=k.dx,y=k.dy;cx.fillStyle='#1b2a6b';cx.fillRect(x-3,y-3,k.w+6,k.h+6);cx.fillStyle='#d98c3f';cx.fillRect(x,y,k.w,k.h);cx.strokeStyle='#8a4f1c';cx.lineWidth=3;cx.strokeRect(x+4,y+4,k.w-8,k.h-8);cx.beginPath();cx.moveTo(x+4,y+4);cx.lineTo(x+k.w-4,y+k.h-4);cx.moveTo(x+k.w-4,y+4);cx.lineTo(x+4,y+k.h-4);cx.stroke();
+  if(k.hb){cx.strokeStyle='#ffe14d';cx.lineWidth=3;cx.strokeRect(x-3,y-3,k.w+6,k.h+6)}}}
 function drawTraps(){
  for(const t of FX.t){const a=Math.min(1,t[3]/.8)*.92,X=t[1],Y=t[2];
   cx.globalAlpha=a;cx.fillStyle='#7b2dff';cx.beginPath();cx.ellipse(X,Y-4,TRAP_W/2,8,0,0,7);cx.fill();
@@ -462,12 +467,12 @@ function step(p,inp,dt){
   p.zs=Math.max(0,Math.min(z.len,p.zs));
   zipPose(p);
   if(!QUIET&&!end&&Math.random()<.35)parts.push({x:p.x+15+(Math.random()-.5)*8,y:p.y+ZIP_HANG,vx:-p.vx*.15+(Math.random()-.5)*80,vy:40+Math.random()*80,l:.28,m:.28,c:'#ffe14d',r:1.5+Math.random()*2});
-  if(jp||end||p.hb||p.gt){   /* let go: hop off / end of the cable / somebody grabbed me */
+  if(jp||end||p.hb||p.gt||p.gk){   /* let go: hop off / end of the cable / somebody grabbed me */
    p.zip=-1;p.zcd=ZIP_CD;p.buf=p.coy=0;p.cut=1;p.drop=0;
    if(jp){p.vx=Math.max(-ZIP_OUT,Math.min(ZIP_OUT,p.vx));p.vy=-ZIP_HOP;if(!QUIET){burst(p.x+15,p.y+ZIP_HANG,8,'#ffe14d',220);snd(420,.16,'square',.05,420)}}
    else{p.vx*=.3;p.vy*=.5;if(!QUIET)snd(300,.1,'triangle',.04,-120)}}
   return}
- const m=(p.it?1.1:1)*(p.bot?.94:1),MAX=340*m*(p.slow?SLOW_K:1)*(p.hb?HELD_K:1)*(p.gt?CARRY_K:1)*(p.bst>0?BST_K:1);
+ const m=(p.it?1.1:1)*(p.bot?.94:1),MAX=340*m*(p.slow?SLOW_K:1)*(p.hb?HELD_K:1)*((p.gt||p.gk)?CARRY_K:1)*(p.bst>0?BST_K:1);
  let ax=(inp.r?1:0)-(inp.l?1:0);
  const ds=inp.s&&!p.ps;p.ps=!!inp.s;
  if(p.dcd>0)p.dcd-=dt;
@@ -478,7 +483,7 @@ function step(p,inp,dt){
  const jp=inp.j&&!p.pj;p.pj=!!inp.j;if(jp)p.buf=.13;else p.buf-=dt;
  p.coy=p.g?.1:p.coy-dt;
  if(p.buf>0&&p.coy>0){p.vy=-840*((p.slow||p.hb)?JUMP_K:1);p.buf=p.coy=0;p.g=0;p.cut=0;p.sq=1.35;if(p.dash>0){p.dash=0;p.vx=Math.max(-MAX,Math.min(MAX,p.vx))}dust(p.x+15,p.y+PH,6);snd(380,.14,'square',.04,320)}
- if(p.zcd<=0&&!p.g&&p.buf>0&&!p.hb&&!p.gt&&zipFind(p)>=0){   /* tap JUMP in the air next to a cable = grab it (decoys have no zcd, so they never do) */
+ if(p.zcd<=0&&!p.g&&p.buf>0&&!p.hb&&!p.gt&&!p.gk&&zipFind(p)>=0){   /* tap JUMP in the air next to a cable = grab it (decoys have no zcd, so they never do) */
   p.zip=zh.i;p.zs=zh.s;p.zd=ax||(zh.s<ZIPS[zh.i].len/2?1:-1);
   p.buf=0;p.dash=0;p.cut=1;p.drop=0;p.sq=1.25;
   if(!QUIET){burst(p.x+15,p.y+ZIP_HANG,10,'#ffe14d',240);snd(760,.16,'triangle',.06,380)}
@@ -489,9 +494,9 @@ function step(p,inp,dt){
  const ov=q=>p.x<q.x+q.w&&p.x+PW>q.x&&p.y<q.y+q.h&&p.y+PH>q.y;
  const was=p.g;p.x+=p.vx*dt;
  if(p.x<LX){p.x=LX;p.vx=0}if(p.x>RX-PW){p.x=RX-PW;p.vx=0}
- for(const q of SOL)if(ov(q)){if(was&&p.y+PH-q.y<=9)p.y=q.y-PH;else{p.x=p.vx>0?q.x-PW:p.vx<0?q.x+q.w:(p.x+PW/2<q.x+q.w/2?q.x-PW:q.x+q.w);p.vx=0}}
+ for(const q of SX)if(ov(q)){if(was&&p.y+PH-q.y<=9)p.y=q.y-PH;else{p.x=p.vx>0?q.x-PW:p.vx<0?q.x+q.w:(p.x+PW/2<q.x+q.w/2?q.x-PW:q.x+q.w);p.vx=0}}
  p.g=0;p.y+=p.vy*dt;
- for(const q of SOL)if(ov(q)){
+ for(const q of SX)if(ov(q)){
   if(p.vy>=0){p.y=q.y-PH;if(!was&&p.vy>350){p.sq=.65;dust(p.x+15,q.y,8);snd(120,.07,'triangle',.06)}p.vy=0;p.g=1}
   else{const l=p.x+PW-q.x,r=q.x+q.w-p.x;if(Math.min(l,r)<10)p.x+=l<r?-l:r;else{p.y=q.y+q.h;p.vy=0}}}
  if(p.g)for(const q of PADS)if(Math.abs(p.y+PH-q.y)<3&&p.x+PW>q.x+4&&p.x<q.x+q.w-4){   /* launch pad / cannon */
@@ -519,7 +524,7 @@ function frame(n){
   const timerText=S.inf?'':many?String(Math.ceil(tleft)):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&!S.inf&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
  if(S.mode=='play')hudUpd();
  if(S.mode=='lobby'&&S.pub)lobbyTick();
- const t=performance.now();for(const k in rem)stepRemote(rem[k],t,dt);for(const k in DEC)stepRemote(DEC[k],t,dt);
+ const t=performance.now();for(const k in rem)stepRemote(rem[k],t,dt);for(const q of CRS){if(Math.abs(q.x-q.dx)>120||Math.abs(q.y-q.dy)>120){q.dx=q.x;q.dy=q.y}else{const e=1-Math.exp(-dt*35);q.dx+=(q.x-q.dx)*e;q.dy+=(q.y-q.dy)*e}}for(const k in DEC)stepRemote(DEC[k],t,dt);
  if(parts.length){
  let w=0;
  for(let i=0;i<parts.length;i++){const q=parts[i];q.l-=dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.vy+=500*dt;if(q.l>0)parts[w++]=q}
@@ -596,7 +601,7 @@ function draw(){
  /* camera origin snapped to whole device pixels: static scenery never shimmers while the camera pans */
  const TX=Math.round((W/2-cam.x*cam.z+shx)*DPR),TY=Math.round((H/2-cam.y*cam.z+shy)*DPR);
  cx.setTransform(s,0,0,s,TX,TY);
- drawOps(WORLD);drawFeatures();
+ drawOps(WORLD);drawFeatures();if(CRS.length&&(S.mode=='play'||S.mode=='over'))drawCrates();
  if(S.ev&&S.ev.t=='l'&&(S.mode=='play'||S.mode=='over')){const q=PL[S.ev.pi];if(q){if(S.ev.ph==0){cx.globalAlpha=.45+.45*Math.sin(time*18);cx.fillStyle='#ffe14d';cx.fillRect(q.x-3,q.y-4,q.w+6,q.h+6)}else{cx.fillStyle='#ff3b1a';cx.fillRect(q.x,q.y-3,q.w,q.h+3);cx.fillStyle='#ffb830';for(let x=q.x+8;x<q.x+q.w-8;x+=26){cx.beginPath();cx.arc(x,q.y-3,5+Math.sin(time*6+x)*2.5,0,7);cx.fill()}}cx.globalAlpha=1}}
  const inG=S.mode=='play'||S.mode=='over';
  if(inG){drawTraps();drawLightning()}

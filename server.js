@@ -24,7 +24,7 @@ const TICK_MS = 1000 / 60;     // simulation rate (must match the client's PHYS_
 const DT = 1 / 60;
 let snapEvery = +process.env.TAG_SNAP_EVERY || 1;   // send a snapshot every N ticks (1 = 60/s, 2 = 30/s). Adapts automatically when the server is overloaded (see the tick loop).
 const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
-const ROUND_S = +process.env.TAG_ROUND_S || 100;           // seconds per round
+const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
 const CD_MS = 2200;            // 3-2-1-GO countdown before each round
 const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
@@ -43,7 +43,7 @@ const TRAP_W = 110, TRAP_IMM = 1;                    // trap width (px); its own
 const SLOW_K = 0.4, JUMP_K = 0.8;                    // speed / jump multipliers while standing in a trap
 /* ---- grab: hold the button next to a player to latch on and drag them along (Human-Fall-Flat style). Everyone has it. ---- */
 const GRAB_REACH = 46, GRAB_REACH_T = 0.7;           // how far (px beyond the body) the hand reaches / how long (s) the hands stay out before it counts as a miss
-const GRAB_MAX = 2.5, GRAB_MIN = 0.25;               // longest hold (s) / shortest hold (a tap or a lag blip can't drop the grip instantly)
+const GRAB_MAX = 6, GRAB_MIN = 0.25;               // longest hold (s) / shortest hold (a tap or a lag blip can't drop the grip instantly)
 const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hold / after a miss
 const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
 const HELD_K = 0.5, CARRY_K = 0.8;                   // speed multiplier of the player who is held / of the player who is carrying
@@ -117,7 +117,7 @@ const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: f
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
 const PL = [[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a => ({ x: a[0], y: a[1], w: a[2], h: a[1] == 800 ? 36 : 14 }));
-const SOL = PL;                                                             // solid rectangles: just the platforms, the arena is wide open
+let SX = null; const SOL = PL; SX = SOL;                                                             // solid rectangles: just the platforms, the arena is wide open
 
 /* ---- MAP FEATURES (the client has an identical copy; both run inside step()) ----
    PADS : launch pads. vx=0 -> straight up; vx!=0 -> a cannon that also shoots you sideways.
@@ -165,14 +165,14 @@ function step(p, inp, dt) {
     const end = p.zs <= 0 || p.zs >= z.len;
     p.zs = Math.max(0, Math.min(z.len, p.zs));
     zipPose(p);
-    if (jp || end || p.hb || p.gt) {                                          // let go: hop off / end of the cable / somebody grabbed me
+    if (jp || end || p.hb || p.gt || p.gk) {                                          // let go: hop off / end of the cable / somebody grabbed me
       p.zip = -1; p.zcd = ZIP_CD; p.buf = p.coy = 0; p.cut = 1; p.drop = 0;
       if (jp) { p.vx = Math.max(-ZIP_OUT, Math.min(ZIP_OUT, p.vx)); p.vy = -ZIP_HOP; }   // hop off: keep the speed and fly
       else { p.vx *= .3; p.vy *= .5; }                                        // cable end (or grabbed): drop off near the end, onto whatever is below
     }
     return;
   }
-  const m = p.it ? 1.1 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * (p.gt ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
+  const m = p.it ? 1.1 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * ((p.gt || p.gk) ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
   const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
   if (p.dcd > 0) p.dcd -= dt;
@@ -183,7 +183,7 @@ function step(p, inp, dt) {
   const jp = inp.j && !p.pj; p.pj = !!inp.j; if (jp) p.buf = .13; else p.buf -= dt;
   p.coy = p.g ? .1 : p.coy - dt;
   if (p.buf > 0 && p.coy > 0) { p.vy = -840 * ((p.slow || p.hb) ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
-  if (p.zcd <= 0 && !p.g && p.buf > 0 && !p.hb && !p.gt && zipFind(p) >= 0) {   // tap JUMP in the air next to a cable = grab it (decoys have no zcd, so they never do)
+  if (p.zcd <= 0 && !p.g && p.buf > 0 && !p.hb && !p.gt && !p.gk && zipFind(p) >= 0) {   // tap JUMP in the air next to a cable = grab it (decoys have no zcd, so they never do)
     p.zip = zh.i; p.zs = zh.s; p.zd = ax || (zh.s < ZIPS[zh.i].len / 2 ? 1 : -1);
     p.buf = 0; p.dash = 0; p.cut = 1; p.drop = 0;
     zipPose(p); return;
@@ -194,9 +194,9 @@ function step(p, inp, dt) {
   const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
   const was = p.g; p.x += p.vx * dt;
   if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
-  for (const q of SOL) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
+  for (const q of SX) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
   p.g = 0; p.y += p.vy * dt;
-  for (const q of SOL) if (ov(q)) {
+  for (const q of SX) if (ov(q)) {
     if (p.vy >= 0) { p.y = q.y - PH; p.vy = 0; p.g = 1; }
     else { const l = p.x + PW - q.x, r = q.x + q.w - p.x; if (Math.min(l, r) < 10) p.x += l < r ? -l : r; else { p.y = q.y + q.h; p.vy = 0; } }
   }
@@ -207,6 +207,51 @@ function step(p, inp, dt) {
   }
 }
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
+
+/* ---------------- crates: solid boxes; hold GRAB next to one to drag it ---------------- */
+const CS = 40, CRATE_ROPE = 64, CRATE_BREAK = 220;
+const CRATE_SP = [[300,760],[1250,760],[700,411],[1100,314],[120,496],[1300,672],[480,411]];
+function initCrates(r) { r.cr = CRATE_SP.map((a, i) => ({ id: i + 1, x: a[0], y: a[1], w: CS, h: CS, sx: a[0], sy: a[1], vy: 0, hb: '' })); }
+const crHit = (c, o) => c.x < o.x + o.w && c.x + c.w > o.x && c.y < o.y + o.h && c.y + c.h > o.y;
+function crBlocked(r, c) {
+  if (c.x < LX || c.x + c.w > RX) return true;
+  for (const s of SOL) if (crHit(c, s)) return true;
+  for (const o of r.cr) if (o !== c && crHit(c, o)) return true;
+  for (const p of r.players.values()) if (p.alive && c.x < p.x + PW && c.x + c.w > p.x && c.y < p.y + PH && c.y + c.h > p.y) return true;
+  return false;
+}
+function moveCrate(r, c, mx, my) {
+  const ox = c.x, oy = c.y;
+  c.x = ox + mx; c.y = oy + my; if (!crBlocked(r, c)) return;
+  c.y = oy; if (!crBlocked(r, c)) return;
+  c.x = ox; c.y = oy + my; if (!crBlocked(r, c)) return;
+  c.x = ox; c.y = oy;
+}
+function grabCrate(r, p) {
+  let best = null, bd = 1e9;
+  for (const c of r.cr) {
+    if (c.hb || !(p.x < c.x + c.w + GRAB_REACH && p.x + PW > c.x - GRAB_REACH && p.y < c.y + c.h + GRAB_REACH && p.y + PH > c.y - GRAB_REACH)) continue;
+    const d = Math.abs(p.x + PW / 2 - c.x - c.w / 2) + Math.abs(p.y + PH / 2 - c.y - c.h / 2);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+function crateTick(r) {
+  for (const c of r.cr) {
+    let h = c.hb ? r.players.get(c.hb) : null;
+    if (c.hb && (!h || !h.alive || h.gk !== c.id)) { c.hb = ''; h = null; }
+    if (h) {
+      const dx = h.x + PW / 2 - c.x - c.w / 2, dy = h.y + PH / 2 - c.y - c.h / 2, d = Math.hypot(dx, dy);
+      if (d > CRATE_BREAK) { ungrab(r, h, GRAB_CD); continue; }
+      if (d > CRATE_ROPE) { const k = (d - CRATE_ROPE) / d; moveCrate(r, c, dx * k, dy * k); }
+      c.vy = 0; continue;
+    }
+    c.vy = Math.min(1150, c.vy + 2300 * DT);
+    let left = c.vy * DT;
+    while (left > 0) { const st = Math.min(left, 1.5); c.y += st; if (crBlocked(r, c)) { c.y -= st; c.vy = 0; break; } left -= st; }
+    if (c.y > WH + 100) { c.x = c.sx; c.y = c.sy; c.vy = 0; }
+  }
+}
 
 /* ---------------- helpers ---------------- */
 const rnd = n => Math.random() * n | 0;
@@ -239,7 +284,7 @@ function mkRoom(key, pub) {
     ord: [], rn: 0, gm: 0, practice: false, first: null, inf: pub ? (pubN++ & 1) : 0,
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
-    dec: [], pj: [], sm: [], tr: [], lt: [], ltNext: 2, fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
+    dec: [], pj: [], sm: [], tr: [], lt: [], cr: [], ltNext: 2, fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
   };
   return r;   // not registered yet: addPlayer() registers it together with its first player, so an empty room can never be left behind
 }
@@ -253,7 +298,7 @@ function newPlayer(nm, ci) {
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
     ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
-    gt: '', hb: '', gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
+    gt: '', hb: '', gk: 0, gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
   };
 }
 
@@ -285,7 +330,7 @@ function aliveIds(r) {
 }
 
 function startRound(r, ids, t) {
-  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r);
+  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r); initCrates(r);
   const first = ids[rnd(ids.length)]; r.first = first;
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t); p.alive = true; p.it = id === first ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
@@ -427,16 +472,17 @@ function tickFx(r) {
 }
 
 /* ---------------- grab ---------------- */
-function resetGrab(p) { p.gt = ''; p.hb = ''; p.gs = 0; p.gl = 0; p.gcd = 0; p.gimm = 0; p.pg = false; p.ge = 0; p.gin = 0; }
+function resetGrab(p) { p.gk = 0; p.gt = ''; p.hb = ''; p.gs = 0; p.gl = 0; p.gcd = 0; p.gimm = 0; p.pg = false; p.ge = 0; p.gin = 0; }
 
 // p lets go of whoever they hold; cd = seconds before p may grab again. The freed player is briefly immune to being re-grabbed.
 function ungrab(r, p, cd) {
+  if (p.gk) { const c = r.cr.find(x => x.id === p.gk); if (c && c.hb === p.id) c.hb = ''; p.gk = 0; }
   const q = p.gt && r.players.get(p.gt);
   if (q && q.hb === p.id) { q.hb = ''; q.gimm = GRAB_IMM; }
   p.gt = ''; p.gs = 0; p.gl = 0; p.gcd = cd;
 }
 
-const inSolid = p => { for (const s of SOL) if (p.x < s.x + s.w && p.x + PW > s.x && p.y < s.y + s.h && p.y + PH > s.y) return true; return false; };
+const inSolid = p => { for (const s of SX) if (p.x < s.x + s.w && p.x + PW > s.x && p.y < s.y + s.h && p.y + PH > s.y) return true; return false; };
 
 // the nearest player inside p's reach that nobody is holding yet
 function grabTarget(r, p) {
@@ -468,13 +514,16 @@ function grabTick(r) {
     // links go stale when someone leaves / is out; a held player who DASHES breaks free
     if (p.hb) { const h = r.players.get(p.hb); if (!h || !h.alive || h.gt !== p.id) p.hb = ''; else if (p.dash > 0) ungrab(r, h, GRAB_CD); }
     if (p.gt) { const q = r.players.get(p.gt); if (!p.alive || !q || !q.alive || q.hb !== p.id) { p.gt = ''; p.gs = 0; p.gl = 0; p.gcd = GRAB_CD; } }
+    if (p.gk) { const c = r.cr.find(x => x.id === p.gk); if (!p.alive || !c || c.hb !== p.id) { if (c && c.hb === p.id) c.hb = ''; p.gk = 0; p.gs = 0; p.gl = 0; p.gcd = GRAB_CD; } }
     if (!p.alive) continue;
 
     if (p.gs === 0 && p.ge && p.gcd <= 0 && !p.hb) { p.gs = 1; p.gl = GRAB_REACH_T; }   // button pressed: hands out
     p.ge = 0;
     if (p.gs === 1) {
       const q = p.hb ? null : grabTarget(r, p);
+      const cc = (q || p.hb) ? null : grabCrate(r, p);
       if (q) { p.gs = 2; p.gt = q.id; q.hb = p.id; p.gl = GRAB_MAX; bcast(r, JSON.stringify({ t: 'grab', a: p.id, b: q.id })); }
+      else if (cc) { p.gs = 2; p.gk = cc.id; cc.hb = p.id; p.gl = GRAB_MAX; bcast(r, JSON.stringify({ t: 'grab', a: p.id, b: 'c' })); }
       else { p.gl -= DT; if (!p.gin || p.gl <= 0 || p.hb) { p.gs = 0; p.gl = 0; p.gcd = GRAB_MISS_CD; } }   // nobody in reach: a miss
     } else if (p.gs === 2) {
       p.gl -= DT;
@@ -525,6 +574,7 @@ function evState(r, t) {
 }
 
 function simRoom(r, t) {
+  SX = r.cr.length ? SOL.concat(r.cr) : SOL;
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
     if (!p.alive) continue;
@@ -548,6 +598,7 @@ function simRoom(r, t) {
     }
   }
   grabTick(r);
+  crateTick(r);
   if (r.inf) {   // INFECTION: every infected player spreads it by touch; the last healthy player wins
     const al = aliveIds(r).map(id => r.players.get(id));
     if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
@@ -600,13 +651,14 @@ function snapshot(r, t, tt) {
   if (r.tr.length) fx += ',"tr":[' + r.tr.map(x => '[' + x.id + ',' + x.x + ',' + x.y + ',' + r1(x.life) + ',"' + x.o + '"]').join(',') + ']';
   let gb = '', gr = '';                                                  // who is holding whom / who has their hands out
   for (const p of r.players.values()) { if (!p.alive) continue; if (p.gs === 2 && p.gt) gb += (gb ? ',' : '') + '["' + p.id + '","' + p.gt + '"]'; else if (p.gs === 1) gr += (gr ? ',' : '') + '"' + p.id + '"'; }
+  if (r.cr.length) fx += ',"c":[' + r.cr.map(c => '[' + c.id + ',' + r1(c.x) + ',' + r1(c.y) + ',' + (c.hb ? '"' + c.hb + '"' : 0) + ']').join(',') + ']';
   if (gb) fx += ',"gb":[' + gb + ']'; if (gr) fx += ',"gr":[' + gr + ']';
   if (r.st === 'play') { const ev = evState(r, t); if (ev) fx += ',"ev":["' + ev[0] + '",' + ev[1] + ',' + ev[2] + ',' + r1(ev[3]) + ']'; }
   const head = '{"t":"s","ts":' + tt.toFixed(1) + ',"tl":' + tl + ',"cd":' + Math.max(0, (r.cdEnd - t) / 1000).toFixed(2) + ',"p":[' + arr + ']' + fx;
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
