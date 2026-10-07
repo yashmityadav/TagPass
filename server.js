@@ -119,7 +119,7 @@ const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: f
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
 let PL = [[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a => ({ x: a[0], y: a[1], w: a[2], h: a[1] == 800 ? 36 : 14 }));
-let SX = null, SOL = PL; SX = SOL;                                                             // solid rectangles: just the platforms, the arena is wide open
+let SX = null, SOL = PL, SL = []; SX = SOL;                                                             // solid rectangles: just the platforms, the arena is wide open
 
 /* ---- MAP FEATURES (the client has an identical copy; both run inside step()) ----
    PADS : launch pads. vx=0 -> straight up; vx!=0 -> a cannon that also shoots you sideways.
@@ -194,7 +194,7 @@ function step(p, inp, dt) {
   if (inp.d && p.g) p.drop = .22; p.drop -= dt;
   if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);   // air-dash: no gravity while dashing
   const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
-  const was = p.g; p.x += p.vx * dt;
+  const was = p.g, fy0 = p.y + PH; p.x += p.vx * dt;
   if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
   for (const q of SX) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
   p.g = 0; p.y += p.vy * dt;
@@ -202,30 +202,32 @@ function step(p, inp, dt) {
     if (p.vy >= 0) { p.y = q.y - PH; p.vy = 0; p.g = 1; }
     else { const l = p.x + PW - q.x, r = q.x + q.w - p.x; if (Math.min(l, r) < 10) p.x += l < r ? -l : r; else { p.y = q.y + q.h; p.vy = 0; } }
   }
+  if (SL.length && p.vy >= 0) { const mx = p.x + PW / 2; for (const q of SL) if (mx >= q.x && mx <= q.x + q.w) { const sy = q.y + (mx - q.x) / q.w * q.dy; if (was ? (fy0 >= sy - 26 && fy0 <= sy + 20) : (fy0 <= sy + 2 && p.y + PH >= sy - 1)) { p.y = sy - PH; p.vy = 0; p.g = 1; break; } } }
   if (p.g) for (const q of PADS) if (Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x + 4 && p.x < q.x + q.w - 4) {      // launch pad / cannon
     p.vy = -q.vy; p.g = 0; p.coy = 0; p.buf = 0; p.cut = 1; p.dash = 0;
     if (q.vx) { p.vx = q.vx; p.face = q.vx > 0 ? 1 : -1; p.bst = PAD_BST; }
     break;
   }
 }
+const onQ = (q, p) => q.dy ? (p.x + PW / 2 >= q.x && p.x + PW / 2 <= q.x + q.w && Math.abs(p.y + PH - (q.y + (p.x + PW / 2 - q.x) / q.w * q.dy)) < 4) : (Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x && p.x < q.x + q.w);
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
 
 /* ---------------- crates: solid boxes; hold GRAB next to one to drag it ---------------- */
 const CS = 40, CRATE_ROPE = 64, CRATE_BREAK = 220;
 /* ---- MAPS: pl = [x,y,w] platforms (floor y=800 last), pads, zips (x1<x2), cr = crate spots (top-left, 40x40, resting on a platform), sp = spawn of player 0 (+42 px per player) ---- */
 const mkZ = z => { const dx = z.x2 - z.x1, dy = z.y2 - z.y1, len = Math.hypot(dx, dy); return { x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2, len, ux: dx / len, uy: dy / len }; };
-const mkP = a => a.map(v => ({ x: v[0], y: v[1], w: v[2], h: v[1] == 800 ? 36 : 14 }));
+const mkP = a => a.map(v => ({ x: v[0], y: v[1], w: v[2], h: v[1] == 800 ? 36 : 14, dy: v[3] || 0 }));
 const MAPS = [
   { pl: PL.map(q => [q.x, q.y, q.w]), pads: PADS, zips: ZIPS.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 })), cr: [[300,760],[1250,760],[700,411],[1100,314],[120,496],[1300,672],[480,411]], sp: [580, 502] },   // 0 classic
-  { pl: [[435,408,380],[1203,325,196],[887,487,176],[171,547,468],[22,659,167],[605,653,198],[366,721,224],[73,409,9],[81,401,9],[88,393,9],[96,385,9],[103,377,9],[111,369,9],[119,361,9],[126,353,9],[134,345,9],[142,337,9],[149,329,9],[157,321,9],[164,313,9],[172,305,9],[180,297,9],[187,289,9],[195,281,9],[202,273,9],[946,716,11],[956,708,11],[966,700,11],[976,692,11],[986,684,11],[995,676,11],[1005,668,11],[1015,660,11],[1025,652,11],[1035,644,11],[1045,636,11],[1055,628,11],[1065,620,11],[1074,612,11],[1084,604,11],[1094,596,11],[1104,588,11],[1114,580,11],[1124,572,11],[1134,564,11],[1144,556,11],[1154,548,11],[1163,540,11],[1173,532,11],[1183,524,11],[1193,516,11],[1203,508,11],[1213,500,11],[1223,492,11],[1233,484,11],[1242,476,11],[1252,468,11],[1262,460,11],[1272,452,11],[1250,583,11],[1259,575,11],[1268,567,11],[1277,559,11],[1287,551,11],[1296,543,11],[1305,535,11],[1314,527,11],[1323,519,11],[1332,511,11],[1341,503,11],[1351,495,11],[1360,487,11],[1369,479,11],[1378,471,11],[1387,463,11],[1396,455,11],[1405,447,11],[1415,439,11],[1424,431,11],[1433,423,11],[1442,415,11],[1451,407,11],[1460,399,11],[1469,391,11],[1479,383,11],[1488,375,11],[1497,367,11],[22,800,1548]],
+  { pl: [[435,408,380],[1203,325,196],[887,487,176],[171,547,468],[22,659,167],[605,653,198],[366,721,224],[73,409,137,-138],[946,716,336,-265],[1250,583,256,-222],[22,800,1548]],
     pads: [{"x":284,"y":547,"w":44,"vy":1250,"vx":0},{"x":1518,"y":800,"w":44,"vy":1400,"vx":0}], zips: [{"x1":350,"y1":691,"x2":1273,"y2":177}], cr: [[610,368],[1282,285],[967,447],[417,507],[468,681],[702,613],[700,760],[1200,760]], sp: [50, 600] },   // 1 frozen peaks
-  { pl: [[22,705,170],[330,705,260],[720,705,120],[960,705,300],[1400,705,170],[150,610,130],[420,610,150],[640,610,230],[1010,610,120],[1250,610,170],[1470,610,100],[22,515,140],[260,515,200],[560,515,100],[780,515,260],[1130,515,120],[1340,515,230],[120,420,120],[360,420,130],[620,420,220],[960,420,100],[1200,420,200],[1450,420,120],[22,325,130],[280,325,150],[540,325,110],[760,325,240],[1090,325,120],[1330,325,180],[200,230,150],[480,230,120],[720,230,100],[920,230,160],[1240,230,150],[1460,230,110],[22,800,1548]],
-    pads: [{"x":330,"y":800,"w":44,"vy":1400,"vx":350},{"x":1100,"y":705,"w":44,"vy":1250,"vx":-300},{"x":1470,"y":420,"w":44,"vy":1150,"vx":-400}], zips: [{"x1":30,"y1":100,"x2":170,"y2":190},{"x1":700,"y1":60,"x2":1000,"y2":170},{"x1":1330,"y1":50,"x2":1500,"y2":150}], cr: [[400,665],[850,475],[700,380],[1300,570],[1450,475],[850,285],[1050,665]], sp: [50, 660] }   // 2 desert ruins
+  { pl: [[628,238,230],[1357,277,192],[83,367,119],[1138,388,285],[106,518,423],[977,507,237],[22,620,81],[1180,618,279],[66,715,131],[1372,725,198],[449,250,198,310],[825,558,147,-317],[22,800,1548]],
+    pads: [{"x":730,"y":800,"w":44,"vy":1700,"vx":0}], zips: [{"x1":136,"y1":247,"x2":663,"y2":114},{"x1":781,"y1":107,"x2":1456,"y2":211}], cr: [[733,198],[1435,237],[1231,348],[264,478],[1079,467],[1282,578],[400,760]], sp: [50, 570] }   // 2 desert ruins
 ];
 for (const m of MAPS) m.raw = { pl: m.pl, pads: m.pads, zips: m.zips };
 const COMP = MAPS.map(m => ({ PL: mkP(m.pl), PADS: m.pads, ZIPS: m.zips.map(mkZ) }));
 let CURMAP = 0;
-function setMap(i) { const c = COMP[i]; PL = c.PL; SOL = PL; PADS = c.PADS; ZIPS = c.ZIPS; CURMAP = i; }
+function setMap(i) { const c = COMP[i]; PL = c.PL; SOL = PL.filter(q => !q.dy); SL = PL.filter(q => q.dy); PADS = c.PADS; ZIPS = c.ZIPS; CURMAP = i; }
 function initCrates(r) { r.cr = MAPS[r.mp].cr.map((a, i) => ({ id: i + 1, x: a[0], y: a[1], w: CS, h: CS, sx: a[0], sy: a[1], vy: 0, hb: '' })); }
 const crHit = (c, o) => c.x < o.x + o.w && c.x + c.w > o.x && c.y < o.y + o.h && c.y + c.h > o.y;
 function crBlocked(r, c) {
@@ -617,7 +619,7 @@ function simRoom(r, t) {
   const ev = evState(r, t);
   if (ev && ev[0] === 'l' && ev[1] === 1) {
     const q = PL[ev[2]];
-    for (const p of r.players.values()) if (p.alive && p.g && Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x && p.x < q.x + q.w) {   // standing on lava: burn, respawn on the ground
+    for (const p of r.players.values()) if (p.alive && p.g && onQ(q, p)) {   // standing on lava: burn, respawn on the ground
       p.x = 300 + Math.random() * 600; p.y = 800 - PH - 1; p.vx = p.vy = 0; p.g = 1; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zcd = 0; resetGrab(p); p.rs++;
     }
   }
