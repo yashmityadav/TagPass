@@ -582,19 +582,16 @@ const snowman=(R,x,y)=>{const p=R.f('#fff');pCirc(p,x,y-12,14);pCirc(p,x,y-34,10
 const cane=(R,x,y,k)=>{R.f('#fff').rect(x-5*k,y-80*k,10*k,80*k);const r=R.f('#e0453a');for(let i=0;i<8;i++)r.rect(x-5*k,y-80*k+i*10*k,10*k,5*k);pCirc(r,x+8*k,y-84*k,14*k);pCirc(R.f('#fff'),x+8*k,y-84*k,7*k)};
 const palm=(R,x,y)=>{R.f('#b86a50').rect(x-3,y-62,6,62);const p=R.f('#20b878');[[-18,-66,18,6],[18,-66,18,6],[-8,-76,16,6],[10,-76,16,6]].forEach(l=>el(p,x+l[0],y+l[1],l[2],l[3]));pCirc(p,x,y-66,6)};
 const cactus=(R,x,y)=>{const p=R.f('#1fa86b');p.roundRect(x-5,y-46,10,46,5);p.roundRect(x-17,y-34,6,18,3);p.roundRect(x-17,y-24,14,6,3);p.roundRect(x+11,y-40,6,18,3);p.roundRect(x+3,y-26,14,6,3)};
+const onP=(R,fn)=>PL.forEach((q,i)=>{if(q.w<90)return;const n=q.y==800?7:1+(q.w>200);for(let k=0;k<n;k++){const v=Math.sin(i*7.1+k*3.3)*1e4,u=v-Math.floor(v);fn(q.x+30+u*(q.w-60),q.y,(i+k)%5)}});
 const THEMES=[{wall:'#ff2d7a'},
- {n:'Ice',sky:'#aab0ff',wall:'#8f95f0',pf:'#b4baff',top:'#eef0ff',deco:R=>{const X=p=>22+(p-125)*1.158,Y=p=>p*.99;bands(R,'#b4b9ff','#8a92f2');
-  const m=R.f('#8f95e8',.7);tri(m,X(330),Y(395),230,170);tri(m,X(850),Y(395),260,170);tri(R.f('#7e86e0',.6),X(1230),Y(500),250,110);
-  [[280,505,.9],[560,585,1],[1280,538,1],[760,732,1.1],[1380,650,.8],[190,800,.6],[600,800,1.2],[1260,800,1.3]].forEach(c=>cloud(R,X(c[0]),Y(c[1]),c[2]));
-  [[215,505,.9],[695,505,1],[960,418,1.1],[1205,530,1.1],[700,730,.9],[1270,735,.8]].forEach(t=>{const x=X(t[0]),y=Y(t[1]),k=t[2];R.f('#6f75d6').rect(x-9*k,y-55*k,18*k,55*k);const c=R.f('#c3c7ff');c.roundRect(x-26*k,y-98*k,52*k,44*k,10*k);c.roundRect(x-40*k,y-70*k,26*k,18*k,8*k)});
-  [[638,348],[1356,800],[640,348]].slice(0,2).forEach(s=>snowman(R,X(s[0]),Y(s[1])));
-  [[228,648,.9],[1107,602,1]].forEach(c=>cane(R,X(c[0]),Y(c[1]),c[2]))}},
- {n:'Desert',sky:'#19ffb0',wall:'#ffd36e',pf:'#f4b04a',top:'#ffd878',deco:R=>{const X=p=>22+(p-148)*1.186,Y=p=>p*.99;bands(R,'#19ffb0','#fba58a');
-  const g=R.f('#6fc47f',.6);[[355,520,230,125],[1015,520,240,120],[600,580,140,60],[1400,560,120,70],[150,590,100,70]].forEach(h=>{g.moveTo(X(h[0])+h[2]*1.186,Y(h[1]));g.ellipse(X(h[0]),Y(h[1]),h[2]*1.186,h[3],0,0,Math.PI*2)});
-  [[219,530],[536,470],[821,512],[1238,590],[405,805],[1335,805]].forEach(p=>palm(R,X(p[0]),Y(p[1])));
-  [[1129,448],[662,588],[517,708],[1000,805],[1398,650]].forEach(p=>cactus(R,X(p[0]),Y(p[1])));
-  tri(R.f('#f5c25a'),X(1013),Y(548),40,42);tri(R.f('#f5c25a'),X(167),Y(716),22,22);
-  R.f('#f5c25a').rect(X(423),Y(636),10,74);const s=R.f('#e8a860');s.roundRect(X(398),Y(603),58,30,8);s.roundRect(X(415),Y(572),24,34,6);R.f('#c0392b').rect(X(423),Y(566),10,10)}}];
+ {n:'Ice',sky:'#aab0ff',wall:'#8f95f0',pf:'#b4baff',top:'#eef0ff',deco:R=>{bands(R,'#b4b9ff','#8a92f2');
+  const m=R.f('#8f95e8',.7);tri(m,330,380,260,450);tri(m,900,380,300,450);tri(R.f('#7e86e0',.6),1380,500,260,330);
+  [[250,300,1],[620,200,1.2],[1100,260,1],[1450,170,1],[450,560,.9],[1250,590,1.1],[820,650,1]].forEach(c=>cloud(R,c[0],c[1],c[2]));
+  onP(R,(x,y,t)=>{if(t==0)snowman(R,x,y);else if(t==1||t==3){R.f('#6f75d6').rect(x-8,y-50,16,50);const c=R.f('#c3c7ff');c.roundRect(x-24,y-88,48,40,10);c.roundRect(x-36,y-64,24,16,8)}else if(t==2)cane(R,x,y,.8)})}},
+ {n:'Desert',sky:'#19ffb0',wall:'#ffd36e',pf:'#f4b04a',top:'#ffd878',deco:R=>{bands(R,'#19ffb0','#fba58a');
+  const g=R.f('#6fc47f',.6);[[330,700,300,170],[1000,700,320,160],[1450,720,200,110]].forEach(h=>el(g,h[0],h[1],h[2],h[3]));
+  onP(R,(x,y,t)=>{if(t==0||t==3)palm(R,x,y);else if(t==1||t==4)cactus(R,x,y);else tri(R.f('#f5c25a'),x,y-36,30,36)});
+  R.f('#f5c25a').rect(1000,730,10,70);const s=R.f('#e8a860');s.roundRect(975,700,58,30,8);s.roundRect(992,668,24,34,6);R.f('#c0392b').rect(998,662,10,10)}}];
 let CURMP=0,TH=THEMES[0];
 function setMap(m){const d=m.md;CURMP=m.mp;TH=THEMES[m.mp]||THEMES[0];PL=d.pl.map(a=>({x:a[0],y:a[1],w:a[2],h:a[1]==800?36:14}));SOL=PL;PADS=d.pads;ZIPS=d.zips.map(z=>{const dx=z.x2-z.x1,dy=z.y2-z.y1,len=Math.hypot(dx,dy);return{x1:z.x1,y1:z.y1,x2:z.x2,y2:z.y2,len,ux:dx/len,uy:dy/len}});SX=SOL.concat(CRS);buildWorld()}
 function buildTheme(){const R=rec(WORLD),t=TH;R.f(t.sky).rect(LX,-600,RX-LX,WH+600);t.deco(R);PL.forEach(q=>{const x0=q.x==LX?q.x-400:q.x,w=q.x==LX?q.w+400:q.w;R.f(t.pf).rect(x0,q.y,w,q.h);R.f(t.top).rect(x0,q.y-2,w,6)})}
