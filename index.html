@@ -86,7 +86,7 @@ input::placeholder{color:#8a94c4}
 (function(){const f=function(x,y,w,h,r){if(typeof r==='object'&&r!==null)r=r[0]||0;r=Math.max(0,Math.min(+r||0,Math.abs(w)/2,Math.abs(h)/2));this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath()};
 if(window.CanvasRenderingContext2D&&!CanvasRenderingContext2D.prototype.roundRect)CanvasRenderingContext2D.prototype.roundRect=f;
 if(window.Path2D&&!Path2D.prototype.roundRect)Path2D.prototype.roundRect=f})();
-var MUTE=false,QF=1,QUIET=0;
+var MN=['Classic','Infection','Freeze Tag'],MUTE=false,QF=1,QUIET=0;
 const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
 const $=id=>document.getElementById(id);
 let W,H,DPR,sky;
@@ -207,10 +207,10 @@ function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';cons
 addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){
  if(S.pub)return pubUI(f);
- const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost+S.inf;
+ const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost+S.md;
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
  const list=`Players ${peers.length}/10${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
- const act=isHost?`<button class="b alt sm" onclick="netSend({t:'mode',m:${S.inf?0:1}})">Mode: ${S.inf?'Infection':'Classic'}</button><br><button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:`<p>Mode: ${S.inf?'Infection':'Classic'}<br>Waiting for the host to start…</p>`;
+ const act=isHost?`<button class="b alt sm" onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">Mode: ${MN[S.md|0]}</button><br><button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:`<p>Mode: ${MN[S.md|0]}<br>Waiting for the host to start…</p>`;
  if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
  S.lobCode=code;
  ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><div id="abw">${abHTML()}</div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
@@ -224,11 +224,11 @@ function lobbyUI(f){
 /* ---------- public lobby ---------- */
 function pubUI(f){
  const ps=peers.slice(),n=ps.length,full=n>=PUB_SIZE;
- const sig=ps.map(p=>p.peer+(p.presence.nm||'')+(p.presence.ci||0)).join()+S.inf,live=!ov.classList.contains('off')&&$('pubw');
+ const sig=ps.map(p=>p.peer+(p.presence.nm||'')+(p.presence.ci||0)).join()+S.md,live=!ov.classList.contains('off')&&$('pubw');
  if(!f&&live&&S.psig===sig)return;S.psig=sig;
  if(S.lastN!=null&&n>S.lastN)snd(660,.09,'square',.04,200);S.lastN=n;
  let sl='';for(let i=0;i<PUB_SIZE;i++){const p=ps[i];sl+=p?`<div class="slot"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.isMe?' (you)':''}</div>`:'<div class="slot e"><span class="dot"></span>Searching…</div>'}
- const head=(S.inf?'🦠 INFECTION':'🏃 CLASSIC')+'<br>'+(full?'Match found!':'Finding players…')+' <span style="opacity:.8">'+n+'/'+PUB_SIZE+'</span>';
+ const head=['🏃 CLASSIC','🦠 INFECTION','❄ FREEZE TAG'][S.md|0]+'<br>'+(full?'Match found!':'Finding players…')+' <span style="opacity:.8">'+n+'/'+PUB_SIZE+'</span>';
  if(live&&!f){$('pcnt').innerHTML=head;$('pslots').innerHTML=sl;const c=$('pcd');if(c&&!full)c.textContent='Waiting for more players…';fitLobby();return}
  ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="pubw"><div id="pcnt">${head}</div><div id="pslots">${sl}</div><div id="pcd">${full?'Starting…':'Waiting for more players…'}</div></div><div id="abw">${abHTML()}</div><button class="b alt sm" onclick="leaveRoom()">Cancel</button></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(fitLobby,30))}
@@ -247,13 +247,13 @@ function toLobby(){netSend({t:'lobby'})}
 function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:INTERP_MIN+6,late:0,rt:null,has:0}}
 function onMsg(m,ws){
  if(!room||room.ws!==ws)return;room.rx=Date.now();
- switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
+ switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'fz':onFz(m);break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
 function toLobbyView(){clearFx();S.mode='lobby';S.rn=0;S.gm=0;S.rs=-1;PEND.length=0;OUT.length=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent='';lobbyUI(1)}
 function playView(m,meP){S.rn=m.rn;S.gm=m.gm;S.mode='play';ovHide();ME.alive=!!meP&&meP.al!==0;document.body.classList.toggle('pl',ME.alive)}
 function applyRoom(m){
  if(m.md&&m.mp!==CURMP)setMap(m);
  const meP=m.pl.find(p=>p.id==myId);
- code=m.code||code;S.pub=m.pub?1:0;isHost=m.host===myId;S.practice=!!m.practice;S.inf=!!m.inf;S.st=m.st;
+ code=m.code||code;S.pub=m.pub?1:0;isHost=m.host===myId;S.practice=!!m.practice;S.md=+m.inf||0;S.inf=S.md==1;S.st=m.st;
  peers=m.pl.map(p=>({peer:p.id,isMe:p.id==myId,presence:{nm:p.nm,ci:p.ci,host:p.id==m.host?1:0,alive:p.al!==0}}));
  ME.ci=meP?meP.ci:0;S.lc=m.lc||0;S.lcAt=performance.now();
  const seen={};
@@ -263,7 +263,7 @@ function applyRoom(m){
   if(S.rn!==m.rn||S.gm!==m.gm){   /* a new round (or I just joined a running match as a spectator) */
    S.ov=null;S.bt=null;PEND.length=0;OUT.length=0;VO.x=VO.y=0;S.rs=-1;S.cdFirst=1;AR.h=null;clearFx();
    playView(m,meP);ME.it=m.first==myId?1:0;ME.sq=1;cdS=9;
-   toast(!ME.alive?'Spectating. You join the next game.':(m.practice?'Practice mode':(ME.it?'You have the arrow!':'Run!')),2000)}
+   toast(!ME.alive?'Spectating. You join the next game.':(m.practice?'Practice mode':(ME.it?(S.md==2?'Freeze everyone!':'You have the arrow!'):(S.md==2?'Run! Touch frozen friends to free them':'Run!'))),2000)}
  }else if(m.st=='between'){
   if(S.mode!='play'){S.bt=null;playView(m,meP)}
   if(S.bt!==m.gm+':'+m.rn){S.bt=m.gm+':'+m.rn;
@@ -282,7 +282,7 @@ function onSnap(m){
  S.tl=m.tl;S.tlAt=now;const ek=m.ev?m.ev[0]+m.ev[1]+m.ev[2]:'';S.ev=m.ev?{t:m.ev[0],ph:m.ev[1],pi:m.ev[2],rem:m.ev[3],at:now}:null;if(ek!==S.ek){S.ek=ek;if(m.ev&&m.ev[1]==0&&m.ev[0]=='l')toast('⚠ Floor is lava soon!',1800);else if(m.ev&&m.ev[1]==1)toast(m.ev[0]=='b'?'🌑 Blackout!':'🔥 Lava!',1500)}S.cdl=m.cd;S.cdAt=now;
  if(S.cdFirst){S.cdFirst=0;if(m.cd<=0)cdS=0}
  const live={};
- for(const e of m.p){const id=e[0];live[id]=1;if(id==myId)continue;const r=rem[id];if(!r)continue;r.alive=true;r.it=e[7]?1:0;pushSnap(r,e,m.ts,now)}
+ for(const e of m.p){const id=e[0];live[id]=1;if(id==myId)continue;const r=rem[id];if(!r)continue;r.alive=true;r.it=e[7]?1:0;r.fz=e[8]?1:0;pushSnap(r,e,m.ts,now)}
  for(const k in rem)if(!live[k])rem[k].alive=false;
  FX.j=m.j||[];FX.s=m.s||[];FX.t=m.tr||[];FX.g=m.gb||[];FX.r=m.gr||[];FX.l=m.lt||[];
  const sd={};
@@ -294,7 +294,7 @@ function onSnap(m){
 /* server-authoritative reconciliation: take the server's state for me, then replay the inputs it hasn't processed yet */
 function reconcile(a){
  const sx=ME.x,sy=ME.y,fresh=a.rs!==S.rs,wasHb=ME.hb;
- ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gk=a.gk||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
+ ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gk=a.gk||0;ME.fz=a.fz||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
  if(fresh){S.rs=a.rs;PEND.length=0;VO.x=VO.y=0;ME.px=ME.x;ME.py=ME.y;ME.sq=1;return}   /* spawn / respawn: hard set */
  while(PEND.length&&PEND[0].s<=a.q)PEND.shift();
  QUIET=1;for(const c of PEND){ME.slow=slowAt(ME);step(ME,c.i,1/PHYS_HZ)}QUIET=0;
@@ -374,6 +374,7 @@ function onAbu(m){const o=m.o==myId?ME:rem[m.o];if(!o)return;
  if(m.k=='fake'){burst(o.x+15,o.y+17,16,'#ffffff',260);snd(520,.15,'triangle',.05,300)}
  else if(m.k=='smoke')snd(260,.18,'sawtooth',.04,-120);
  else if(m.k=='trap'){burst(o.x+15,o.y+PH,14,'#b06bff',200);snd(180,.2,'sine',.06,-60)}}
+function onFz(m){const a=m.a==myId?ME:rem[m.a];if(a)burst(a.x+15,a.y+17,m.f?20:24,m.f?'#9fe6ff':'#ffe14d',330);snd(m.f?900:500,.15,'triangle',.06,m.f?-500:300);if(m.a==myId)shake=Math.max(shake,.3)}
 function onGrab(m){const a=m.a==myId?ME:rem[m.a],b=m.b==myId?ME:rem[m.b];if(a&&b)burst((a.x+b.x)/2+15,(a.y+b.y)/2+17,14,'#ffe14d',240);snd(240,.12,'square',.05,-80);if(m.b==myId)shake=Math.max(shake,.3)}
 /* grab visuals: an arm reaching out in front of a player who is looking for someone, and an arm/rope between a grabber and the player they hold */
 function drawGrabs(){
@@ -419,6 +420,7 @@ function drawChar(p,s,TX,TY,al){
  cx.fillStyle='#fff';[-6,7].forEach(e=>{cx.beginPath();cx.arc(e+p.face*2,-PH+18,5,0,7);cx.fill()});
  cx.fillStyle='#111';[-6,7].forEach(e=>{cx.beginPath();cx.arc(e+p.face*4,-PH+19,2.3,0,7);cx.fill()});
  cx.restore();
+ if(p.fz){cx.globalAlpha=.65;cx.fillStyle='#aee9ff';cx.fillRect(-21,-PH-10,42,PH+12);cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(-21,-PH-10,42,PH+12);cx.globalAlpha=1}
  const nm=p===ME?name:p.nm;
  cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);cx.globalAlpha=1}
 
@@ -543,7 +545,7 @@ function cdLeft(){return Math.max(0,S.cdl-(performance.now()-S.cdAt)/1000)}
 function upd(dt){
  ME.px=ME.x;ME.py=ME.y;
  if(!room||!ME.alive||S.rs<0||(S.st!='play'&&S.st!='between'))return;
- const h=cdLeft()>0?NEUT:human(),inp={l:h.l?1:0,r:h.r?1:0,j:h.j?1:0,d:0,s:h.s?1:0};
+ const h=(cdLeft()>0||ME.fz)?NEUT:human(),inp={l:h.l?1:0,r:h.r?1:0,j:h.j?1:0,d:0,s:h.s?1:0};
  TL.s=TL.a=TL.g=0;ME.slow=slowAt(ME);
  step(ME,inp,dt);
  const q=++seq;PEND.push({s:q,i:inp});if(PEND.length>180)PEND.shift();
@@ -627,7 +629,7 @@ function draw(){
  cx.setTransform(s,0,0,s,TX,TY);drawOps(FG);
  if(inG){for(const p of L)if(!p.o&&riding(p))drawTrolley(p)}
  if(AR.h)drawArrow(AR.px,AR.py,1+AR.pop*.45,s,TX,TY);
- if(S.inf&&inG)for(const p of L)if(p.it&&p!==AR.h&&!p.o)drawArrow(p.x+PW/2,p.y+PH,1,s,TX,TY);
+ if(S.md&&inG)for(const p of L)if(p.it&&p!==AR.h&&!p.o)drawArrow(p.x+PW/2,p.y+PH,1,s,TX,TY);
  if(inG){
   for(const k in DEC){const d=DEC[k],o=d.o==myId?ME:rem[d.o];if(d.has&&o&&o.it&&o.alive!==false)drawArrow(d.x+PW/2,d.y+PH,1,s,TX,TY)}   /* the decoy of the arrow holder carries an arrow too */
   cx.setTransform(s,0,0,s,TX,TY);

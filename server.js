@@ -296,7 +296,7 @@ const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 5 (alterna
 function mkRoom(key, pub) {
   const r = {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
-    ord: [], rn: 0, gm: 0, mp: 0, practice: false, first: null, inf: pub ? (pubN++ & 1) : 0,
+    ord: [], rn: 0, gm: 0, mp: 0, practice: false, first: null, inf: pub ? (pubN++ % 3) : 0,
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
     dec: [], pj: [], sm: [], tr: [], lt: [], cr: [], ltNext: 2, fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
@@ -313,7 +313,7 @@ function newPlayer(nm, ci) {
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
     ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
-    gt: '', hb: '', gk: 0, gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
+    gt: '', hb: '', gk: 0, fz: 0, fimm: 0, gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
   };
 }
 
@@ -321,7 +321,7 @@ function bcastRoom(r) {
   const t = now();
   bcast(r, JSON.stringify({
     t: 'room', code: r.pub ? '' : r.key, pub: r.pub ? 1 : 0, st: r.st, host: r.hostId,
-    rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf ? 1 : 0, first: r.first,
+    rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
     pl: [...r.players.values()].filter(p => p.ws || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
@@ -337,7 +337,7 @@ function updateLobbyGo(r, t) {
 function spawn(p, k, t, sp) {
   p.x = sp[0] + k * 42; p.y = sp[1]; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
-  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0;   // every round starts with dash + ability + grab ready
 }
 
 function aliveIds(r) {
@@ -347,7 +347,8 @@ function aliveIds(r) {
 function startRound(r, ids, t) {
   r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r); initCrates(r);
   const first = ids[rnd(ids.length)]; r.first = first;
-  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t, MAPS[r.mp].sp); p.alive = true; p.it = id === first ? 1 : 0; });
+  const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
+  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t, MAPS[r.mp].sp); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
   r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
@@ -598,9 +599,9 @@ function simRoom(r, t) {
     p.slow = inTrap(r, p);                                                // standing in a trap?
     let b = consume(p, t);
     if (b === -1) { p.credit = Math.min(8, p.credit + 1); continue; }   // a late packet: the player earns ONE catch-up step (never more than 1 per missed tick)
-    advance(r, p, cd ? 0 : b);
+    advance(r, p, (cd || p.fz) ? 0 : b);
     // after a lag spike a burst of inputs arrives: spend earned credit to catch up. A flooding cheater has no credit, so they can't go faster than 60 steps/s.
-    while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(r, p, cd ? 0 : c2.b); } }
+    while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(r, p, (cd || p.fz) ? 0 : c2.b); } }
   }
 
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
@@ -615,7 +616,31 @@ function simRoom(r, t) {
   }
   grabTick(r);
   crateTick(r);
-  if (r.inf) {   // INFECTION: every infected player spreads it by touch; the last healthy player wins
+  if (r.inf === 2) {   // FREEZE TAG: half the players are freezers (they freeze runners by touch), free runners unfreeze frozen ones by touch. All runners frozen = freezers win; time out = runners win.
+    const al = aliveIds(r).map(id => r.players.get(id));
+    if (!al.length) return;
+    if (!al.some(p => p.it)) al[rnd(al.length)].it = 1;
+    const its = al.filter(p => p.it), run = al.filter(p => !p.it);
+    for (const p of its) p.fz = 0;
+    for (const q of run) if (q.fimm > 0) q.fimm -= DT;
+    if (t >= r.tagFrom) for (const q of run) {
+      if (q.fz) { for (const h of run) if (h !== q && !h.fz && hit(h, q, 3)) { q.fz = 0; q.fimm = 1.2; bcast(r, JSON.stringify({ t: 'fz', a: q.id, f: 0 })); break; } }
+      else if (q.fimm <= 0) {
+        const f = its.find(h => hit(h, q, 3));
+        if (!f) continue;
+        q.fz = 1; q.vx = 0; q.dash = 0; q.zip = -1; r.lastInf = f.id;
+        if (q.gt || q.gk) ungrab(r, q, GRAB_CD);
+        if (q.hb) { const g = r.players.get(q.hb); if (g) ungrab(r, g, GRAB_CD); }
+        bcast(r, JSON.stringify({ t: 'fz', a: q.id, f: 1 }));
+      }
+    }
+    if (!r.practice && run.length) {
+      if (run.every(p => p.fz)) finish(r, r.players.has(r.lastInf) ? r.lastInf : its[0].id);
+      else if (t >= r.deadline) finish(r, run.find(p => !p.fz).id);
+    }
+    return;
+  }
+  if (r.inf === 1) {   // INFECTION: every infected player spreads it by touch; the last healthy player wins
     const al = aliveIds(r).map(id => r.players.get(id));
     if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
     if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && hit(h, q, 3)) { q.it = 1; r.lastInf = q.id; break; }
@@ -657,8 +682,8 @@ function simRoom(r, t) {
 
 function snapshot(r, t, tt) {
   let arr = '';
-  for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx + p.bv) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ']';
-  const tl = r.practice || r.inf ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
+  for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx + p.bv) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ',' + (p.fz ? 1 : 0) + ']';
+  const tl = r.practice || r.inf === 1 ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
   let fx = '';                                                           // ability effects (only when something is active)
   if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx + d.bv) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
   if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
@@ -674,7 +699,7 @@ function snapshot(r, t, tt) {
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"fz":' + (p.fz ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
@@ -821,7 +846,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 
     /* ---- room controls ---- */
-    if (m.t === 'mode' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.inf = m.m ? 1 : 0; return bcastRoom(r); }
+    if (m.t === 'mode' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.inf = Math.max(0, Math.min(2, m.m | 0)); return bcastRoom(r); }
     if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) return startMatch(r, now());
     if (m.t === 'lobby' && r.st === 'over' && !r.pub && r.hostId === p.id) return toLobby(r);
   });
