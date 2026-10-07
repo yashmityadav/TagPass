@@ -314,10 +314,10 @@ function onSnap(m){
 /* server-authoritative reconciliation: take the server's state for me, then replay the inputs it hasn't processed yet */
 function reconcile(a){
  const sx=ME.x,sy=ME.y,fresh=a.rs!==S.rs,wasHb=ME.hb;
- ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gk=a.gk||0;ME.fz=a.fz||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
+ ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gk=a.gk||0;const wasLv=ME.lv>0;ME.lv=a.lv||0;ME.lvAt=performance.now();if(ME.lv>0&&!wasLv)toast('🔥 Burned! Slowed for 15s',1500);ME.fz=a.fz||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
  if(fresh){S.rs=a.rs;PEND.length=0;VO.x=VO.y=0;ME.px=ME.x;ME.py=ME.y;ME.sq=1;return}   /* spawn / respawn: hard set */
  while(PEND.length&&PEND[0].s<=a.q)PEND.shift();
- QUIET=1;for(const c of PEND){ME.slow=slowAt(ME);step(ME,c.i,1/PHYS_HZ)}QUIET=0;
+ QUIET=1;for(const c of PEND){ME.slow=slowAt(ME)||slowLv();step(ME,c.i,1/PHYS_HZ)}QUIET=0;
  const dx=sx-ME.x,dy=sy-ME.y,d=Math.hypot(dx,dy);
  if(d>.01){if(d<80){VO.x+=dx;VO.y+=dy}else{VO.x=VO.y=0}}   /* small error: blend away visually; big error: snap */
  ME.px=ME.x;ME.py=ME.y}
@@ -384,6 +384,7 @@ const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5
 const FX={j:[],s:[],t:[],g:[],r:[],l:[]},DEC={},LZ={},LT_R=110,LT_WARN=1,LT_FLASH=.35;let MYAB='fake',lastHud='';
 function clearFx(){CRS.length=0;SX=SOL;FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];FX.l=[];for(const k in LZ)delete LZ[k];for(const k in DEC)delete DEC[k];lastHud=''}
 /* standing in a trap? (same rule as the server, so my prediction matches) */
+function slowLv(){return(ME.lv||0)-(performance.now()-(ME.lvAt||0))/1000>0?1:0}
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
 function abHTML(){return`<div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">YOUR ABILITY</div><div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD}s cooldown</div><div class="keys"><span>⚡ Shift · Dash (${DASH_CD}s)</span><span>${AB[MYAB].i} E · Ability</span><span>✊ Q · Grab players &amp; crates</span></div></div>`}
@@ -569,7 +570,7 @@ function upd(dt){
  ME.px=ME.x;ME.py=ME.y;
  if(!room||!ME.alive||S.rs<0||(S.st!='play'&&S.st!='between'))return;
  const h=(cdLeft()>0||ME.fz)?NEUT:human(),inp={l:h.l?1:0,r:h.r?1:0,j:h.j?1:0,d:0,s:h.s?1:0};
- TL.s=TL.a=TL.g=0;ME.slow=slowAt(ME);
+ TL.s=TL.a=TL.g=0;ME.slow=slowAt(ME)||slowLv();
  step(ME,inp,dt);
  const q=++seq;PEND.push({s:q,i:inp});if(PEND.length>180)PEND.shift();
  OUT.push([q,(inp.l?1:0)|(inp.r?2:0)|(inp.j?4:0)|(inp.s?16:0)|(h.a?32:0)|(h.g?64:0)])}

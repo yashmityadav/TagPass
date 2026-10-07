@@ -317,7 +317,7 @@ function newPlayer(nm, ci) {
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
     ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
-    gt: '', hb: '', gk: 0, fz: 0, fimm: 0, gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
+    gt: '', hb: '', gk: 0, fz: 0, lv: 0, fimm: 0, gs: 0, gl: 0, gcd: 0, gimm: 0, pg: false, ge: 0, gin: 0   // grab: target id, held-by id, state (0 idle / 1 reaching / 2 holding), timer, cooldown, immunity, button edge
   };
 }
 
@@ -341,7 +341,7 @@ function updateLobbyGo(r, t) {
 function spawn(p, k, t, sp) {
   p.x = sp[0] + k * 42; p.y = sp[1]; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
-  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0;   // every round starts with dash + ability + grab ready
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.lv = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0;   // every round starts with dash + ability + grab ready
 }
 
 function aliveIds(r) {
@@ -606,8 +606,8 @@ function simRoom(r, t) {
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
     if (!p.alive) continue;
-    if (p.acd > 0) p.acd -= DT;                                           // ability cooldown
-    p.slow = inTrap(r, p);                                                // standing in a trap?
+    if (p.acd > 0) p.acd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
+    p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
     let b = consume(p, t);
     if (b === -1) { p.credit = Math.min(8, p.credit + 1); continue; }   // a late packet: the player earns ONE catch-up step (never more than 1 per missed tick)
     advance(r, p, (cd || p.fz) ? 0 : b);
@@ -621,9 +621,7 @@ function simRoom(r, t) {
   const ev = evState(r, t);
   if (ev && ev[0] === 'l' && ev[1] === 1) {
     const q = PL[ev[2]];
-    for (const p of r.players.values()) if (p.alive && p.g && onQ(q, p)) {   // standing on lava: burn, respawn on the ground
-      p.x = 300 + Math.random() * 600; p.y = 800 - PH - 1; p.vx = p.vy = 0; p.g = 1; p.dash = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zcd = 0; resetGrab(p); p.rs++;
-    }
+    for (const p of r.players.values()) if (p.alive && p.g && onQ(q, p)) p.lv = 15;   // standing on lava: slowed for 15 s
   }
   grabTick(r);
   crateTick(r);
@@ -710,7 +708,7 @@ function snapshot(r, t, tt) {
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"fz":' + (p.fz ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"lv":' + r1(Math.max(0, p.lv || 0)) + ',"fz":' + (p.fz ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
