@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 /* ---------------- tunables ---------------- */
 const MAX_ROOM = 10;           // players per room
-const PUB_SIZE = 15;           // public match starts when this many are waiting
+const PUB_SIZE = 10;           // public match starts when this many are waiting
 const MAX_CONN_PER_IP = +process.env.MAX_CONN_PER_IP || 20;
 const MAX_CLIENTS = 2000;       // hard caps so a flood can never exhaust memory
 const MAX_ROOMS = 600;
@@ -297,7 +297,7 @@ const bcast = (r, s, drop) => { for (const p of r.players.values()) sendP(p, s, 
 
 /* ---------------- rooms ---------------- */
 let pubN = 0;
-const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 15 (alternate classic / infection), private rooms 10
+const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 10 (alternate classic / infection), private rooms 10
 function mkRoom(key, pub) {
   const r = {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
