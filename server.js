@@ -30,7 +30,7 @@ const roundS = r => r.inf === 0 ? CLASSIC_S : ROUND_S;
 const CD_MS = 2200;            // 3-2-1-GO countdown before each round
 const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
-const BOT_FILL_MS = 10000;     // public lobby not full after this long -> bots fill the empty seats
+const BOT_GAP_MS = 2000;       // public lobby not full: one bot joins every 2 s (a real player takes a bot's seat)
 const LOBBY_GO_MS = 3000;      // public lobby full -> match starts after this
 const LOCK_MS = 1200;          // the player who just passed the tag can't take it straight back
 const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
@@ -329,25 +329,26 @@ function bcastRoom(r) {
     rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf, sl: r.sel, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
-    pl: [...r.players.values()].filter(p => p.ws || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
+    pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
   }));
 }
 
+const tot = r => { let n = 0; for (const p of r.players.values()) if (p.ws || p.bot) n++; return n; };   // humans + bots
 function updateLobbyGo(r, t) {
   if (!r.pub || r.st !== 'lobby') return;
-  if (conn(r) >= PUB_SIZE) { if (!r.lobbyGo) r.lobbyGo = t + LOBBY_GO_MS; }
+  while (tot(r) > PUB_SIZE) { const b = [...r.players.values()].find(p => p.bot); if (!b) break; r.players.delete(b.id); }   // a real player takes a bot's seat
+  if (tot(r) >= PUB_SIZE) { if (!r.lobbyGo) r.lobbyGo = t + LOBBY_GO_MS; }
   else r.lobbyGo = 0;
-  const n = conn(r);
-  if (n >= 1 && n < PUB_SIZE) { if (!r.botGo) r.botGo = t + BOT_FILL_MS; } else r.botGo = 0;   // bot-fill timer runs while the lobby has people but isn't full
+  r.botNext = conn(r) >= 1 && tot(r) < PUB_SIZE ? (r.botNext || t + BOT_GAP_MS) : 0;   // bots join one by one while people are waiting
 }
 
 const BOT_NAMES = ['Zed', 'Mika', 'Rex', 'Nova', 'Kai', 'Luna', 'Jax', 'Pixel', 'Turbo', 'Echo', 'Blaze', 'Milo'];
-function addBots(r) {
+function addBots(r, cnt) {
   const used = new Set([...r.players.values()].map(p => p.ci)), nm = new Set([...r.players.values()].map(p => p.nm));
-  for (let need = PUB_SIZE - conn(r); need > 0; need--) {
+  for (let need = cnt; need > 0; need--) {
     let ci = 0; while (ci < 9 && used.has(ci)) ci++; used.add(ci);
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = 0; b.bst2 = 0; b.stk = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = 0; b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
@@ -355,7 +356,7 @@ function addBots(r) {
 /* ---- bots: every 8 ticks they try 12 short plans on a copy of their own body (same physics as the real game), look ~0.5 s ahead and pick the best one ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk-- <= 0) { p.btk = 8; botPlan(r, p); p.k = 0; }
+  if (p.btk-- <= 0) { p.btk = 12; botPlan(r, p); p.k = 0; }
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0);
@@ -377,10 +378,11 @@ function botPlan(r, p) {
   if (Math.hypot(p.x - p.sx, p.y - p.sy) < 6 && ++p.stk > 12 && chase) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 14, s: 0 }; p.btk = 14; return; }   // stuck under a ledge: shake loose
   if (Math.hypot(p.x - p.sx, p.y - p.sy) >= 6) p.stk = 0;
   p.sx = p.x; p.sy = p.y;
-  const tx = tg.x + tg.vx * .25, ty = tg.y + tg.vy * .1;
-  let best = null, bc = 1e12;
+  if (p.tid !== tg.id || --p.tc <= 0) { p.tid = tg.id; p.tc = 2; p.tx = tg.x + (Math.random() - .5) * 140; p.ty = tg.y + (Math.random() - .5) * 60; }   // human-like reaction: stale, slightly off view of the target
+  const tx = p.tx, ty = p.ty;
+  let best = null, bc = 1e12; const all = [];
   for (let d = -1; d <= 1; d++) for (let j = 0; j <= 14; j += 14) for (let ds = 0; ds < 2; ds++) {
-    if (ds && (p.dcd > 0 || !d)) continue;
+    if (ds && (p.dcd > 0 || !d || Math.random() > .25)) continue;
     const s = Object.assign({}, p); let c = 0, dead = false, mn = 1e9;
     for (let k = 0; k < 30; k++) {
       step(s, { l: d < 0, r: d > 0, j: k < j, d: 0, s: ds && !k }, DT);
@@ -391,9 +393,10 @@ function botPlan(r, p) {
     else if (chase && mn < 40) c -= 300;
     else if (!chase && s.g) c -= 40;
     c += Math.random() * 3;
+    if (!dead) all.push({ d, j, s: ds });
     if (c < bc) { bc = c; best = { d, j, s: ds }; }
   }
-  p.pl = best || { d: 0, j: 0, s: 0 };
+  p.pl = Math.random() < .2 && all.length ? all[rnd(all.length)] : best || { d: 0, j: 0, s: 0 };   // 1 in 5 plans is a deliberate mistake
 }
 
 function spawn(p, k, t, sp) {
@@ -406,11 +409,30 @@ function aliveIds(r) {
   return r.ord.filter(id => { const p = r.players.get(id); return p && p.alive; });
 }
 
+function spots(r, n) {   // classic: tight group on the middle-most platform; other modes: random, well separated spots
+  if (CURMAP !== r.mp) setMap(r.mp);
+  const P = SOL.filter(q => q.w >= 90);
+  if (!r.inf) {
+    let b = P[0]; for (const q of P) if (Math.abs(q.x + q.w / 2 - WW / 2) + Math.abs(q.y - WH / 2) * .3 < Math.abs(b.x + b.w / 2 - WW / 2) + Math.abs(b.y - WH / 2) * .3) b = q;
+    const g = Math.min(42, (b.w - 50) / Math.max(1, n)), x0 = Math.max(b.x, Math.min(WW / 2, b.x + b.w) - g * (n - 1) / 2 - PW / 2);
+    return Array.from({ length: n }, (_, k) => [x0 + k * g, b.y - PH - 2]);
+  }
+  for (let md = 480; ; md -= 60) {
+    const out = [];
+    for (let tries = 0; tries < 300 && out.length < n; tries++) {
+      const q = P[rnd(P.length)], x = q.x + 15 + Math.random() * (q.w - 60), y = q.y - PH - 2;
+      if (x < LX || x > RX - PW) continue;
+      if (out.every(o => Math.hypot(o[0] - x, o[1] - y) >= md)) out.push([x, y]);
+    }
+    if (out.length === n || md <= 0) { while (out.length < n) out.push([300 + Math.random() * 900, -60]); return out; }
+  }
+}
 function startRound(r, ids, t) {
   r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r); initCrates(r);
+  const pts = spots(r, ids.length);
   const first = ids[rnd(ids.length)]; r.first = first;
   const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
-  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t, MAPS[r.mp].sp); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
+  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, 0, t, pts[k]); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
   r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + roundS(r) * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
@@ -419,7 +441,7 @@ function startRound(r, ids, t) {
 function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
-  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botGo = 0;
+  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
   startRound(r, ids, t);
 }
 
@@ -781,8 +803,8 @@ function tickAll(t, tt) {
       if (!rooms.has(r.key)) continue;
       if (r.st === 'lobby') {
         if (sweep && r.pub) for (const p of [...r.players.values()]) if (p.ws && t - p.since > LOBBY_IDLE_MS) kick(r, p, 'idle');
-        if (r.botGo && t >= r.botGo) { r.botGo = 0; if (conn(r) >= 1 && conn(r) < PUB_SIZE) { addBots(r); startMatch(r, t); continue; } }
-        if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (conn(r) >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
+        if (r.botNext && t >= r.botNext) { r.botNext = 0; if (conn(r) >= 1 && tot(r) < PUB_SIZE) { addBots(r, 1); updateLobbyGo(r, t); bcastRoom(r); } }
+        if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (tot(r) >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
       } else if (r.st === 'play' || r.st === 'between') {
         simRoom(r, t);
         if (rooms.has(r.key) && (r.st === 'play' || r.st === 'between') && tickN % snapEvery === 0 && conn(r)) snapshot(r, t, tt);

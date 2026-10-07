@@ -654,7 +654,7 @@ function draw(){
  /* camera origin snapped to whole device pixels: static scenery never shimmers while the camera pans */
  const TX=Math.round((W/2-cam.x*cam.z+shx)*DPR),TY=Math.round((H/2-cam.y*cam.z+shy)*DPR);
  cx.setTransform(s,0,0,s,TX,TY);
- drawOps(WORLD);drawFeatures();if(CRS.length&&(S.mode=='play'||S.mode=='over'))drawCrates();
+ cx.save();cx.beginPath();cx.rect(0,0,1600,836);cx.clip();drawOps(WORLD);drawFeatures();if(CRS.length&&(S.mode=='play'||S.mode=='over'))drawCrates();cx.restore();
  if(S.ev&&S.ev.t=='l'&&(S.mode=='play'||S.mode=='over')){const q=PL[S.ev.pi];if(q){const sl=q.dy||0,kk=q.k||1,poly=(o,hh)=>{cx.beginPath();cx.moveTo(q.x,q.y+o);cx.lineTo(q.x+q.w,q.y+sl+o);cx.lineTo(q.x+q.w,q.y+sl+o+hh);cx.lineTo(q.x,q.y+o+hh);cx.fill()};if(S.ev.ph==0){cx.globalAlpha=.45+.45*Math.sin(time*18);cx.fillStyle='#ffe14d';poly(-4*kk,(q.h+6)*kk)}else{cx.fillStyle='#ff3b1a';poly(-3*kk,(q.h+3)*kk);cx.fillStyle='#ffb830';for(let x=q.x+8;x<q.x+q.w-8;x+=26){cx.beginPath();cx.arc(x,q.y-3+sl*(x-q.x)/q.w,5+Math.sin(time*6+x)*2.5,0,7);cx.fill()}}cx.globalAlpha=1}}
  const inG=S.mode=='play'||S.mode=='over';
  if(inG){drawTraps();drawLightning()}
@@ -666,7 +666,7 @@ function draw(){
  if(inG)for(const k in rem)if(rem[k].alive)L.push(rem[k]);
  if(inG)for(const k in DEC){const d=DEC[k],o=d.o==myId?ME:rem[d.o];if(!o||!d.has)continue;d.ci=o.ci||0;d.nm=d.o==myId?name:(o.nm||'Player');d.alive=true;L.push(d)}   /* a decoy looks exactly like its owner */
  L.forEach(p=>drawChar(p,s,TX,TY,1));
- cx.setTransform(s,0,0,s,TX,TY);drawOps(FG);
+ cx.setTransform(s,0,0,s,TX,TY);cx.save();cx.beginPath();cx.rect(0,0,1600,836);cx.clip();drawOps(FG);cx.restore();
  if(inG){for(const p of L)if(!p.o&&riding(p))drawTrolley(p)}
  if(AR.h)drawArrow(AR.px,AR.py,1+AR.pop*.45,s,TX,TY);
  if(S.md&&inG)for(const p of L)if(p.it&&p!==AR.h&&!p.o)drawArrow(p.x+PW/2,p.y+PH,1,s,TX,TY);
