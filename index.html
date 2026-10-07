@@ -207,10 +207,10 @@ function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';cons
 addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){
  if(S.pub)return pubUI(f);
- const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost+S.md;
+ const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost+S.md+'/'+(S.sl|0);
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
  const list=`Players ${peers.length}/10${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
- const act=isHost?`<button class="b alt sm" onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">Mode: ${MN[S.md|0]}</button><br><button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:`<p>Mode: ${MN[S.md|0]}<br>Waiting for the host to start…</p>`;
+ const act=isHost?`<button class="b alt sm" onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">Mode: ${MN[S.md|0]}</button><br><button class="b alt sm" onclick="netSend({t:'map',m:${((S.sl|0)+1)%5}})">Map: ${['Random','Classic','Space','Ice','Desert'][S.sl|0]}</button><br><button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:`<p>Mode: ${MN[S.md|0]}<br>Map: ${['Random','Classic','Space','Ice','Desert'][S.sl|0]}<br>Waiting for the host to start…</p>`;
  if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
  S.lobCode=code;
  ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><div id="abw">${abHTML()}</div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
@@ -253,7 +253,7 @@ function playView(m,meP){S.rn=m.rn;S.gm=m.gm;S.mode='play';ovHide();ME.alive=!!m
 function applyRoom(m){
  if(m.md&&m.mp!==CURMP)setMap(m);
  const meP=m.pl.find(p=>p.id==myId);
- code=m.code||code;S.pub=m.pub?1:0;isHost=m.host===myId;S.practice=!!m.practice;S.md=+m.inf||0;S.inf=S.md==1;S.st=m.st;
+ code=m.code||code;S.pub=m.pub?1:0;isHost=m.host===myId;S.practice=!!m.practice;S.md=+m.inf||0;S.sl=m.sl|0;S.inf=S.md==1;S.st=m.st;
  peers=m.pl.map(p=>({peer:p.id,isMe:p.id==myId,presence:{nm:p.nm,ci:p.ci,host:p.id==m.host?1:0,alive:p.al!==0}}));
  ME.ci=meP?meP.ci:0;S.lc=m.lc||0;S.lcAt=performance.now();
  const seen={};
