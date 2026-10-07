@@ -288,9 +288,9 @@ function applyRoom(m){
    toast(!ME.alive?'Spectating. You join the next game.':(m.practice?'Practice mode':(ME.it?(S.md==2?'Freeze everyone!':'You have the arrow!'):(S.md==2?'Run! Touch frozen friends to free them':'Run!'))),2000)}
  }else if(m.st=='between'){
   if(S.mode!='play'){S.bt=null;playView(m,meP)}
-  if(S.bt!==m.gm+':'+m.rn){S.bt=m.gm+':'+m.rn;
+  const bk=m.gm+':'+m.rn+':'+m.loser;if(S.bt!==bk){S.bt=bk;
    const lr=m.loser==myId?ME:rem[m.loser];if(lr)burst(lr.x+15,lr.y+17,40,'#ffd23f',500);
-   shake=1;snd(150,.6,'sawtooth',.08,-100);toast((m.loser==myId?'You are':(m.ln||'Someone')+' is')+' out!',2600);
+   shake=1;snd(150,.6,'sawtooth',.08,-100);toast('❌ '+(m.loser==myId?'You are':(m.ln||'Someone')+' is')+' eliminated!',3000);
    if(m.loser==myId){ME.alive=false;ME.it=0;document.body.classList.remove('pl')}}
  }else if(m.st=='over'){
   if(S.ov!==m.gm+':'+m.rn){S.ov=m.gm+':'+m.rn;S.mode='over';document.body.classList.remove('pl');
