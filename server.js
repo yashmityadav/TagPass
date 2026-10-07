@@ -116,18 +116,18 @@ const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: f
 
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
-const PL = [[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a => ({ x: a[0], y: a[1], w: a[2], h: a[1] == 800 ? 36 : 14 }));
-let SX = null; const SOL = PL; SX = SOL;                                                             // solid rectangles: just the platforms, the arena is wide open
+let PL = [[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]].map(a => ({ x: a[0], y: a[1], w: a[2], h: a[1] == 800 ? 36 : 14 }));
+let SX = null, SOL = PL; SX = SOL;                                                             // solid rectangles: just the platforms, the arena is wide open
 
 /* ---- MAP FEATURES (the client has an identical copy; both run inside step()) ----
    PADS : launch pads. vx=0 -> straight up; vx!=0 -> a cannon that also shoots you sideways.
    ZIPS : ziplines, completely optional. Tap JUMP in the air next to a cable to grab it and ride it (left/right picks the direction),
           tap JUMP again to hop off, or just ride to the end. Every cable must run left -> right (x1 < x2). */
-const PADS = [
+let PADS = [
   { x: 1524, y: 800, w: 44, vy: 1500, vx: 0 },       // bottom-right corner of the floor: straight up (steer left in the air to land on the right-side decks)
   { x: 417, y: 451, w: 44, vy: 1300, vx: 0 }         // middle of the platform up-right of the left tower: straight up, right through the diagonal cable
 ];
-const ZIPS = [
+let ZIPS = [
   { x1: 170, y1: 473, x2: 844, y2: 167 },      // LEFT DIAGONAL: from the left-side deck up to the top-centre platform
   { x1: 1181, y1: 457, x2: 1505, y2: 289 }     // RIGHT DIAGONAL: from the right-middle deck up to the far-right perch
 ].map(z => { const dx = z.x2 - z.x1, dy = z.y2 - z.y1, len = Math.hypot(dx, dy); return { x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2, len, ux: dx / len, uy: dy / len }; });
@@ -210,8 +210,23 @@ const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y <
 
 /* ---------------- crates: solid boxes; hold GRAB next to one to drag it ---------------- */
 const CS = 40, CRATE_ROPE = 64, CRATE_BREAK = 220;
-const CRATE_SP = [[300,760],[1250,760],[700,411],[1100,314],[120,496],[1300,672],[480,411]];
-function initCrates(r) { r.cr = CRATE_SP.map((a, i) => ({ id: i + 1, x: a[0], y: a[1], w: CS, h: CS, sx: a[0], sy: a[1], vy: 0, hb: '' })); }
+/* ---- MAPS: pl = [x,y,w] platforms (floor y=800 last), pads, zips (x1<x2), cr = crate spots (top-left, 40x40, resting on a platform), sp = spawn of player 0 (+42 px per player) ---- */
+const mkZ = z => { const dx = z.x2 - z.x1, dy = z.y2 - z.y1, len = Math.hypot(dx, dy); return { x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2, len, ux: dx / len, uy: dy / len }; };
+const mkP = a => a.map(v => ({ x: v[0], y: v[1], w: v[2], h: v[1] == 800 ? 36 : 14 }));
+const MAPS = [
+  { pl: PL.map(q => [q.x, q.y, q.w]), pads: PADS, zips: ZIPS.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 })), cr: [[300,760],[1250,760],[700,411],[1100,314],[120,496],[1300,672],[480,411]], sp: [580, 502] },   // 0 classic
+  { pl: [[150,710,260],[670,710,260],[1190,710,260],[22,620,200],[420,620,220],[960,620,220],[1348,620,222],[250,530,240],[690,530,220],[1110,530,240],[22,440,190],[480,440,200],[920,440,200],[1380,440,190],[250,350,220],[700,350,200],[1130,350,220],[22,260,160],[480,260,200],[920,260,200],[1410,260,160],[22,800,1548]],
+    pads: [], zips: [{ x1: 240, y1: 230, x2: 1330, y2: 230 }], cr: [[300,670],[1250,670],[800,490],[1200,310],[550,400],[100,400]], sp: [540, 60] },   // 1 space station
+  { pl: [[22,720,200],[200,640,200],[380,560,200],[560,480,200],[1370,720,200],[1190,640,200],[1010,560,200],[830,480,200],[700,390,200],[100,430,160],[1340,430,160],[300,330,200],[1100,330,200],[560,260,160],[880,260,160],[22,800,1548]],
+    pads: [{ x: 773, y: 800, w: 44, vy: 1260, vx: 0 }], zips: [{ x1: 400, y1: 290, x2: 1180, y2: 290 }], cr: [[600,760],[1000,760],[450,520],[1100,520],[780,350],[380,290]], sp: [540, 60] },   // 2 frozen peaks
+  { pl: [[200,690,180],[520,690,180],[840,690,180],[1160,690,180],[1380,690,190],[22,580,160],[350,580,180],[680,580,200],[1010,580,180],[1300,580,150],[200,470,200],[520,470,160],[860,470,160],[1180,470,200],[1420,470,150],[380,360,220],[760,360,180],[1100,360,200],[560,250,160],[900,250,160],[22,800,1548]],
+    pads: [{ x: 60, y: 800, w: 44, vy: 1100, vx: 700 }], zips: [{ x1: 100, y1: 450, x2: 560, y2: 240 }], cr: [[300,760],[1250,760],[250,650],[750,540],[900,430],[1150,320],[1450,650]], sp: [540, 60] }   // 3 desert ruins
+];
+for (const m of MAPS) m.raw = { pl: m.pl, pads: m.pads, zips: m.zips };
+const COMP = MAPS.map(m => ({ PL: mkP(m.pl), PADS: m.pads, ZIPS: m.zips.map(mkZ) }));
+let CURMAP = 0;
+function setMap(i) { const c = COMP[i]; PL = c.PL; SOL = PL; PADS = c.PADS; ZIPS = c.ZIPS; CURMAP = i; }
+function initCrates(r) { r.cr = MAPS[r.mp].cr.map((a, i) => ({ id: i + 1, x: a[0], y: a[1], w: CS, h: CS, sx: a[0], sy: a[1], vy: 0, hb: '' })); }
 const crHit = (c, o) => c.x < o.x + o.w && c.x + c.w > o.x && c.y < o.y + o.h && c.y + c.h > o.y;
 function crBlocked(r, c) {
   if (c.x < LX || c.x + c.w > RX) return true;
@@ -281,7 +296,7 @@ const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 5 (alterna
 function mkRoom(key, pub) {
   const r = {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
-    ord: [], rn: 0, gm: 0, practice: false, first: null, inf: pub ? (pubN++ & 1) : 0,
+    ord: [], rn: 0, gm: 0, mp: 0, practice: false, first: null, inf: pub ? (pubN++ & 1) : 0,
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
     dec: [], pj: [], sm: [], tr: [], lt: [], cr: [], ltNext: 2, fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
@@ -306,7 +321,7 @@ function bcastRoom(r) {
   const t = now();
   bcast(r, JSON.stringify({
     t: 'room', code: r.pub ? '' : r.key, pub: r.pub ? 1 : 0, st: r.st, host: r.hostId,
-    rn: r.rn, gm: r.gm, practice: r.practice ? 1 : 0, inf: r.inf ? 1 : 0, first: r.first,
+    rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf ? 1 : 0, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
     pl: [...r.players.values()].filter(p => p.ws || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0 }))
@@ -319,8 +334,8 @@ function updateLobbyGo(r, t) {
   else r.lobbyGo = 0;
 }
 
-function spawn(p, k, t) {
-  p.x = 580 + k * 42; p.y = 502; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
+function spawn(p, k, t, sp) {
+  p.x = sp[0] + k * 42; p.y = sp[1]; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t;
   p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p);   // every round starts with dash + ability + grab ready
 }
@@ -332,7 +347,7 @@ function aliveIds(r) {
 function startRound(r, ids, t) {
   r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r); initCrates(r);
   const first = ids[rnd(ids.length)]; r.first = first;
-  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t); p.alive = true; p.it = id === first ? 1 : 0; });
+  ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t, MAPS[r.mp].sp); p.alive = true; p.it = id === first ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
   r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
@@ -341,7 +356,7 @@ function startRound(r, ids, t) {
 function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
-  r.gm = 1 + rnd(999999999); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0;
+  r.gm = 1 + rnd(999999999); r.mp = rnd(MAPS.length); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0;
   startRound(r, ids, t);
 }
 
@@ -568,12 +583,13 @@ function advance(r, p, b) {
 function evState(r, t) {
   const el = (t - r.cdEnd) / 1000; if (el < 0) return null;
   const k = Math.floor(el / 40), ph = el - k * 40;
-  if (r.evK !== k) { r.evK = k; r.evT = (k + r.evF) % 2 ? 'b' : 'l'; r.evP = rnd(18); }
+  if (r.evK !== k) { r.evK = k; r.evT = (k + r.evF) % 2 ? 'b' : 'l'; r.evP = rnd(PL.length - 1); }
   if (r.evT === 'b') return ph >= 30 ? ['b', 1, 0, 40 - ph] : null;
   return ph >= 28 ? ['l', ph < 30 ? 0 : 1, r.evP, ph < 30 ? 30 - ph : 40 - ph] : null;
 }
 
 function simRoom(r, t) {
+  if (CURMAP !== r.mp) setMap(r.mp);
   SX = r.cr.length ? SOL.concat(r.cr) : SOL;
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
