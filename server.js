@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 /* ---------------- tunables ---------------- */
 const MAX_ROOM = 10;           // players per room
-const PUB_SIZE = 5;            // public match starts when this many are waiting
+const PUB_SIZE = 15;           // public match starts when this many are waiting
 const MAX_CONN_PER_IP = +process.env.MAX_CONN_PER_IP || 20;
 const MAX_CLIENTS = 2000;       // hard caps so a flood can never exhaust memory
 const MAX_ROOMS = 600;
@@ -297,7 +297,7 @@ const bcast = (r, s, drop) => { for (const p of r.players.values()) sendP(p, s, 
 
 /* ---------------- rooms ---------------- */
 let pubN = 0;
-const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 5 (alternate classic / infection), private rooms 10
+const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 15 (alternate classic / infection), private rooms 10
 function mkRoom(key, pub) {
   const r = {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
@@ -346,7 +346,7 @@ const BOT_NAMES = ['Zed', 'Mika', 'Rex', 'Nova', 'Kai', 'Luna', 'Jax', 'Pixel', 
 function addBots(r, cnt) {
   const used = new Set([...r.players.values()].map(p => p.ci)), nm = new Set([...r.players.values()].map(p => p.nm));
   for (let need = cnt; need > 0; need--) {
-    let ci = 0; while (ci < 9 && used.has(ci)) ci++; used.add(ci);
+    let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
     const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = 0; b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
@@ -859,7 +859,7 @@ wss.on('connection', (ws, req) => {
     if (rr.players.size >= roomMax(rr)) return err('full');                       // single choke point: no path can exceed the room limit
     if (rr.pub && rr.st !== 'lobby') return err('full');                       // public matches in progress are closed
     if (!rooms.has(rr.key)) rooms.set(rr.key, rr);
-    const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++;
+    const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++; ci %= 10;
     const pp = newPlayer(nm, ci); pp.since = now();
     rr.players.set(pp.id, pp);
     if (!rr.pub && !rr.hostId) rr.hostId = pp.id;
