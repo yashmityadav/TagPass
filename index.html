@@ -72,6 +72,25 @@ input::placeholder{color:#8a94c4}
 .abp.sel{background:var(--pink);border-color:#fff}
 .abd{font-size:15px;opacity:.95;max-width:460px;text-align:center}
 @media (max-height:480px){.abp{font-size:15px;padding:4px 10px}.abd{font-size:12px}}
+/* ---- polished menus ---- */
+.card{background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.3);border-radius:22px;padding:14px 18px;box-shadow:0 8px 0 rgba(27,42,107,.35),inset 0 2px 0 rgba(255,255,255,.18)}
+.cap{font-size:14px;letter-spacing:2.5px;opacity:.85;margin-bottom:6px}
+.code{font-size:min(12vh,56px);letter-spacing:8px;line-height:1.1;background:rgba(27,42,107,.45);border-radius:14px;padding:6px 12px 6px 20px;margin:4px 0 6px}
+#lob{align-items:stretch;gap:14px}#lob>.card{min-width:200px;display:flex;flex-direction:column;align-items:center}
+#lob #pl{width:100%;text-align:left}#lob #pl .chip{background:rgba(255,255,255,.15);border-radius:12px;padding:4px 12px;margin-top:5px;font-size:19px}
+#act{width:100%;display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(27,42,107,.4);border-radius:14px;padding:6px 8px 6px 14px;font-size:20px}
+.opt b{font-weight:400;font-size:13px;letter-spacing:2px;opacity:.8}
+.opt button{font:inherit;font-size:19px;color:#fff;background:#2b8cff;border:0;border-radius:11px;padding:6px 14px;box-shadow:0 4px 0 #1552a8;min-width:140px}
+.opt button:active{transform:translateY(3px);box-shadow:0 1px 0 #1552a8}
+.b.go,.b.go2{background:#2fd16b;box-shadow:0 6px 0 #17934a}.b.go:active,.b.go2:active{box-shadow:0 2px 0 #17934a}
+.b.go{width:100%;font-size:28px;margin-top:2px}.b.go2{font-size:34px;padding:14px 56px}
+input{box-shadow:inset 0 3px 0 rgba(27,42,107,.15)}
+.abp{font-size:16px;background:rgba(27,42,107,.4);border-radius:16px;padding:8px 14px;flex-direction:column;gap:2px;min-width:92px}
+.abp span{font-size:28px;line-height:1}.abp.sel{box-shadow:0 4px 0 #b0124f}
+.abd{font-size:15px;max-width:520px}
+.keys{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;font-size:14px}.keys span{background:rgba(27,42,107,.4);border-radius:10px;padding:3px 10px}
+@media (max-height:480px){.card{padding:8px 12px;border-radius:16px}.abp{font-size:13px;padding:4px 8px;min-width:70px}.abp span{font-size:20px}.keys{font-size:11px}.opt{font-size:16px}.opt button{font-size:15px;min-width:110px;padding:4px 10px}.b.go{font-size:22px}.code{font-size:34px;letter-spacing:5px}#lob>.card{min-width:140px}}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -147,7 +166,7 @@ function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play'
 function menu(msg){warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<h1>TAG</h1><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b" onclick="enterPublic()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div><div class="row"><button class="b alt sm" onclick="enter(1)">Create room</button><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:160px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><p id="msg">${msg||'Tap PLAY for a public match of '+PUB_SIZE+', or make a private room for friends. Whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p>`);fetchStats()}
+ ovShow(`<h1>TAG</h1><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="enterPublic()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p>`);fetchStats()}
 async function enter(host){if(S.joining)return;S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(){if(S.joining)return;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
 function playAgain(){leaveRoom();enterPublic()}
@@ -209,11 +228,12 @@ function lobbyUI(f){
  if(S.pub)return pubUI(f);
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)).join()+isHost+S.md+'/'+(S.sl|0);
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
- const list=`Players ${peers.length}/10${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
- const act=isHost?`<button class="b alt sm" onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">Mode: ${MN[S.md|0]}</button><br><button class="b alt sm" onclick="netSend({t:'map',m:${((S.sl|0)+1)%4}})">Map: ${['Random','Classic','Ice','Desert'][S.sl|0]}</button><br><button class="b" onclick="hostStart()">${peers.length<2?'Start solo practice':'Start game'}</button>`:`<p>Mode: ${MN[S.md|0]}<br>Map: ${['Random','Classic','Ice','Desert'][S.sl|0]}<br>Waiting for the host to start…</p>`;
+ const list=`<div class="cap">PLAYERS ${peers.length}/10</div>${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}</div>`).join('')}`;
+ const mn=MN[S.md|0],mpn=['Random','Classic','Ice','Desert'][S.sl|0];
+ const act=isHost?`<div class="opt"><b>MODE</b><button onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">${mn} ↻</button></div><div class="opt"><b>MAP</b><button onclick="netSend({t:'map',m:${((S.sl|0)+1)%4}})">${mpn} ↻</button></div><button class="b go" onclick="hostStart()">${peers.length<2?'▶ Solo practice':'▶ Start game'}</button>`:`<div class="opt"><b>MODE</b><span>${mn}</span></div><div class="opt"><b>MAP</b><span>${mpn}</span></div><div class="cap" style="text-align:center;margin:4px 0 0">Waiting for the host to start…</div>`;
  if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
  S.lobCode=code;
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div>Room code<div style="font-size:min(13vh,64px);letter-spacing:6px;line-height:1">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div style="text-align:left"><div id="pl">${list}</div><div id="act" style="margin-top:8px">${act}</div></div></div><div id="abw">${abHTML()}</div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div class="card"><div class="cap">ROOM CODE</div><div class="code">${esc(code)}</div><div id="qrw"><div id="qr"></div></div></div><div class="card"><div id="pl">${list}</div></div><div class="card"><div class="cap">GAME</div><div id="act">${act}</div></div></div><div id="abw" style="width:100%">${abHTML()}</div><p id="lobp">Friends join with the code, or by scanning the QR.</p></div>`);
  ov.classList.add('fit');ov.style.opacity='0';ov.style.transition='opacity .15s';
  const drawQR=()=>{const q=$('qr');if(!q||q.firstChild)return 1;if(!window.QRCode)return 0;try{const tmp=document.createElement('div');new QRCode(tmp,{text:BASE+'?room='+code,width:104,height:104});const c=tmp.querySelector('canvas');if(c){const im=new Image(104,104);im.src=c.toDataURL('image/png');im.style.cssText='display:block;width:104px;height:104px';q.appendChild(im);return 1}}catch(e){}return 0};
  if(!drawQR())setTimeout(()=>{if(!drawQR()){const w=$('qrw');if(w){w.style.display='none';fitLobby()}}},1800);
@@ -366,7 +386,7 @@ function clearFx(){CRS.length=0;SX=SOL;FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];F
 /* standing in a trap? (same rule as the server, so my prediction matches) */
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
-function abHTML(){return`<div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD} s cooldown<br>Everyone also has ⚡ Dash (${DASH_CD} s cooldown) and ✊ Grab: hold it next to a player to latch on and drag them along (they're slowed; a dash breaks the grip). It also drags 📦 crates.<br>Keys: Shift = dash, E = ability, Q = grab<br>Map: yellow pads launch you up, orange cannons fling you sideways, portals come in pairs of the same colour, cyan lanes boost you, belts carry you, the purple bubble is low gravity.</div>`}
+function abHTML(){return`<div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">YOUR ABILITY</div><div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD}s cooldown</div><div class="keys"><span>⚡ Shift · Dash (${DASH_CD}s)</span><span>${AB[MYAB].i} E · Ability</span><span>✊ Q · Grab players &amp; crates</span></div></div>`}
 function pickAb(k){if(!AB[k]||S.mode!='lobby')return;MYAB=k;try{localStorage.setItem('tagab',k)}catch(e){}netSend({t:'ab',k});snd(660,.07,'square',.04,120);const w=$('abw');if(w){w.innerHTML=abHTML();fitLobby()}}
 function hudUpd(){const dc=Math.max(0,ME.dcd||0),ac=Math.max(0,(ME.ac||0)-(performance.now()-(ME.acAt||0))/1000),gc=Math.max(0,(ME.gc||0)-(performance.now()-(ME.gcAt||0))/1000),sig=Math.ceil(dc)+'|'+Math.ceil(ac)+'|'+Math.ceil(gc)+'|'+(ME.gs||0)+'|'+MYAB;if(sig===lastHud)return;lastHud=sig;
  const set=(b,c)=>{b.classList.toggle('cool',c>0);b.querySelector('.cdn').textContent=c>0?Math.ceil(c):''};set($('hd'),dc);set($('ha'),ac);set($('hg'),gc);$('hg').classList.toggle('act',!!ME.gs);$('ha').querySelector('.ic').textContent=AB[MYAB].i}
