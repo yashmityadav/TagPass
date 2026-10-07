@@ -25,6 +25,8 @@ const DT = 1 / 60;
 let snapEvery = +process.env.TAG_SNAP_EVERY || 1;   // send a snapshot every N ticks (1 = 60/s, 2 = 30/s). Adapts automatically when the server is overloaded (see the tick loop).
 const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
 const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
+const CLASSIC_S = 30;          // classic mode: one elimination every 30 s, play continues without respawn
+const roundS = r => r.inf === 0 ? CLASSIC_S : ROUND_S;
 const CD_MS = 2200;            // 3-2-1-GO countdown before each round
 const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
@@ -350,7 +352,7 @@ function startRound(r, ids, t) {
   const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, k, t, MAPS[r.mp].sp); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
-  r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + ROUND_S * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
+  r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + roundS(r) * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
 }
 
@@ -372,6 +374,13 @@ function toLobby(r) {
   r.st = 'lobby'; clearFx(r); r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
   for (const p of r.players.values()) { p.alive = false; p.it = 0; p.q.length = 0; }
   updateLobbyGo(r, now());
+  bcastRoom(r);
+}
+
+function resumeClassic(r, t, al) {   // classic: keep positions, new random tag, fresh 30 s
+  for (const q of r.players.values()) q.it = 0;
+  const h = r.players.get(al[rnd(al.length)]); if (h) h.it = 1;
+  r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.deadline = t + CLASSIC_S * 1000; r.tagFrom = t + TAG_GRACE_MS;
   bcastRoom(r);
 }
 
@@ -604,7 +613,7 @@ function simRoom(r, t) {
     while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(r, p, (cd || p.fz) ? 0 : c2.b); } }
   }
 
-  if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) startRound(r, al, t); else finish(r, al[0]); } return; }
+  if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) { if (r.inf === 0) resumeClassic(r, t, al); else startRound(r, al, t); } else finish(r, al[0]); } return; }
   if (r.st !== 'play' || cd) return;
   tickFx(r);
   const ev = evState(r, t);
@@ -683,7 +692,7 @@ function simRoom(r, t) {
 function snapshot(r, t, tt) {
   let arr = '';
   for (const p of r.players.values()) if (p.alive) arr += (arr ? ',' : '') + '["' + p.id + '",' + r1(p.x) + ',' + r1(p.y) + ',' + ri(p.vx + p.bv) + ',' + ri(p.vy) + ',' + p.face + ',' + (p.g ? 1 : 0) + ',' + (p.it ? 1 : 0) + ',' + (p.fz ? 1 : 0) + ']';
-  const tl = r.practice || r.inf === 1 ? 'null' : r.st === 'play' ? Math.min(ROUND_S, Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
+  const tl = r.practice || r.inf === 1 ? 'null' : r.st === 'play' ? Math.min(roundS(r), Math.max(0, (r.deadline - t) / 1000)).toFixed(2) : '0';
   let fx = '';                                                           // ability effects (only when something is active)
   if (r.dec.length) fx += ',"d":[' + r.dec.map(d => '["' + d.id + '",' + r1(d.x) + ',' + r1(d.y) + ',' + ri(d.vx + d.bv) + ',' + ri(d.vy) + ',' + d.face + ',' + (d.g ? 1 : 0) + ',0,"' + d.o + '"]').join(',') + ']';
   if (r.pj.length) fx += ',"j":[' + r.pj.map(j => '[' + ri(j.x) + ',' + ri(j.y) + ']').join(',') + ']';
