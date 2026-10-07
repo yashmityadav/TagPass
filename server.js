@@ -194,7 +194,7 @@ function step(p, inp, dt) {
   if (inp.d && p.g) p.drop = .22; p.drop -= dt;
   if (p.dash > 0 && !p.g) p.vy = 0; else p.vy = Math.min(p.vy + (p.vy > 0 ? 3400 : 2300) * dt, 1150);   // air-dash: no gravity while dashing
   const ov = q => p.x < q.x + q.w && p.x + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y;
-  const was = p.g, fy0 = p.y + PH; p.x += p.vx * dt;
+  const was = p.g, fy0 = p.y + PH, px0 = p.x; p.x += p.vx * dt;
   if (p.x < LX) { p.x = LX; p.vx = 0; } if (p.x > RX - PW) { p.x = RX - PW; p.vx = 0; }
   for (const q of SX) if (ov(q)) { if (was && p.y + PH - q.y <= 9) p.y = q.y - PH; else { p.x = p.vx > 0 ? q.x - PW : p.vx < 0 ? q.x + q.w : (p.x + PW / 2 < q.x + q.w / 2 ? q.x - PW : q.x + q.w); p.vx = 0; } }
   p.g = 0; p.y += p.vy * dt;
@@ -202,7 +202,9 @@ function step(p, inp, dt) {
     if (p.vy >= 0) { p.y = q.y - PH; p.vy = 0; p.g = 1; }
     else { const l = p.x + PW - q.x, r = q.x + q.w - p.x; if (Math.min(l, r) < 10) p.x += l < r ? -l : r; else { p.y = q.y + q.h; p.vy = 0; } }
   }
-  if (SL.length && p.vy >= 0) { const mx = p.x + PW / 2; for (const q of SL) if (mx >= q.x && mx <= q.x + q.w) { const sy = q.y + (mx - q.x) / q.w * q.dy; if (was ? (fy0 >= sy - 26 && fy0 <= sy + 20) : (fy0 <= sy + 2 && p.y + PH >= sy - 1)) { p.y = sy - PH; p.vy = 0; p.g = 1; break; } } }
+  if (SL.length) { const mx = p.x + PW / 2, f = p.y + PH; for (const q of SL) { if (mx < q.x || mx > q.x + q.w) continue; const s = q.y + (mx - q.x) / q.w * q.dy, b = s + q.hv;
+    if (p.vy >= 0 && (was ? (fy0 >= s - 26 && fy0 <= s + 20) : (fy0 <= s + 2 && f >= s - 1))) { p.y = s - PH; p.vy = 0; p.g = 1; break; }
+    if (f > s + 2 && p.y < b) { if (p.y + PH / 2 > s + q.hv / 2) { if (was && p.g) { p.x = px0; p.vx = 0; } else { p.y = b; if (p.vy < 0) p.vy = 0; } } else { p.y = s - PH; p.vy = 0; p.g = 1; } break; } } }
   if (p.g) for (const q of PADS) if (Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x + 4 && p.x < q.x + q.w - 4) {      // launch pad / cannon
     p.vy = -q.vy; p.g = 0; p.coy = 0; p.buf = 0; p.cut = 1; p.dash = 0;
     if (q.vx) { p.vx = q.vx; p.face = q.vx > 0 ? 1 : -1; p.bst = PAD_BST; }
@@ -216,7 +218,7 @@ const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y <
 const CS = 40, CRATE_ROPE = 64, CRATE_BREAK = 220;
 /* ---- MAPS: pl = [x,y,w] platforms (floor y=800 last), pads, zips (x1<x2), cr = crate spots (top-left, 40x40, resting on a platform), sp = spawn of player 0 (+42 px per player) ---- */
 const mkZ = z => { const dx = z.x2 - z.x1, dy = z.y2 - z.y1, len = Math.hypot(dx, dy); return { x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2, len, ux: dx / len, uy: dy / len }; };
-const mkP = a => a.map(v => ({ x: v[0], y: v[1], w: v[2], h: v[1] == 800 ? 36 : 14, dy: v[3] || 0 }));
+const mkP = a => a.map(v => ({ x: v[0], y: v[1], w: v[2], h: v[1] == 800 ? 36 : 14, dy: v[3] || 0, hv: 14 * (v[3] ? Math.sqrt(1 + (v[3] / v[2]) ** 2) : 1) }));
 const MAPS = [
   { pl: PL.map(q => [q.x, q.y, q.w]), pads: PADS, zips: ZIPS.map(z => ({ x1: z.x1, y1: z.y1, x2: z.x2, y2: z.y2 })), cr: [[300,760],[1250,760],[700,411],[1100,314],[120,496],[1300,672],[480,411]], sp: [580, 502] },   // 0 classic
   { pl: [[435,408,380],[1203,325,196],[887,487,176],[171,547,468],[22,659,167],[605,653,198],[366,721,224],[73,409,137,-138],[946,716,336,-265],[1250,583,256,-222],[22,800,1548]],
