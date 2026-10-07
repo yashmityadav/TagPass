@@ -30,6 +30,7 @@ const roundS = r => r.inf === 0 ? CLASSIC_S : ROUND_S;
 const CD_MS = 2200;            // 3-2-1-GO countdown before each round
 const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
+const BOT_FILL_MS = 10000;     // public lobby not full after this long -> bots fill the empty seats
 const LOBBY_GO_MS = 3000;      // public lobby full -> match starts after this
 const LOCK_MS = 1200;          // the player who just passed the tag can't take it straight back
 const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
@@ -336,6 +337,63 @@ function updateLobbyGo(r, t) {
   if (!r.pub || r.st !== 'lobby') return;
   if (conn(r) >= PUB_SIZE) { if (!r.lobbyGo) r.lobbyGo = t + LOBBY_GO_MS; }
   else r.lobbyGo = 0;
+  const n = conn(r);
+  if (n >= 1 && n < PUB_SIZE) { if (!r.botGo) r.botGo = t + BOT_FILL_MS; } else r.botGo = 0;   // bot-fill timer runs while the lobby has people but isn't full
+}
+
+const BOT_NAMES = ['Zed', 'Mika', 'Rex', 'Nova', 'Kai', 'Luna', 'Jax', 'Pixel', 'Turbo', 'Echo', 'Blaze', 'Milo'];
+function addBots(r) {
+  const used = new Set([...r.players.values()].map(p => p.ci)), nm = new Set([...r.players.values()].map(p => p.nm));
+  for (let need = PUB_SIZE - conn(r); need > 0; need--) {
+    let ci = 0; while (ci < 9 && used.has(ci)) ci++; used.add(ci);
+    let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = 0; b.bst2 = 0; b.stk = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    r.players.set(b.id, b);
+  }
+}
+
+/* ---- bots: every 8 ticks they try 12 short plans on a copy of their own body (same physics as the real game), look ~0.5 s ahead and pick the best one ---- */
+function botInput(r, p, t) {
+  if (p.fz || t < r.cdEnd) return 0;
+  if (p.btk-- <= 0) { p.btk = 8; botPlan(r, p); p.k = 0; }
+  const pl = p.pl; if (!pl) return 0;
+  const k = p.k++;
+  return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0);
+}
+function botPlan(r, p) {
+  let near = null, nd = 1e9, rescue = null, rd = 1e9, thr = null, td = 1e9;
+  for (const q of r.players.values()) {
+    if (q === p || !q.alive) continue;
+    const d = Math.hypot(q.x - p.x, (q.y - p.y) * 1.2);
+    if (p.it) { if (!q.it && !q.fz && d < nd) { nd = d; near = q; } }
+    else if (q.it) { if (d < td) { td = d; thr = q; } }
+    else if (r.inf === 2 && q.fz && d < rd) { rd = d; rescue = q; }
+  }
+  let tg = null, chase = true;
+  if (p.it) tg = near;
+  else if (rescue && td > 320) tg = rescue;
+  else { tg = thr; chase = false; }
+  if (!tg) { p.pl = { d: 0, j: 0, s: 0 }; return; }
+  if (Math.hypot(p.x - p.sx, p.y - p.sy) < 6 && ++p.stk > 12 && chase) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 14, s: 0 }; p.btk = 14; return; }   // stuck under a ledge: shake loose
+  if (Math.hypot(p.x - p.sx, p.y - p.sy) >= 6) p.stk = 0;
+  p.sx = p.x; p.sy = p.y;
+  const tx = tg.x + tg.vx * .25, ty = tg.y + tg.vy * .1;
+  let best = null, bc = 1e12;
+  for (let d = -1; d <= 1; d++) for (let j = 0; j <= 14; j += 14) for (let ds = 0; ds < 2; ds++) {
+    if (ds && (p.dcd > 0 || !d)) continue;
+    const s = Object.assign({}, p); let c = 0, dead = false, mn = 1e9;
+    for (let k = 0; k < 30; k++) {
+      step(s, { l: d < 0, r: d > 0, j: k < j, d: 0, s: ds && !k }, DT);
+      if (s.y > WH - 30 || s.x < LX - 30 || s.x > RX + 30) { dead = true; break; }
+      if (k % 5 === 4) { const dd = Math.hypot(s.x - tx, (s.y - ty) * 1.2); c += chase ? dd : -Math.min(dd, 700); if (dd < mn) mn = dd; }
+    }
+    if (dead) c = chase ? c + 4000 : 1e6;
+    else if (chase && mn < 40) c -= 300;
+    else if (!chase && s.g) c -= 40;
+    c += Math.random() * 3;
+    if (c < bc) { bc = c; best = { d, j, s: ds }; }
+  }
+  p.pl = best || { d: 0, j: 0, s: 0 };
 }
 
 function spawn(p, k, t, sp) {
@@ -359,9 +417,9 @@ function startRound(r, ids, t) {
 }
 
 function startMatch(r, t) {
-  const ids = [...r.players.values()].filter(p => p.ws).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
+  const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
-  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0;
+  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botGo = 0;
   startRound(r, ids, t);
 }
 
@@ -374,7 +432,7 @@ function finish(r, id) {
 
 function toLobby(r) {
   r.st = 'lobby'; clearFx(r); r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
-  for (const p of r.players.values()) { p.alive = false; p.it = 0; p.q.length = 0; }
+  for (const p of [...r.players.values()]) { if (p.bot) { r.players.delete(p.id); continue; } p.alive = false; p.it = 0; p.q.length = 0; }
   updateLobbyGo(r, now());
   bcastRoom(r);
 }
@@ -395,7 +453,7 @@ function expire(r, t, holder) {
 function removePlayer(r, p, t) {
   if (r.players.get(p.id) !== p) return;
   r.players.delete(p.id);
-  if (!r.players.size) { rooms.delete(r.key); return; }
+  if (![...r.players.values()].some(q => !q.bot)) { rooms.delete(r.key); return; }   // only bots left -> close the room
   if (r.hostId === p.id) {                                                          // oldest CONNECTED player becomes the host
     const nx = [...r.players.values()].find(q => q.ws) || r.players.values().next().value;
     r.hostId = r.pub ? null : (nx ? nx.id : null);
@@ -608,7 +666,7 @@ function simRoom(r, t) {
     if (!p.alive) continue;
     if (p.acd > 0) p.acd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
     p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
-    let b = consume(p, t);
+    let b = p.bot ? botInput(r, p, t) : consume(p, t);
     if (b === -1) { p.credit = Math.min(8, p.credit + 1); continue; }   // a late packet: the player earns ONE catch-up step (never more than 1 per missed tick)
     advance(r, p, (cd || p.fz) ? 0 : b);
     // after a lag spike a burst of inputs arrives: spend earned credit to catch up. A flooding cheater has no credit, so they can't go faster than 60 steps/s.
@@ -723,6 +781,7 @@ function tickAll(t, tt) {
       if (!rooms.has(r.key)) continue;
       if (r.st === 'lobby') {
         if (sweep && r.pub) for (const p of [...r.players.values()]) if (p.ws && t - p.since > LOBBY_IDLE_MS) kick(r, p, 'idle');
+        if (r.botGo && t >= r.botGo) { r.botGo = 0; if (conn(r) >= 1 && conn(r) < PUB_SIZE) { addBots(r); startMatch(r, t); continue; } }
         if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (conn(r) >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
       } else if (r.st === 'play' || r.st === 'between') {
         simRoom(r, t);
@@ -857,7 +916,7 @@ wss.on('connection', (ws, req) => {
     /* ---- room controls ---- */
     if (m.t === 'map' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.sel = Math.max(0, Math.min(MAPS.length, m.m | 0)); return bcastRoom(r); }
     if (m.t === 'mode' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.inf = Math.max(0, Math.min(2, m.m | 0)); return bcastRoom(r); }
-    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) return startMatch(r, now());
+    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { if (conn(r) < (r.inf === 1 ? 4 : r.inf === 2 ? 3 : 1)) return; return startMatch(r, now()); }   // infection needs 4+ players, freeze tag 3+
     if (m.t === 'lobby' && r.st === 'over' && !r.pub && r.hostId === p.id) return toLobby(r);
   });
 
