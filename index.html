@@ -46,8 +46,13 @@ input::placeholder{color:#8a94c4}
 .b.sm{font-size:20px;padding:10px 18px;min-width:0;box-shadow:0 5px 0 #1552a8}
 #pubw{display:flex;flex-direction:column;align-items:center;gap:10px}
 #pcnt{font-size:min(8vh,40px);line-height:1;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill;text-shadow:0 3px 0 #1b2a6b}
-#pslots{display:flex;flex-direction:column;gap:6px}
-.slot{display:flex;align-items:center;gap:10px;font-size:20px;min-width:240px;padding:5px 16px;border-radius:12px;background:rgba(255,255,255,.16);text-align:left}
+#pslots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}
+#mm{display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap}.mcol{display:flex;flex-direction:column;align-items:center;gap:10px}
+#mg{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.mc{font:inherit;color:#fff;width:210px;padding:16px 12px;border-radius:22px;border:3px solid rgba(255,255,255,.35);background:linear-gradient(160deg,var(--c),#1b2a6b 150%);box-shadow:0 8px 0 rgba(27,42,107,.5);display:flex;flex-direction:column;align-items:center;gap:6px}
+.mc:active{transform:translateY(5px);box-shadow:0 3px 0 rgba(27,42,107,.5)}.mc .mi{font-size:54px;line-height:1}.mc b{font-size:26px;font-weight:400;letter-spacing:1px}.mc small{font-size:14px;opacity:.92;line-height:1.25;min-height:36px}.mw{font-style:normal;font-size:13px;background:rgba(0,0,0,.28);border-radius:20px;padding:2px 10px;min-height:20px}
+@media (max-height:480px){.mc{width:170px;padding:10px 8px}.mc .mi{font-size:38px}.mc b{font-size:21px}.mc small{font-size:12px;min-height:30px}.slot{font-size:15px;padding:3px 10px;min-width:150px!important}#mm{gap:12px}}
+.slot{display:flex;align-items:center;gap:10px;font-size:18px;min-width:190px;padding:5px 12px;overflow:hidden;border-radius:12px;background:rgba(255,255,255,.16);text-align:left}
 .slot.e{opacity:.5;background:rgba(255,255,255,.06)}.slot.e .dot{background:transparent;animation:wt 1s infinite}
 @keyframes wt{50%{opacity:.25}}
 #pcd{font-size:22px;min-height:28px}
@@ -77,7 +82,7 @@ input::placeholder{color:#8a94c4}
 .cap{font-size:14px;letter-spacing:2.5px;opacity:.85;margin-bottom:6px}
 .code{font-size:min(12vh,56px);letter-spacing:8px;line-height:1.1;background:rgba(27,42,107,.45);border-radius:14px;padding:6px 12px 6px 20px;margin:4px 0 6px}
 #lob{align-items:stretch;gap:14px}#lob>.card{min-width:200px;display:flex;flex-direction:column;align-items:center}
-#lob #pl{width:100%;text-align:left}#lob #pl .chip{background:rgba(255,255,255,.15);border-radius:12px;padding:4px 12px;margin-top:5px;font-size:19px}
+#lob #pl{width:100%;text-align:left;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 8px}#lob #pl .chip{background:rgba(255,255,255,.15);border-radius:12px;padding:4px 12px;margin-top:5px;font-size:19px}
 #act{width:100%;display:flex;flex-direction:column;gap:8px}
 .opt{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(27,42,107,.4);border-radius:14px;padding:6px 8px 6px 14px;font-size:20px}
 .opt b{font-weight:400;font-size:13px;letter-spacing:2px;opacity:.8}
@@ -170,10 +175,15 @@ function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play'
 function menu(msg){warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<h1>TAG</h1><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="enterPublic()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p>`);fetchStats()}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="modeMenu()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
+function modeMenu(){
+ const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
+ const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 5 minutes.','#2b8cff']];
+ ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small><i class="mw" id="mw${i}"></i></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
+ ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 async function enter(host){if(S.joining)return;S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
-async function enterPublic(){if(S.joining)return;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
-function playAgain(){leaveRoom();enterPublic()}
+async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
+function playAgain(){leaveRoom();enterPublic(S.pm)}
 /* open a socket and send the first message (quick / create / join / resume); resolves on the server's "hello". Later messages go to onMsg. */
 /* pre-warm: open the socket while the player is still typing their name, so pressing Play skips the TCP/TLS handshake (and wakes a sleeping server early) */
 let WARM=null,WARM_URL='';
@@ -200,7 +210,7 @@ async function enter0(kind){
  try{document.activeElement&&document.activeElement.blur()}catch(e){}scrollTo(0,0);lockLand();startMusic();try{AC&&AC.resume&&AC.resume()}catch(e){}
  $('msg').textContent=kind=='quick'?'Finding a match…':'Connecting…';
  const WS_URL=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host);
- const first=kind=='quick'?{t:'quick',nm}:kind=='create'?{t:'create',nm}:{t:'join',code:jc,nm};
+ const first=kind=='quick'?{t:'quick',nm,m:S.pm|0}:kind=='create'?{t:'create',nm}:{t:'join',code:jc,nm};
  let o=null,jerr=null;
  for(let at=0;at<3&&!o;at++){
   try{o=await openWS(WS_URL,first,at?25000:12000)}
@@ -264,7 +274,7 @@ function lobbyTick(){
  const left=S.lc-(performance.now()-S.lcAt)/1000,c=Math.ceil(left),e=$('pcd'),t=left>0?'Starting in '+c+'…':'Starting…';
  if(e&&e.textContent!==t)e.textContent=t;
  if(left>0&&S.mc!==c){S.mc=c;snd(520,.1,'square',.05)}}
-function fetchStats(){if(window.TAG_WS)return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.json()).then(d=>{const e=$('onl');if(e&&S.mode=='menu'&&d.online>0)e.textContent=d.online+' online'+(d.waiting?' · '+d.waiting+' waiting for a match':'')}).catch(()=>{})}catch(e){}}
+function fetchStats(){if(window.TAG_WS)return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(d.wm)d.wm.forEach((v,i)=>{const w=$('mw'+i);if(w)w.textContent=v?v+' waiting':'Be first!'});const e=$('onl');if(e&&S.mode=='menu'&&d.online>0)e.textContent=d.online+' online'+(d.waiting?' · '+d.waiting+' waiting for a match':'')}).catch(()=>{})}catch(e){}}
 
 /* ---------- net: the server owns the game. I send inputs; it sends back the truth ---------- */
 function hostStart(){if(peers.length<MINP[S.md|0]||!peers.every(p=>p.presence.rd))return;netSend({t:'start'})}

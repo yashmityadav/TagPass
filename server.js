@@ -25,8 +25,11 @@ const DT = 1 / 60;
 let snapEvery = +process.env.TAG_SNAP_EVERY || 1;   // send a snapshot every N ticks (1 = 60/s, 2 = 30/s). Adapts automatically when the server is overloaded (see the tick loop).
 const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
 const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
-const CLASSIC_S = 30;          // classic mode: one elimination every 30 s, play continues without respawn
-const roundS = r => r.inf === 0 ? CLASSIC_S : ROUND_S;
+const classicS = n => Math.max(25, 70 - 6 * n);   // classic: seconds per elimination, shrinks as players grow (2p 58s, 3p 52s, 5p 40s, 8+p 25s)
+
+const FREEZE_S = 300;          // freeze tag: always 300 s
+
+const roundS = r => r.rs || (r.inf === 2 ? FREEZE_S : r.inf === 0 ? classicS(2) : ROUND_S);
 const CD_MS = 2200;            // 3-2-1-GO countdown before each round
 const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
@@ -81,10 +84,11 @@ const server = http.createServer((req, res) => {
     return res.end('ok');
   }
   if (url === '/stats') {
-    let waiting = 0;
-    for (const r of rooms.values()) if (r.pub && r.st === 'lobby') waiting += r.players.size;
+    let waiting = 0; const wm = [0, 0, 0];
+
+    for (const r of rooms.values()) if (r.pub && r.st === 'lobby') { waiting += r.players.size; wm[r.inf] += conn(r); }
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ online: wss.clients.size, waiting }));
+    return res.end(JSON.stringify({ online: wss.clients.size, waiting, wm }));
   }
   if (url === '/favicon.ico') { res.writeHead(204); return res.end(); }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
@@ -298,10 +302,10 @@ const bcast = (r, s, drop) => { for (const p of r.players.values()) sendP(p, s, 
 /* ---------------- rooms ---------------- */
 let pubN = 0;
 const roomMax = r => r.pub ? PUB_SIZE : MAX_ROOM;   // public matches 10 (alternate classic / infection), private rooms 10
-function mkRoom(key, pub) {
+function mkRoom(key, pub, md) {
   const r = {
     key, pub: !!pub, players: new Map(), st: 'lobby', hostId: null,
-    ord: [], rn: 0, gm: 0, mp: 0, practice: false, first: null, inf: pub ? (pubN++ % 3) : 0, sel: 0,
+    ord: [], rn: 0, gm: 0, mp: 0, practice: false, first: null, inf: pub ? (md | 0) % 3 : 0, sel: 0,
     loser: null, ln: null, win: null, wn: null,
     lobbyGo: 0, cdEnd: 0, deadline: 0, tagFrom: 0, betweenEnd: 0, lk: null,
     dec: [], pj: [], sm: [], tr: [], lt: [], cr: [], ltNext: 2, fxn: 0      // ability effects: decoys, smoke grenades in flight, smoke clouds, traps
@@ -434,6 +438,8 @@ function startRound(r, ids, t) {
   const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, 0, t, pts[k]); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
+  r.rs = r.inf === 0 ? classicS(ids.length) : r.inf === 2 ? FREEZE_S : ROUND_S;
+
   r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + roundS(r) * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
 }
@@ -462,7 +468,7 @@ function toLobby(r) {
 function resumeClassic(r, t, al) {   // classic: keep positions, new random tag, fresh 30 s
   for (const q of r.players.values()) q.it = 0;
   const h = r.players.get(al[rnd(al.length)]); if (h) h.it = 1;
-  r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.deadline = t + CLASSIC_S * 1000; r.tagFrom = t + TAG_GRACE_MS;
+  r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.rs = classicS(al.length); r.deadline = t + r.rs * 1000; r.tagFrom = t + TAG_GRACE_MS;
   bcastRoom(r);
 }
 
@@ -912,13 +918,16 @@ wss.on('connection', (ws, req) => {
         return addPlayer(rr, cleanName(m.nm));          // joining a running match = spectate until the next game
       }
       if (m.t === 'quick') {
+
+        const md = Math.max(0, Math.min(2, m.m | 0));
+
         let best = null;
         for (const rr of rooms.values()) {
-          if (!rr.pub || rr.st !== 'lobby' || conn(rr) >= PUB_SIZE) continue;
+          if (!rr.pub || rr.inf !== md || rr.st !== 'lobby' || conn(rr) >= PUB_SIZE) continue;
           if (!best || conn(rr) > conn(best)) best = rr;   // fullest lobby first
         }
         if (!best && rooms.size >= MAX_ROOMS) return err('busy');
-        if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true); }
+        if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true, md); }
         return addPlayer(best, cleanName(m.nm));
       }
       if (m.t === 'resume') {                           // reconnect after a dropped connection
