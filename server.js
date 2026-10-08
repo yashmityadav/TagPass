@@ -218,6 +218,16 @@ function step(p, inp, dt) {
 }
 const onQ = (q, p) => q.dy ? (p.x + PW / 2 >= q.x && p.x + PW / 2 <= q.x + q.w && Math.abs(p.y + PH - (q.y + (p.x + PW / 2 - q.x) / q.w * q.dy)) < 4) : (Math.abs(p.y + PH - q.y) < 3 && p.x + PW > q.x && p.x < q.x + q.w);
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
+/* Lag compensation: the player who tags sees the others ~RTT+interp-delay in the past (and himself predicted in the present), so contact is judged on HIS screen:
+   his current position against the other player's position from that many ticks ago. A bot holder has no screen -> the human runner's screen decides. */
+const LAGC_MAX = 10, LAGC_EXTRA = 55;
+const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + LAGC_EXTRA) / TICK_MS));
+const hitRew = (a, b, k) => { const i = (b.hi - k) & 31, x = b.hx[i], y = b.hy[i]; return a.x < x + PW - 3 && a.x + PW > x + 3 && a.y < y + PH - 3 && a.y + PH > y + 3; };
+function tagHit(h, q) {
+  if (!h.bot && h.ws) return hitRew(h, q, lagK(h));
+  if (!q.bot && q.ws) return hitRew(q, h, lagK(q));
+  return hit(h, q, 3);
+}
 
 /* ---------------- crates: solid boxes; hold GRAB next to one to drag it ---------------- */
 const CS = 40, CRATE_ROPE = 64, CRATE_BREAK = 220;
@@ -293,7 +303,7 @@ function cleanName(v) {
 function send(ws, s, droppable) {
   if (!ws || ws.readyState !== 1) return;
   if (ws.bufferedAmount > 1048576) { ws.terminate(); return; }          // hopelessly backed up
-  if (droppable && ws.bufferedAmount > 4096) return;                    // slow link: skip a stale snapshot (the next one is 16 ms away) instead of queueing latency
+  if (droppable && ws.bufferedAmount > 16384) return;                    // slow link: skip a stale snapshot (the next one is 16 ms away) instead of queueing latency
   ws.send(s);
 }
 const sendP = (p, s, drop) => { if (p.ws) send(p.ws, s, drop); };
@@ -318,7 +328,7 @@ const conn = r => { let n = 0; for (const p of r.players.values()) if (p.ws) n++
 function newPlayer(nm, ci) {
   return {
     id: hex(4), tk: hex(12), ws: null, nm, ci,
-    rdy: 0, q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0,
+    rdy: 0, q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0, lastB: 0, starve: 0, debt: 0, hx: new Float32Array(32), hy: new Float32Array(32), hi: 0, hrs: -1,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
     ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
@@ -405,7 +415,7 @@ function botPlan(r, p) {
 
 function spawn(p, k, t, sp) {
   p.x = sp[0] + k * 42; p.y = sp[1]; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
-  p.rs++; p.q.length = 0; p.lastCmd = t;
+  p.rs++; p.q.length = 0; p.lastCmd = t; p.lastB = 0; p.starve = 0; p.debt = 0;
   p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.lv = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0;   // every round starts with dash + ability + grab ready
 }
 
@@ -659,11 +669,20 @@ function grabTick(r) {
 
 /* ---------------- simulation ---------------- */
 // Returns the input bit-mask to apply this tick, or -1 = "wait, the next input packet is probably in flight".
-function consume(p, t) {
-  const c = p.q.shift();
-  if (c) { p.lastSeq = c.s; p.lastCmd = t; return c.b; }
-  if (t - p.lastCmd < STALL_MS) return -1;   // short wait keeps us in lock-step with the client's prediction
-  return 0;                                    // client is silent (hidden tab / lost signal): stand still, but keep playing
+const REPEAT_MAX = 9, QTRIM = 4;   // ticks a silent player keeps moving on their last input / longest input backlog kept
+function consume(p) {
+  if (!p.q.length) {                                   // input is late: keep moving on the last input instead of freezing (a freeze looks like a teleport on everyone else's screen)
+    if (p.starve < REPEAT_MAX) { p.starve++; p.debt++; return p.lastB; }
+    p.debt = 0; return p.lastB = 0;                    // really silent (hidden tab / lost signal): stand still
+  }
+  p.starve = 0;
+  let c = p.q.shift(), b = c.b;
+  while (p.q.length && (p.debt > 0 || p.q.length > QTRIM)) {   // repay the repeated ticks (or trim a backlog) by dropping the oldest input - its button presses are merged into the next one so no jump/dash is lost
+    if (p.debt > 0) p.debt--;
+    const press = b & ~p.lastB & 116;
+    c = p.q.shift(); b = c.b | press;
+  }
+  p.lastSeq = c.s; p.lastB = b; return b;
 }
 
 function advance(r, p, b) {
@@ -694,11 +713,10 @@ function simRoom(r, t) {
     if (!p.alive) continue;
     if (p.acd > 0) p.acd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
     p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
-    let b = p.bot ? botInput(r, p, t) : consume(p, t);
-    if (b === -1) { p.credit = Math.min(8, p.credit + 1); continue; }   // a late packet: the player earns ONE catch-up step (never more than 1 per missed tick)
+    let b = p.bot ? botInput(r, p, t) : consume(p);
     advance(r, p, (cd || p.fz) ? 0 : b);
-    // after a lag spike a burst of inputs arrives: spend earned credit to catch up. A flooding cheater has no credit, so they can't go faster than 60 steps/s.
-    while (p.credit > 0 && p.q.length > 1) { p.credit--; { const c2 = p.q.shift(); p.lastSeq = c2.s; advance(r, p, (cd || p.fz) ? 0 : c2.b); } }
+    if (p.hrs !== p.rs) { p.hx.fill(p.x); p.hy.fill(p.y); p.hrs = p.rs; }                 // position history (lag compensation)
+    p.hi = (p.hi + 1) & 31; p.hx[p.hi] = p.x; p.hy[p.hi] = p.y;
   }
 
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) { if (r.inf === 0) resumeClassic(r, t, al); else startRound(r, al, t); } else finish(r, al[0]); } return; }
@@ -719,9 +737,9 @@ function simRoom(r, t) {
     for (const p of its) p.fz = 0;
     for (const q of run) if (q.fimm > 0) q.fimm -= DT;
     if (t >= r.tagFrom) for (const q of run) {
-      if (q.fz) { for (const h of run) if (h !== q && !h.fz && hit(h, q, 3)) { q.fz = 0; q.fimm = 1.2; bcast(r, JSON.stringify({ t: 'fz', a: q.id, f: 0 })); break; } }
+      if (q.fz) { for (const h of run) if (h !== q && !h.fz && tagHit(h, q)) { q.fz = 0; q.fimm = 1.2; bcast(r, JSON.stringify({ t: 'fz', a: q.id, f: 0 })); break; } }
       else if (q.fimm <= 0) {
-        const f = its.find(h => hit(h, q, 3));
+        const f = its.find(h => tagHit(h, q));
         if (!f) continue;
         q.fz = 1; q.vx = 0; q.dash = 0; q.zip = -1; r.lastInf = f.id;
         if (q.gt || q.gk) ungrab(r, q, GRAB_CD);
@@ -738,7 +756,7 @@ function simRoom(r, t) {
   if (r.inf === 1) {   // INFECTION: every infected player spreads it by touch; the last healthy player wins
     const al = aliveIds(r).map(id => r.players.get(id));
     if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
-    if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && hit(h, q, 3)) { q.it = 1; r.lastInf = q.id; break; }
+    if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && tagHit(h, q)) { q.it = 1; r.lastInf = q.id; break; }
     const hl = al.filter(p => !p.it);
     if (!r.practice && al.length > 1) { if (hl.length <= 1) finish(r, hl.length ? hl[0].id : r.lastInf); }
     return;
@@ -760,7 +778,7 @@ function simRoom(r, t) {
   if (t >= r.tagFrom) {
     for (const q of r.players.values()) {
       if (!q.alive || q.it || q === holder) continue;
-      if (!hit(holder, q, 3)) continue;                                   // real overlap only, never from a distance
+      if (!tagHit(holder, q)) continue;                                   // real overlap only, never from a distance
       if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
       holder.it = 0; q.it = 1;
       if (holder.gt === q.id) ungrab(r, holder, GRAB_CD); else if (q.gt === holder.id) ungrab(r, q, GRAB_CD);   // a tag ends the grip between the two
@@ -849,7 +867,7 @@ wss.on('connection', (ws, req) => {
   perIp.set(ip, n);
 
   ws.lastSeen = ws.born = Date.now();
-  ws.on('pong', () => { ws.lastSeen = Date.now(); });
+  ws.on('pong', () => { const n = Date.now(); ws.lastSeen = n; if (ws.pingAt) { const m = n - ws.pingAt; ws.rtt = ws.rtt ? ws.rtt * .7 + m * .3 : m; } });
 
   let r = null, p = null, cnt = 0, winStart = Date.now();
   const err = e => { send(ws, '{"t":"err","e":"' + e + '"}'); ws.close(); };
@@ -971,10 +989,10 @@ setInterval(() => {
   const t = Date.now();
   for (const ws of wss.clients) {
     if (t - ws.lastSeen > 15000 || (!ws.joined && t - ws.born > 120000)) { ws.terminate(); continue; }
-    try { ws.ping(); } catch {}
+    try { ws.pingAt = Date.now(); ws.ping(); } catch {}
     send(ws, '{"t":"hb"}');
   }
-}, 5000);
+}, 2000);
 
 /* ---------------- housekeeping ---------------- */
 // Safety net: any room with nobody connected for a while is deleted, whatever state it is in.
