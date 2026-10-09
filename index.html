@@ -175,11 +175,11 @@ function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play'
 function menu(msg){warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="modeMenu()">▶ PLAY</button><div id="onl" style="font-size:16px;opacity:.9;min-height:20px"></div></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="modeMenu()">▶ PLAY</button></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 function modeMenu(){
  const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
  const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 5 minutes.','#2b8cff']];
- ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small><i class="mw" id="mw${i}"></i></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
+ ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 async function enter(host){if(S.joining)return;S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
@@ -274,7 +274,7 @@ function lobbyTick(){
  const left=S.lc-(performance.now()-S.lcAt)/1000,c=Math.ceil(left),e=$('pcd'),t=left>0?'Starting in '+c+'…':'Starting…';
  if(e&&e.textContent!==t)e.textContent=t;
  if(left>0&&S.mc!==c){S.mc=c;snd(520,.1,'square',.05)}}
-function fetchStats(){if(window.TAG_WS)return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(d.wm)d.wm.forEach((v,i)=>{const w=$('mw'+i);if(w)w.textContent=v?v+' waiting':'Be first!'});const e=$('onl');if(e&&S.mode=='menu'&&d.online>0)e.textContent=d.online+' online'+(d.waiting?' · '+d.waiting+' waiting for a match':'')}).catch(()=>{})}catch(e){}}
+function fetchStats(){return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(d.wm)d.wm.forEach((v,i)=>{const w=$('mw'+i);if(w)w.textContent=v?v+' waiting':'Be first!'});const e=$('onl');if(e&&S.mode=='menu'&&d.online>0)e.textContent=d.online+' online'+(d.waiting?' · '+d.waiting+' waiting for a match':'')}).catch(()=>{})}catch(e){}}
 
 /* ---------- net: the server owns the game. I send inputs; it sends back the truth ---------- */
 function hostStart(){if(peers.length<MINP[S.md|0]||!peers.every(p=>p.presence.rd))return;netSend({t:'start'})}
@@ -446,7 +446,9 @@ function drawSmoke(){
 function drawArrow(wx,wy,pk,s,TX,TY){const bob=Math.sin(time*7)*4;cx.setTransform(s*pk,0,0,s*pk,Math.round(TX+wx*s),Math.round(TY+wy*s+(-66+bob)*s));cx.fillStyle='#fff';cx.strokeStyle='#dfe9ff';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();cx.moveTo(-16,-8);cx.lineTo(16,-8);cx.lineTo(0,8);cx.closePath();cx.fill();cx.stroke()}
 function drawChar(p,s,TX,TY,al){
  const px=Math.round(TX+(p.x+PW/2)*s),py=Math.round(TY+(p.y+PH)*s);
- cx.setTransform(s,0,0,s,px,py);cx.save();cx.globalAlpha=al;
+ cx.setTransform(s,0,0,s,px,py);
+ {const md=S.md&&S.mode=='play'&&ME.alive;let hc=0;if(p===ME)hc='#ffe14a';else if(md&&!p.o&&p.alive!==false)hc=ME.it?(p.it?0:'#2b8cff'):(p.it?'#ff2a2a':0);
+ if(hc){cx.save();cx.globalAlpha=al*(.5+.25*Math.sin(time*6));cx.fillStyle=hc;cx.beginPath();cx.ellipse(0,-PH/2,34,PH/2+16,0,0,7);cx.fill();cx.globalAlpha=al;cx.strokeStyle=hc;cx.lineWidth=4;cx.stroke();cx.restore()}}cx.save();cx.globalAlpha=al;
  const sy=p.sq,sx=1/Math.sqrt(sy);cx.scale(sx,sy);cx.rotate(p.vx/2500*(p.g?1:.5));
  const w=p.g&&Math.abs(p.vx)>60?Math.sin(time*26)*3:0;
  cx.fillStyle='#0a2c3a';rr(-11+w,-4,9,5,2);cx.fill();rr(2-w,-4,9,5,2);cx.fill();
@@ -458,7 +460,7 @@ function drawChar(p,s,TX,TY,al){
  cx.restore();
  if(p.fz){cx.globalAlpha=.65;cx.fillStyle='#aee9ff';cx.fillRect(-21,-PH-10,42,PH+12);cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(-21,-PH-10,42,PH+12);cx.globalAlpha=1}
  const nm=p===ME?name:p.nm;
- cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);cx.globalAlpha=1}
+ cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);if(p===ME){cx.font='18px "Lilita One",Impact,sans-serif';cx.strokeStyle='#1b2a6b';cx.strokeText('YOU ▼',0,-100);cx.fillStyle='#ffe14a';cx.fillText('YOU ▼',0,-100)}cx.globalAlpha=1}
 
 /* ---------- map features: drawing ---------- */
 function drawPad(q){
@@ -678,7 +680,7 @@ function draw(){
  const L=inG?(ME.alive?[ME]:[]):[];
  if(inG)for(const k in rem)if(rem[k].alive)L.push(rem[k]);
  if(inG)for(const k in DEC){const d=DEC[k],o=d.o==myId?ME:rem[d.o];if(!o||!d.has)continue;d.ci=o.ci||0;d.nm=d.o==myId?name:(o.nm||'Player');d.alive=true;L.push(d)}   /* a decoy looks exactly like its owner */
- L.forEach(p=>drawChar(p,s,TX,TY,1));
+ L.sort((a,b)=>(a===ME)-(b===ME));L.forEach(p=>drawChar(p,s,TX,TY,1));
  cx.setTransform(s,0,0,s,TX,TY);cx.save();cx.beginPath();cx.rect(0,0,1600,836);cx.clip();drawOps(FG);cx.restore();
  if(inG){for(const p of L)if(!p.o&&riding(p))drawTrolley(p)}
  if(AR.h)drawArrow(AR.px,AR.py,1+AR.pop*.45,s,TX,TY);

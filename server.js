@@ -441,11 +441,26 @@ function spots(r, n) {   // classic: tight group on the middle-most platform; ot
     if (out.length === n || md <= 0) { while (out.length < n) out.push([300 + Math.random() * 900, -60]); return out; }
   }
 }
+function zoneSpots(r, n, right) {   // infection / freeze: one team per map edge
+  if (CURMAP !== r.mp) setMap(r.mp);
+  const P = SOL.filter(q => q.w >= 90), a = right ? RX - PW - WW * .3 : LX, b = right ? RX - PW : LX + WW * .3;
+  for (let md = 300; ; md -= 40) {
+    const out = [];
+    for (let tries = 0; tries < 400 && out.length < n; tries++) {
+      const q = P[rnd(P.length)], x0 = Math.max(q.x + 15, a), x1 = Math.min(q.x + q.w - 45, b);
+      if (x1 < x0) continue;
+      const x = x0 + Math.random() * (x1 - x0), y = q.y - PH - 2;
+      if (out.every(o => Math.hypot(o[0] - x, o[1] - y) >= md)) out.push([x, y]);
+    }
+    if (out.length === n || md <= 0) { while (out.length < n) out.push([a + Math.random() * (b - a), -60]); return out; }
+  }
+}
 function startRound(r, ids, t) {
   r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r); initCrates(r);
-  const pts = spots(r, ids.length);
+  let pts = r.inf ? null : spots(r, ids.length);
   const first = ids[rnd(ids.length)]; r.first = first;
   const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
+  if (r.inf) { const d = ids.filter(i => !frs.has(i)), a = ids.filter(i => frs.has(i)), L = zoneSpots(r, d.length, 0), R = zoneSpots(r, a.length, 1), m = {}; d.forEach((i, k) => m[i] = L[k]); a.forEach((i, k) => m[i] = R[k]); pts = ids.map(i => m[i]); }   // defenders left, attackers right
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, 0, t, pts[k]); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
   r.rs = r.inf === 0 ? classicS(ids.length) : r.inf === 2 ? FREEZE_S : ROUND_S;
