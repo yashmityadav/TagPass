@@ -448,7 +448,7 @@ function drawChar(p,s,TX,TY,al){
  const px=Math.round(TX+(p.x+PW/2)*s),py=Math.round(TY+(p.y+PH)*s);
  cx.setTransform(s,0,0,s,px,py);
  {const md=S.md&&S.mode=='play'&&ME.alive;let hc=0;if(p===ME)hc='#ffe14a';else if(md&&!p.o&&p.alive!==false)hc=ME.it?(p.it?0:'#2b8cff'):(p.it?'#ff2a2a':0);
- if(hc){cx.save();cx.globalAlpha=al*(.5+.25*Math.sin(time*6));cx.fillStyle=hc;cx.beginPath();cx.ellipse(0,-PH/2,34,PH/2+16,0,0,7);cx.fill();cx.globalAlpha=al;cx.strokeStyle=hc;cx.lineWidth=4;cx.stroke();cx.restore()}}cx.save();cx.globalAlpha=al;
+ if(hc){cx.save();const pu=.5+.25*Math.sin(time*6),g=cx.createRadialGradient(0,-PH/2,6,0,-PH/2,PH/2+22);g.addColorStop(0,hc+'00');g.addColorStop(.7,hc+'55');g.addColorStop(1,hc+'00');cx.globalAlpha=al*(.7+pu*.5);cx.fillStyle=g;cx.beginPath();cx.arc(0,-PH/2,PH/2+22,0,7);cx.fill();cx.globalAlpha=al*(.6+pu);cx.strokeStyle=hc;cx.lineWidth=4;cx.shadowColor=hc;cx.shadowBlur=14;cx.beginPath();cx.ellipse(0,2,28+pu*6,8+pu*2,0,0,7);cx.stroke();cx.restore()}}cx.save();cx.globalAlpha=al;
  const sy=p.sq,sx=1/Math.sqrt(sy);cx.scale(sx,sy);cx.rotate(p.vx/2500*(p.g?1:.5));
  const w=p.g&&Math.abs(p.vx)>60?Math.sin(time*26)*3:0;
  cx.fillStyle='#0a2c3a';rr(-11+w,-4,9,5,2);cx.fill();rr(2-w,-4,9,5,2);cx.fill();
