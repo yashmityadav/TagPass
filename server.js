@@ -341,7 +341,7 @@ function bcastRoom(r) {
   bcast(r, JSON.stringify({
     t: 'room', code: r.pub ? '' : r.key, pub: r.pub ? 1 : 0, st: r.st, host: r.hostId,
     rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf, sl: r.sel, first: r.first,
-    loser: r.loser, ln: r.ln, win: r.win, wn: r.wn,
+    loser: r.loser, ln: r.ln, win: r.win, wn: r.wn, wt: r.wt | 0,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
     pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0, rd: p.rdy ? 1 : 0 }))
   }));
@@ -476,9 +476,9 @@ function startMatch(r, t) {
   startRound(r, ids, t);
 }
 
-function finish(r, id) {
+function finish(r, id, wt) {
   const p = id && r.players.get(id);
-  r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.lobbyGo = 0; clearFx(r);
+  r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
   for (const q of r.players.values()) q.it = 0;
   bcastRoom(r);
 }
@@ -763,8 +763,8 @@ function simRoom(r, t) {
       }
     }
     if (!r.practice && run.length) {
-      if (run.every(p => p.fz)) finish(r, r.players.has(r.lastInf) ? r.lastInf : its[0].id);
-      else if (t >= r.deadline) finish(r, run.find(p => !p.fz).id);
+      if (run.every(p => p.fz)) finish(r, r.players.has(r.lastInf) ? r.lastInf : its[0].id, 1);
+      else if (t >= r.deadline) finish(r, run.find(p => !p.fz).id, 2);
     }
     return;
   }

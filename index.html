@@ -308,7 +308,7 @@ function applyRoom(m){
  }else if(m.st=='over'){
   if(S.ov!==m.gm+':'+m.rn){S.ov=m.gm+':'+m.rn;S.mode='over';document.body.classList.remove('pl');
    const mine=m.win==myId,w=mine?name:(m.wn||'');jingle(mine);
-   ovShow(`<h1 style="font-size:min(13vh,68px)">${w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</h1>${S.pub?'<button class="b" onclick="playAgain()">Play again</button>':(isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>')}<button class="b alt" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>`)}
+   ovShow(`<h1 style="font-size:min(13vh,68px)">${m.wt?(m.wt==1?'❄ Freezers win!':'🏃 Runners win!'):w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</h1>${S.pub?'<button class="b" onclick="playAgain()">Play again</button>':(isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>')}<button class="b alt" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>`)}
  }else if(m.st=='lobby'&&S.mode!='lobby'&&S.mode!='menu')toLobbyView();
  if(S.mode=='lobby')lobbyUI();
  board()}
