@@ -22,8 +22,7 @@ const LOBBY_GRACE_MS = 10000;  // a dropped connection in a lobby / results scre
 const ALLOWED = (process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);   // optional: restrict which sites may open a socket
 const TICK_MS = 1000 / 60;     // simulation rate (must match the client's PHYS_HZ = 60)
 const DT = 1 / 60;
-const BASE_SNAP = +process.env.TAG_SNAP_EVERY || 2;
-let snapEvery = BASE_SNAP;   // send a snapshot every N ticks (2 = 30/s, 3 = 20/s, 4 = 15/s). The simulation always runs at 60/s. Steps down automatically when the host is overloaded (see the tick loop).
+let snapEvery = +process.env.TAG_SNAP_EVERY || 1;   // send a snapshot every N ticks (1 = 60/s, 2 = 30/s). Adapts automatically when the server is overloaded (see the tick loop).
 const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
 const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
 const classicS = n => Math.max(25, 70 - 6 * n);   // classic: seconds per elimination, shrinks as players grow (2p 58s, 3p 52s, 5p 40s, 8+p 25s)
@@ -221,8 +220,8 @@ const onQ = (q, p) => q.dy ? (p.x + PW / 2 >= q.x && p.x + PW / 2 <= q.x + q.w &
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
 /* Lag compensation: the player who tags sees the others ~RTT+interp-delay in the past (and himself predicted in the present), so contact is judged on HIS screen:
    his current position against the other player's position from that many ticks ago. A bot holder has no screen -> the human runner's screen decides. */
-const LAGC_MAX = 12;
-const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + snapEvery * TICK_MS * 1.5 + 10) / TICK_MS));   // rtt + the client's interpolation delay (~1.5 snapshot intervals)
+const LAGC_MAX = 10, LAGC_EXTRA = 55;
+const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + LAGC_EXTRA) / TICK_MS));
 const hitRew = (a, b, k) => { const i = (b.hi - k) & 31, x = b.hx[i], y = b.hy[i]; return a.x < x + PW - 3 && a.x + PW > x + 3 && a.y < y + PH - 3 && a.y + PH > y + 3; };
 function tagHit(h, q) {
   if (!h.bot && h.ws) return hitRew(h, q, lagK(h));
@@ -304,7 +303,7 @@ function cleanName(v) {
 function send(ws, s, droppable) {
   if (!ws || ws.readyState !== 1) return;
   if (ws.bufferedAmount > 1048576) { ws.terminate(); return; }          // hopelessly backed up
-  if (droppable && ws.bufferedAmount > 8192) return;                    // slow link: skip a stale snapshot (the next one is 16 ms away) instead of queueing latency
+  if (droppable && ws.bufferedAmount > 16384) return;                    // slow link: skip a stale snapshot (the next one is 16 ms away) instead of queueing latency
   ws.send(s);
 }
 const sendP = (p, s, drop) => { if (p.ws) send(p.ws, s, drop); };
@@ -363,7 +362,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = rnd(16); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = 0; b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
@@ -371,7 +370,7 @@ function addBots(r, cnt) {
 /* ---- bots: every 8 ticks they try 12 short plans on a copy of their own body (same physics as the real game), look ~0.5 s ahead and pick the best one ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk-- <= 0) { p.btk = 16; botPlan(r, p); p.k = 0; }
+  if (p.btk-- <= 0) { p.btk = 12; botPlan(r, p); p.k = 0; }
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0);
@@ -390,7 +389,7 @@ function botPlan(r, p) {
   else if (rescue && td > 320) tg = rescue;
   else { tg = thr; chase = false; }
   if (!tg) { p.pl = { d: 0, j: 0, s: 0 }; return; }
-  if (Math.hypot(p.x - p.sx, p.y - p.sy) < 6 && ++p.stk > 12 && chase) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 14, s: 0 }; p.btk = 16; return; }   // stuck under a ledge: shake loose
+  if (Math.hypot(p.x - p.sx, p.y - p.sy) < 6 && ++p.stk > 12 && chase) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 14, s: 0 }; p.btk = 14; return; }   // stuck under a ledge: shake loose
   if (Math.hypot(p.x - p.sx, p.y - p.sy) >= 6) p.stk = 0;
   p.sx = p.x; p.sy = p.y;
   if (p.tid !== tg.id || --p.tc <= 0) { p.tid = tg.id; p.tc = 2; p.tx = tg.x + (Math.random() - .5) * 140; p.ty = tg.y + (Math.random() - .5) * 60; }   // human-like reaction: stale, slightly off view of the target
@@ -828,7 +827,7 @@ function snapshot(r, t, tt) {
   for (const p of r.players.values()) {
     if (!p.ws) continue;
     // full-precision state of the receiver, used for client-side prediction + reconciliation
-    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"lv":' + r1(Math.max(0, p.lv || 0)) + ',"fz":' + (p.fz ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"db":' + p.debt + ',"rs":' + p.rs + '}' : '';
+    const a = p.alive ? ',"a":{"x":' + r4(p.x) + ',"y":' + r4(p.y) + ',"vx":' + r4(p.vx) + ',"vy":' + r4(p.vy) + ',"g":' + (p.g ? 1 : 0) + ',"coy":' + r4(p.coy) + ',"buf":' + r4(p.buf) + ',"pj":' + (p.pj ? 'true' : 'false') + ',"cut":' + (p.cut ? 1 : 0) + ',"drop":' + r4(p.drop) + ',"face":' + p.face + ',"it":' + (p.it ? 1 : 0) + ',"dash":' + r4(p.dash) + ',"dd":' + p.dd + ',"dcd":' + r4(p.dcd) + ',"ps":' + (p.ps ? 'true' : 'false') + ',"ac":' + r1(Math.max(0, p.acd)) + ',"gs":' + p.gs + ',"gt":' + (p.gt ? 1 : 0) + ',"hb":' + (p.hb ? 1 : 0) + ',"gk":' + (p.gk ? 1 : 0) + ',"lv":' + r1(Math.max(0, p.lv || 0)) + ',"fz":' + (p.fz ? 1 : 0) + ',"gc":' + r1(Math.max(0, p.gcd)) + ',"bs":' + r4(Math.max(0, p.bst)) + ',"pc":' + r4(Math.max(0, p.pcd)) + ',"z":' + p.zip + ',"zd":' + p.zd + ',"zs":' + r4(p.zs) + ',"zc":' + r4(Math.max(0, p.zcd)) + ',"q":' + p.lastSeq + ',"rs":' + p.rs + '}' : '';
     send(p.ws, head + a + '}', true);
   }
 }
@@ -847,41 +846,26 @@ function tickAll(t, tt) {
         if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (tot(r) >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
       } else if (r.st === 'play' || r.st === 'between') {
         simRoom(r, t);
-        if (tickN % snapEvery === 0 && (r.st === 'play' || r.st === 'between')) r.snapDue = 1;   // sent once, after the whole batch of ticks (see loop())
+        if (rooms.has(r.key) && (r.st === 'play' || r.st === 'between') && tickN % snapEvery === 0 && conn(r)) snapshot(r, t, tt);
       }
     } catch (e) { console.error('room error, closing room ' + r.key + ':', e); destroyRoom(r); }
   }
 }
-function sendSnaps(t, tt) {
-  for (const r of rooms.values()) {
-    if (!r.snapDue) continue;
-    r.snapDue = 0;
-    if (r.st !== 'play' && r.st !== 'between') continue;
-    try { if (conn(r)) snapshot(r, t, tt); } catch (e) { console.error('snapshot error, closing room ' + r.key + ':', e); destroyRoom(r); }
+let lagEma = 0, calmSince = 0;
+setInterval(() => {
+  const t = now();
+  // Overload guard: if ticks keep running late (a busy / tiny shared CPU), halve the snapshot rate so the game logic stays on time
+  // and every player keeps the same fair, steady 60 Hz simulation. It returns to 60 snapshots/s by itself when the load drops.
+  const lag = Math.max(0, t - nextTick);
+  lagEma += (lag - lagEma) * 0.05;
+  if (!FIXED_SNAP) {
+    if (snapEvery === 1 && lagEma > 6) { snapEvery = 2; calmSince = 0; console.log('high load: snapshots at 30/s'); }
+    else if (snapEvery === 2) { if (lagEma < 1.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 20000) { snapEvery = 1; calmSince = 0; console.log('load normal: snapshots at 60/s'); } } else calmSince = 0; }
   }
-}
-let lagEma = 0, calmSince = 0, lvAt = 0;
-// Self-correcting timer instead of a 4 ms setInterval (250 wake-ups/s were wasted CPU on a 0.1-CPU free instance).
-function loop() {
-  try {
-    const t = now();
-    // Overload guard: if ticks keep running late (a busy / throttled shared CPU), send fewer snapshots so the game logic stays on time.
-    // It steps back up by itself after 20 calm seconds.
-    const lag = Math.max(0, t - nextTick);
-    lagEma += (lag - lagEma) * 0.05;
-    if (!FIXED_SNAP) {
-      if (lagEma > 8 && snapEvery < 4 && t - lvAt > 3000) { snapEvery++; lvAt = t; calmSince = 0; console.log('high load: snapshots at ' + Math.round(60 / snapEvery) + '/s'); }
-      else if (snapEvery > BASE_SNAP && lagEma < 2.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 20000) { snapEvery--; lvAt = t; calmSince = 0; console.log('load normal: snapshots at ' + Math.round(60 / snapEvery) + '/s'); } }
-      else if (lagEma >= 2.5) calmSince = 0;
-    }
-    let n = 0, last = nextTick;
-    while (nextTick <= t && n < 8) { last = nextTick; tickAll(t, nextTick); nextTick += TICK_MS; n++; }   // fixed 60 Hz, catches up after a hiccup
-    if (n) sendSnaps(t, last);
-    if (nextTick < t - 250) nextTick = t;
-  } catch (e) { console.error('loop error:', e); }
-  setTimeout(loop, Math.max(1, Math.ceil(nextTick - now())));
-}
-setTimeout(loop, 1);
+  let n = 0;
+  while (nextTick <= t && n++ < 5) { tickAll(t, nextTick); nextTick += TICK_MS; }   // fixed 60 Hz, catches up after a hiccup
+  if (nextTick < t - 100) nextTick = t;
+}, 4);
 
 /* ---------------- connections ---------------- */
 const perIp = new Map();
