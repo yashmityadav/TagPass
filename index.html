@@ -156,7 +156,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6','#ff8a3d','#ff6fd8','#29d3ff','#b6e03a','#ffffff'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,zip:-1,zd:1,zs:0,zcd:0,ac:0,acAt:0,gt:0,gk:0,hb:0,gs:0,gc:0,gcAt:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,mi=0,mus=0,toastT,lastBoard='';
-const PHYS_HZ=60,SEND_S=0,INTERP_MIN=33,INTERP_MAX=110,EXTRAP_MS=120,PUB_SIZE=10;   /* PUB_SIZE: players needed before a public match starts */
+const PHYS_HZ=60,SEND_S=.033,INTERP_MAX=170,EXTRAP_MS=120,JIT_HALF=3000,PUB_SIZE=10;   /* PUB_SIZE: players needed before a public match starts */
 const S={mode:'menu',gm:0,rn:0,rs:-1,st:'lobby',bt:null,ov:null,rm:null,practice:false,tl:null,tlAt:0,cdl:0,cdAt:0,lc:0,lcAt:0},ME=mk(0,700,500),NEUT={},PEND=[],OUT=[],VO={x:0,y:0};let seq=0;
 ME.alive=true;ME.ci=0;
 let cam={x:800,y:418,z:.6};
@@ -279,7 +279,7 @@ function fetchStats(){return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.js
 /* ---------- net: the server owns the game. I send inputs; it sends back the truth ---------- */
 function hostStart(){if(peers.length<MINP[S.md|0]||!peers.every(p=>p.presence.rd))return;netSend({t:'start'})}
 function toLobby(){netSend({t:'lobby'})}
-function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:INTERP_MIN+6,late:0,rt:null,has:0}}
+function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:80,late:0,ln:0,iv:33.3,lts:0,rt:null,has:0}}
 function onMsg(m,ws){
  if(!room||room.ws!==ws)return;room.rx=Date.now();
  switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'fz':onFz(m);break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
@@ -331,7 +331,7 @@ function reconcile(a){
  const sx=ME.x,sy=ME.y,fresh=a.rs!==S.rs,wasHb=ME.hb;
  ME.x=a.x;ME.y=a.y;ME.vx=a.vx;ME.vy=a.vy;ME.g=a.g;ME.coy=a.coy;ME.buf=a.buf;ME.pj=a.pj;ME.cut=a.cut;ME.drop=a.drop;ME.face=a.face;ME.it=a.it;ME.dash=a.dash;ME.dd=a.dd;ME.dcd=a.dcd;ME.ps=a.ps;ME.bst=a.bs||0;ME.pcd=a.pc||0;ME.zip=a.z==null?-1:a.z;ME.zd=a.zd||1;ME.zs=a.zs||0;ME.zcd=a.zc||0;ME.ac=a.ac||0;ME.acAt=performance.now();ME.gs=a.gs||0;ME.gt=a.gt||0;ME.hb=a.hb||0;ME.gk=a.gk||0;const wasLv=ME.lv>0;ME.lv=a.lv||0;ME.lvAt=performance.now();if(ME.lv>0&&!wasLv)toast('🔥 Burned! Slowed for 15s',1500);ME.fz=a.fz||0;ME.gc=a.gc||0;ME.gcAt=performance.now();if(ME.hb&&!wasHb){toast('Grabbed! Dash ⚡ to break free',1400);shake=Math.max(shake,.3)}
  if(fresh){S.rs=a.rs;PEND.length=0;VO.x=VO.y=0;ME.px=ME.x;ME.py=ME.y;ME.sq=1;return}   /* spawn / respawn: hard set */
- while(PEND.length&&PEND[0].s<=a.q)PEND.shift();
+ const lead=a.db|0;while(PEND.length&&PEND[0].s<=a.q+lead)PEND.shift();   /* the server may be 'lead' ticks ahead of the last input it consumed (it repeated my last input while a packet was late) */
  QUIET=1;for(const c of PEND){ME.slow=slowAt(ME)||slowLv();step(ME,c.i,1/PHYS_HZ)}QUIET=0;
  const dx=sx-ME.x,dy=sy-ME.y,d=Math.hypot(dx,dy);
  if(d>.01){if(d<80){VO.x+=dx;VO.y+=dy}else{VO.x=VO.y=0}}   /* small error: blend away visually; big error: snap */
@@ -351,14 +351,17 @@ function flush(){
 setInterval(()=>{if(document.hidden)flush()},1000);   /* a hidden tab keeps its connection alive; the server keeps playing for it */
 function pushSnap(r,e,ts,now){
  const s=r.snaps,smp=now-ts;
- /* clock offset = fastest observed transit (leaky minimum); lateness above it = jitter */
- if(r.off===null||Math.abs(smp-r.off)>1500){r.off=smp;r.late=0;r.rt=null;s.length=0}
- else if(smp<r.off)r.off=smp;else r.off+=(smp-r.off)*.02;
- const late=Math.max(0,smp-r.off);r.late=Math.max(late,r.late*.97);
- const tg=Math.min(INTERP_MAX,Math.max(INTERP_MIN,17+r.late*.9));r.dly+=(tg-r.dly)*(tg>r.dly?.25:.01);   /* adaptive jitter buffer */
+ /* clock offset = fastest observed transit (leaky minimum); lateness above it = network + server jitter */
+ if(r.off===null||Math.abs(smp-r.off)>1500){r.off=smp;r.late=0;r.rt=null;s.length=0;r.ln=now;r.lts=0;r.iv=33.3}
+ else if(smp<r.off)r.off=smp;else r.off+=(smp-r.off)*.01;
+ const late=Math.max(0,smp-r.off);
+ r.late=Math.max(late,r.late*Math.pow(.5,Math.max(0,now-r.ln)/JIT_HALF));r.ln=now;   /* worst recent lateness, fades with a ~3 s half-life (time based, so it doesn't depend on the snapshot rate) */
+ if(r.lts&&ts>r.lts)r.iv+=(Math.min(ts-r.lts,100)-r.iv)*.1;if(ts>r.lts)r.lts=ts;      /* measured snapshot interval (33 ms normally, 50-66 ms when the server is stressed) */
+ /* adaptive jitter buffer: at least 1.6 snapshot intervals, grows quickly with jitter, shrinks slowly */
+ const tg=Math.min(INTERP_MAX,Math.max(r.iv*1.6,r.iv+r.late*1.1+8));r.dly+=(tg-r.dly)*(tg>r.dly?.35:.004);
  if(s.length&&ts<=s[s.length-1].t)return;
  s.push({t:ts,x:e[1],y:e[2],vx:e[3],vy:e[4],face:e[5],g:e[6],it:e[7],alive:1});
- if(s.length>24)s.shift();
+ if(s.length>30)s.shift();
  if(!r.has){r.has=1;r.x=e[1];r.y=e[2]}}
 const lerp=(a,b,u)=>a+(b-a)*u;
 /* cubic Hermite using the sent velocities -> curved, jitter-free paths between 30Hz snapshots */
@@ -369,8 +372,8 @@ function stepRemote(r,now,dt){
  const s=r.snaps;let tx=r.x,ty=r.y,vx=r.vx,vy=r.vy,face=r.face,g=r.g,it=r.it,alive=r.alive;
  if(s.length&&r.off!==null){
   const tg=now-r.off-r.dly;                                   /* where the sender's timeline should be shown, in sender-clock ms */
-  if(r.rt===null||Math.abs(tg-r.rt)>600)r.rt=tg;
-  else{const err=tg-r.rt;r.rt+=dt*1000*(1+Math.max(-.2,Math.min(.2,err/250)))}   /* playback speed gently steers to target: no jumps */
+  if(r.rt===null||Math.abs(tg-r.rt)>700)r.rt=tg;
+  else{const err=tg-r.rt;r.rt+=dt*1000*(1+Math.max(-.12,Math.min(.12,err/500)))}   /* playback speed gently steers to target: no jumps */
   const e=s[s.length-1];if(r.rt>e.t+EXTRAP_MS)r.rt=e.t+EXTRAP_MS;
   const rt=r.rt;while(s.length>2&&s[1].t<=rt)s.shift();
   const a=s[0],b=s[1];
@@ -383,7 +386,7 @@ function stepRemote(r,now,dt){
   else{const lead=Math.min(EXTRAP_MS,Math.max(0,rt-e.t))/1000;const ex=lead-lead*lead/(2*EXTRAP_MS/1000);tx=e.x+e.vx*ex;ty=e.g?e.y:e.y+e.vy*ex;vx=e.vx;vy=e.vy;face=e.face;g=e.g;it=e.it;alive=e.alive}
  }
  if(Math.abs(tx-r.x)>220||Math.abs(ty-r.y)>220){if(r.has&&r.alive&&S.mode=='play'&&cdLeft()<=0&&Math.hypot(tx-r.x,ty-r.y)>260){burst(r.x+15,r.y+17,12,'#c9a8ff',300);burst(tx+15,ty+17,12,'#c9a8ff',300)}r.x=tx;r.y=ty}
- else{const k=1-Math.exp(-dt*110),cap=(Math.hypot(vx,vy)+260)*dt;let dx=(tx-r.x)*k,dy=(ty-r.y)*k;const m=Math.hypot(dx,dy);if(m>cap){dx*=cap/m;dy*=cap/m}r.x+=dx;r.y+=dy}   /* ~20ms low-pass + speed-capped catch-up: no visible snaps */
+ else{r.x+=vx*dt;r.x+=(tx-r.x)*(1-Math.exp(-dt*30));r.y+=(ty-r.y)*(1-Math.exp(-dt*70))}   /* x: velocity feed-forward (no lag while running) + ~35 ms blend of any correction; y: short blend so landings never sink into the floor */
  r.vx=vx;r.vy=vy;r.face=face;r.g=g;
  if(r.alive&&vy<-950&&time-(r.pt||0)>.6&&S.mode=='play'){r.pt=time;burst(r.x+15,r.y+PH,8,'#ffe14d',260)}   /* a launch pad fired */
  r.sq=r.g?1:(r.vy<-100?1.25:(r.vy>200?.85:1));
@@ -444,6 +447,13 @@ function drawSmoke(){
   for(let i=0;i<9;i++){const u=Math.sin(c[0]*12.9898+i*78.233)*43758.5453,f=u-Math.floor(u),v=Math.sin(c[0]*39.3468+i*11.135)*24634.6345,g=v-Math.floor(v),ang=f*6.283,dist=SMOKE_R*(.2+.4*g),rad=SMOKE_R*(.28+.1*Math.sin(time*2+i));cx.beginPath();cx.arc(X+Math.cos(ang)*dist,Y+Math.sin(ang)*dist*.8,rad,0,7);cx.fill()}}
  cx.globalAlpha=1}
 function drawArrow(wx,wy,pk,s,TX,TY){const bob=Math.sin(time*7)*4;cx.setTransform(s*pk,0,0,s*pk,Math.round(TX+wx*s),Math.round(TY+wy*s+(-66+bob)*s));cx.fillStyle='#fff';cx.strokeStyle='#dfe9ff';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();cx.moveTo(-16,-8);cx.lineTo(16,-8);cx.lineTo(0,8);cx.closePath();cx.fill();cx.stroke()}
+const LBL=new Map();
+function lbl(text,font,fill){const key=font+'|'+fill+'|'+text;let o=LBL.get(key);if(o)return o;
+ const R=3,lw=4,m=document.createElement('canvas'),g=m.getContext('2d');g.font=font;
+ const w=Math.ceil(g.measureText(text).width)+lw*2+6,h=parseInt(font)+lw*2+10,bx=w/2,by=h-lw-5;
+ m.width=w*R;m.height=h*R;g.scale(R,R);g.font=font;g.textAlign='center';g.lineJoin='round';g.miterLimit=2;g.lineWidth=lw;g.strokeStyle='#1b2a6b';g.fillStyle=fill;g.strokeText(text,bx,by);g.fillText(text,bx,by);
+ o={c:m,w,h,bx,by};if(LBL.size>80)LBL.clear();LBL.set(key,o);return o}
+if(document.fonts&&document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',()=>LBL.clear());
 function drawChar(p,s,TX,TY,al){
  const px=Math.round(TX+(p.x+PW/2)*s),py=Math.round(TY+(p.y+PH)*s);
  cx.setTransform(s,0,0,s,px,py);
@@ -460,7 +470,7 @@ function drawChar(p,s,TX,TY,al){
  cx.restore();
  if(p.fz){cx.globalAlpha=.65;cx.fillStyle='#aee9ff';cx.fillRect(-21,-PH-10,42,PH+12);cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(-21,-PH-10,42,PH+12);cx.globalAlpha=1}
  const nm=p===ME?name:p.nm;
- cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);if(p===ME){cx.font='18px "Lilita One",Impact,sans-serif';cx.strokeStyle='#1b2a6b';cx.strokeText('YOU ▼',0,-100);cx.fillStyle='#ffe14a';cx.fillText('YOU ▼',0,-100)}cx.globalAlpha=1}
+ cx.globalAlpha=al;{const o=lbl(nm,'15px "Lilita One",Impact,sans-serif','#fff');cx.drawImage(o.c,-o.bx,-80-o.by,o.w,o.h)}if(p===ME){const o=lbl('YOU ▼','18px "Lilita One",Impact,sans-serif','#ffe14a');cx.drawImage(o.c,-o.bx,-100-o.by,o.w,o.h)}cx.globalAlpha=1}
 
 /* ---------- map features: drawing ---------- */
 function drawPad(q){
@@ -563,7 +573,7 @@ function frame(n){
  emaDt=emaDt*.95+dt*.05;if(emaDt>.028&&time-lastQ>4&&QF>.6){QF=Math.max(.6,QF-.15);lastQ=time;rs()}
  if(S.mode=='play'){acc+=dt;let ns=0;while(acc>=1/PHYS_HZ&&ns++<6){upd(1/PHYS_HZ);acc-=1/PHYS_HZ}if(acc>1/PHYS_HZ)acc=0;
   cd=cdLeft();const bn=cd>.4?Math.ceil((cd-.4)/.6):0;if(S.st=='play'&&bn!==cdS){snd(bn>0?520:880,.12,'square',.05);cdS=bn}
-  netAcc+=dt;if(netAcc>=SEND_S){netAcc=0;flush()}   /* inputs go out ~30x/s in small batches */
+  netAcc+=dt;if(inChg||netAcc>=SEND_S){inChg=0;netAcc=0;flush()}   /* inputs go out ~30x/s in small batches, and instantly when a button changes */
   const many=!S.practice;tleft=S.tl==null?100:Math.max(0,S.tl-(performance.now()-S.tlAt)/1000);   /* the clock is the SERVER's clock */
   const timerText=S.inf?'':many?String(Math.ceil(tleft)):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&!S.inf&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
  if(S.mode=='play')hudUpd();
@@ -583,6 +593,7 @@ function frame(n){
  arrowUpd(dt);camUpd(dt);draw();ME.x=ax;ME.y=ay}
 function cdLeft(){return Math.max(0,S.cdl-(performance.now()-S.cdAt)/1000)}
 /* client-side PREDICTION: I move instantly on my own screen and send the inputs; the server's answer corrects me. No tagging, timer or scoring happens here. */
+let lastMask=0,inChg=0;
 function upd(dt){
  ME.px=ME.x;ME.py=ME.y;
  if(!room||!ME.alive||S.rs<0||(S.st!='play'&&S.st!='between'))return;
@@ -590,7 +601,7 @@ function upd(dt){
  TL.s=TL.a=TL.g=0;ME.slow=slowAt(ME)||slowLv();
  step(ME,inp,dt);
  const q=++seq;PEND.push({s:q,i:inp});if(PEND.length>180)PEND.shift();
- OUT.push([q,(inp.l?1:0)|(inp.r?2:0)|(inp.j?4:0)|(inp.s?16:0)|(h.a?32:0)|(h.g?64:0)])}
+ const mk=(inp.l?1:0)|(inp.r?2:0)|(inp.j?4:0)|(inp.s?16:0)|(h.a?32:0)|(h.g?64:0);if(mk!==lastMask){lastMask=mk;inChg=1}OUT.push([q,mk])}
 /* the arrow keeps a decaying offset from its holder: it glides head-to-head on a hand-off but never trails behind a running player */
 function arrowUpd(dt){
  let h=null;
