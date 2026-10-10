@@ -78,6 +78,75 @@ function loadHtml() {
 }
 loadHtml();
 
+/* ---------------- accounts: username + password, stats saved per account in Upstash Redis (free, external: survives Render restarts/redeploys) ---------------- */
+const UP_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/$/, ''), UP_TOK = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+if (!UP_URL) console.warn('WARNING: UPSTASH_REDIS_REST_URL not set - accounts are kept in memory only and are LOST on restart!');
+const MEM = new Map();   // fallback store for local testing
+async function db(...cmds) {   // runs commands as one pipeline, returns the array of results
+  if (!UP_URL) return cmds.map(([op, k, v, nx]) => op === 'GET' ? (MEM.has(k) ? MEM.get(k) : null) : op === 'DEL' ? (MEM.delete(k), 1) : (nx && MEM.has(k)) ? null : (MEM.set(k, v), 'OK'));
+  const r = await fetch(UP_URL + '/pipeline', { method: 'POST', headers: { Authorization: 'Bearer ' + UP_TOK }, body: JSON.stringify(cmds) });
+  if (!r.ok) throw new Error('db ' + r.status);
+  return (await r.json()).map(x => { if (x.error) throw new Error(x.error); return x.result; });
+}
+const sha = s => crypto.createHash('sha256').update(s).digest('hex');
+const ACC = new Map(), byTok = new Map(), dirty = new Set();   // in-memory caches of what the DB holds
+let accT = 0;
+async function getAcc(k) { let a = ACC.get(k); if (a) return a; const [v] = await db(['GET', 'acc:' + k]); if (!v) return null; a = ACC.get(k) || JSON.parse(v); ACC.set(k, a); return a; }
+async function tokAcc(tk) {
+  if (typeof tk !== 'string' || !tk || tk.length > 64) return null;
+  const h = sha(tk); let a = byTok.get(h); if (a) return a;
+  const [k] = await db(['GET', 'tok:' + h]); a = k ? await getAcc(k) : null; if (a) byTok.set(h, a); return a;
+}
+async function newTok(a) {
+  const tk = hex(24), h = sha(tk), cmds = [['SET', 'tok:' + h, a.k]]; a.tk.push(h); byTok.set(h, a);
+  while (a.tk.length > 5) { const o = a.tk.shift(); byTok.delete(o); cmds.push(['DEL', 'tok:' + o]); }
+  cmds.push(['SET', 'acc:' + a.k, JSON.stringify(a)]); await db(...cmds); return tk;
+}
+function accSave(a) { dirty.add(a); if (!accT) accT = setTimeout(accFlush, 3000); }   // stats are batched into one request
+async function accFlush() {
+  accT = 0; if (!dirty.size) return;
+  const l = [...dirty]; dirty.clear();
+  try { await db(...l.map(a => ['SET', 'acc:' + a.k, JSON.stringify(a)])); }
+  catch (e) { console.error('account save failed:', e.message); for (const a of l) dirty.add(a); if (!accT) accT = setTimeout(accFlush, 10000); }
+}
+const accOut = (a, tk) => ({ ok: 1, u: a.n, tk, st: { p: a.p, w: a.w, l: a.l } });
+const LIVE = new WeakMap(), authIp = new Map(); setInterval(() => authIp.clear(), 60000).unref();
+function authReq(req, res) {
+  const out = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(o)); };
+  const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const n = (authIp.get(ip) || 0) + 1; authIp.set(ip, n);
+  if (n > 30) return out(429, { e: 'rate' });
+  let b = ''; req.on('data', d => { b += d; if (b.length > 1024) req.destroy(); });
+  req.on('end', async () => {
+    try {
+      let m; try { m = JSON.parse(b); } catch { return out(400, { e: 'bad' }); }
+      if (!m || typeof m !== 'object') return out(400, { e: 'bad' });
+      if (m.m === 'tk') { const a = await tokAcc(m.tk); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
+      const u = String(m.u || ''), pw = String(m.p || ''), k = u.toLowerCase();
+      if (!/^[A-Za-z0-9_]{3,12}$/.test(u) || pw.length < 4 || pw.length > 64) return out(400, { e: 'bad' });
+      const scr = salt => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, d) => e ? no(e) : ok(d)));
+      if (m.m === 'reg') {
+        if (await getAcc(k)) return out(409, { e: 'taken' });
+        const salt = hex(16), a = { k, n: u, s: salt, h: (await scr(salt)).toString('hex'), p: 0, w: 0, l: 0, tk: [] };
+        const [ok] = await db(['SET', 'acc:' + k, JSON.stringify(a), 'NX']);   // NX: two people can never grab the same name
+        if (!ok) return out(409, { e: 'taken' });
+        ACC.set(k, a); return out(200, accOut(a, await newTok(a)));
+      }
+      if (m.m === 'login') {
+        const a = await getAcc(k); if (!a) return out(401, { e: 'cred' });
+        if (!crypto.timingSafeEqual(await scr(a.s), Buffer.from(a.h, 'hex'))) return out(401, { e: 'cred' });
+        return out(200, accOut(a, await newTok(a)));
+      }
+      out(400, { e: 'bad' });
+    } catch (e) { console.error('auth error:', e.message); try { out(503, { e: 'busy' }); } catch {} }
+  });
+}
+function rec(p, win) {   // one finished (or abandoned) match -> played +1, won/lost +1
+  if (!p.rec || !p.acct) return; p.rec = 0;
+  const a = p.acct; a.p++; if (win) a.w++; else a.l++; accSave(a);
+  sendP(p, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l }));
+}
+
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
 
@@ -91,6 +160,10 @@ const server = http.createServer((req, res) => {
     for (const r of rooms.values()) if (r.pub && r.st === 'lobby') { waiting += r.players.size; wm[r.inf] += conn(r); }
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ online: wss.clients.size, waiting, wm }));
+  }
+  if (url === '/auth') {
+    if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' }); return res.end(); }
+    if (req.method === 'POST') return authReq(req, res);
   }
   if (url === '/favicon.ico') { res.writeHead(204); return res.end(); }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
@@ -475,19 +548,20 @@ function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
   r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
+  for (const q of r.players.values()) q.rec = (!r.practice && q.acct && ids.includes(q.id)) ? 1 : 0;   // solo practice never counts
   startRound(r, ids, t);
 }
 
 function finish(r, id, wt) {
   const p = id && r.players.get(id);
   r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
-  for (const q of r.players.values()) q.it = 0;
+  for (const q of r.players.values()) { q.it = 0; rec(q, q.id === id); }
   bcastRoom(r);
 }
 
 function toLobby(r) {
   r.st = 'lobby'; clearFx(r); r.ord = []; r.rn = 0; r.gm = 0; r.first = r.loser = r.win = r.ln = r.wn = null; r.lk = null; r.practice = false;
-  for (const p of [...r.players.values()]) { if (p.bot) { r.players.delete(p.id); continue; } p.alive = false; p.it = 0; p.q.length = 0; p.rdy = 0; }
+  for (const p of [...r.players.values()]) { if (p.bot) { r.players.delete(p.id); continue; } p.alive = false; p.it = 0; p.q.length = 0; p.rdy = 0; p.rec = 0; }
   updateLobbyGo(r, now());
   bcastRoom(r);
 }
@@ -507,6 +581,7 @@ function expire(r, t, holder) {
 
 function removePlayer(r, p, t) {
   if (r.players.get(p.id) !== p) return;
+  if (r.st !== 'lobby' && r.st !== 'over') rec(p, 0);   // leaving a running match = a loss
   r.players.delete(p.id);
   if (![...r.players.values()].some(q => !q.bot)) { rooms.delete(r.key); return; }   // only bots left -> close the room
   if (r.hostId === p.id) {                                                          // oldest CONNECTED player becomes the host
@@ -884,6 +959,7 @@ wss.on('connection', (ws, req) => {
   perIp.set(ip, n);
 
   ws.lastSeen = ws.born = Date.now();
+  setTimeout(() => { if (!ws.acct) try { ws.close(); } catch {} }, 15000);   // never logged in -> dropped
   ws.on('pong', () => { const n = Date.now(); ws.lastSeen = n; if (ws.pingAt) { const m = n - ws.pingAt; ws.rtt = ws.rtt ? ws.rtt * .7 + m * .3 : m; } });
 
   let r = null, p = null, cnt = 0, winStart = Date.now();
@@ -894,6 +970,8 @@ wss.on('connection', (ws, req) => {
 
   const attach = (rr, pp) => {
     r = rr; p = pp; pp.ws = ws; pp.dc = 0; ws.joined = 1;
+    const o = LIVE.get(ws.acct); if (o && o !== ws && o.readyState === 1) { try { o.terminate(); } catch {} }   // one live session per account
+    LIVE.set(ws.acct, ws);
     send(ws, JSON.stringify({ t: 'hello', id: pp.id, tk: pp.tk, rk: rr.key, code: rr.pub ? '' : rr.key, pub: rr.pub ? 1 : 0, ab: pp.ab }));
   };
   const addPlayer = (rr, nm) => {
@@ -904,7 +982,7 @@ wss.on('connection', (ws, req) => {
     if (rr.pub && rr.st !== 'lobby') return err('full');                       // public matches in progress are closed
     if (!rooms.has(rr.key)) rooms.set(rr.key, rr);
     const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++; ci %= 10;
-    const pp = newPlayer(nm, ci); pp.since = now();
+    const pp = newPlayer(nm, ci); pp.since = now(); pp.acct = ws.acct; pp.rec = 0;
     rr.players.set(pp.id, pp);
     if (!rr.pub && !rr.hostId) rr.hostId = pp.id;
     attach(rr, pp);
@@ -921,6 +999,22 @@ wss.on('connection', (ws, req) => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== 'object') return;
+
+    /* ---- login gate: nothing else is processed until the socket proves it belongs to an account ---- */
+    if (!ws.acct) {
+      if (m.t === 'auth' && !ws.pend) {
+        ws.pend = [];   // messages that arrive while the token is being checked wait here
+        tokAcc(m.tk).then(a => {
+          const q = ws.pend; ws.pend = null;
+          if (!a) return err('auth');
+          ws.acct = a; send(ws, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l }));
+          for (const x of q) ws.emit('message', x[0], x[1]);
+        }, () => { ws.pend = null; err('busy'); });
+      }
+      else if (m.t === 'hb') send(ws, '{"t":"hb"}');
+      else if (ws.pend && ws.pend.length < 8) ws.pend.push([raw, isBinary]);
+      return;
+    }
 
     /* ---- inputs: the ONLY thing a client controls ---- */
     if (m.t === 'in') {
@@ -956,7 +1050,7 @@ wss.on('connection', (ws, req) => {
           if (P.mem.size >= PARTY_MAX) return err('full');
         }
         for (const q of P.mem.values()) q.rd = 0;                 // someone new arrived: everybody readies up again
-        const nm = cleanName(m.nm);
+        const nm = ws.acct.n;
         P.mem.set(pid, { id: pid, ws, nm, rd: 0, go: rr => { pt = null; addPlayer(rr, nm); } });
         pt = P; ws.joined = 1;
         return pbc(P);
@@ -985,7 +1079,7 @@ wss.on('connection', (ws, req) => {
       if (m.t === 'create') {
         if (rooms.size >= MAX_ROOMS) return err('busy');
         let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
-        return addPlayer(mkRoom(code, false), cleanName(m.nm));
+        return addPlayer(mkRoom(code, false), ws.acct.n);
       }
       if (m.t === 'join') {
         const code = typeof m.code === 'string' ? m.code.toUpperCase() : '';
@@ -994,7 +1088,7 @@ wss.on('connection', (ws, req) => {
         if (!rr || rr.pub) return err('nf');
         if (rr.players.size >= roomMax(rr)) return err('full');
         if (rr.practice && rr.st !== 'lobby') toLobby(rr);   // a solo practice game has no end: someone joining brings everybody back to the lobby
-        return addPlayer(rr, cleanName(m.nm));          // joining a running match = spectate until the next game
+        return addPlayer(rr, ws.acct.n);          // joining a running match = spectate until the next game
       }
       if (m.t === 'quick') {
 
@@ -1007,7 +1101,7 @@ wss.on('connection', (ws, req) => {
         }
         if (!best && rooms.size >= MAX_ROOMS) return err('busy');
         if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true, md); }
-        return addPlayer(best, cleanName(m.nm));
+        return addPlayer(best, ws.acct.n);
       }
       if (m.t === 'resume') {                           // reconnect after a dropped connection
         const rr = typeof m.rk === 'string' && m.rk.length <= 16 ? rooms.get(m.rk) : null;
@@ -1082,8 +1176,8 @@ server.listen(PORT, '0.0.0.0', () => {
 function shutdown() {
   console.log('Shutting down...');
   for (const ws of wss.clients) { try { ws.close(1001); } catch {} }
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(0), 3000).unref();
+  accFlush().finally(() => server.close(() => process.exit(0)));
+  setTimeout(() => process.exit(0), 4000).unref();
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

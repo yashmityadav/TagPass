@@ -171,11 +171,33 @@ if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout
 function jingle(w){(w?[523,659,784,1047,1319]:[392,330,262,196]).forEach((f,i)=>setTimeout(()=>snd(f,.25,'square',.06),i*130))}
 function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play')return;const n=[0,3,7,10,12,10,7,3];snd(220*Math.pow(2,n[mi++%8]/12),.22,'triangle',.022);if(mi%2==0)snd(110*Math.pow(2,[0,0,5,7][(mi>>1)%4]/12),.3,'sine',.03)},230)}
 
+/* ---------- accounts (login is enforced by the server; this is just the UI) ---------- */
+let AUTH=null;const AURL=window.TAG_WS?window.TAG_WS.replace(/^ws/,'http').replace(/\/$/,'')+'/auth':'/auth';
+try{const a=JSON.parse(localStorage.getItem('tagauth')||'null');if(a&&a.tk&&a.u)AUTH={u:a.u,tk:a.tk,st:a.st||{p:0,w:0,l:0}}}catch(e){}
+const authMsg=()=>JSON.stringify({t:'auth',tk:AUTH&&AUTH.tk});
+const stTxt=()=>'🎮 '+AUTH.st.p+' played · 🏆 '+AUTH.st.w+' won · 💀 '+AUTH.st.l+' lost';
+function saveAuth(){try{localStorage.setItem('tagauth',JSON.stringify(AUTH))}catch(e){}}
+function setSt(m){if(!AUTH)return;AUTH.st={p:m.p,w:m.w,l:m.l};saveAuth();const e=$('stl');if(e)e.textContent=stTxt()}
+function setAuth(d){AUTH={u:d.u,tk:d.tk,st:d.st};saveAuth();name=d.u}
+function logout(msg){try{localStorage.removeItem('tagauth')}catch(e){}AUTH=null;try{WARM&&WARM.close()}catch(e){}WARM=null;loginScreen(msg)}
+const post=b=>fetch(AURL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+function loginScreen(msg){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">LOGIN / SIGN UP</div><input id="lu" maxlength="12" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="lp" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key=='Enter')doAuth('login')"><div class="row"><button class="b go2 sm" onclick="doAuth('login')">Login</button><button class="b alt sm" onclick="doAuth('reg')">Sign up</button></div></div><p id="msg">${esc(msg||'Sign up once - you stay logged in on this device and your stats are saved.')}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+async function doAuth(m){const u=$('lu').value.trim(),p=$('lp').value,g=$('msg');
+ if(!/^[A-Za-z0-9_]{3,12}$/.test(u))return g.textContent='Username: 3-12 letters, numbers or _';
+ if(p.length<4)return g.textContent='Password must be at least 4 characters.';
+ g.textContent='Please wait…';
+ try{const d=await(await post({m,u,p})).json();
+  if(!d.ok){const E={cred:'Wrong username or password.',taken:'That username is taken.',rate:'Too many tries. Wait a minute.',busy:'Server busy. Try again in a moment.'};return g.textContent=E[d.e]||'Invalid username or password.'}
+  setAuth(d);menu()}catch(e){g.textContent='Cannot reach the server (free hosting may be waking up). Try again.'}}
+function boot(){menu();if(!AUTH)return;
+ post({m:'tk',tk:AUTH.tk}).then(r=>r.status==401?logout('Session expired. Please log in again.'):r.json().then(d=>{if(d.ok&&AUTH){AUTH.st=d.st;saveAuth();const e=$('stl');if(e)e.textContent=stTxt()}})).catch(()=>{})}
+
 /* ---------- screens ---------- */
-function menu(msg){warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
+function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="modeMenu()">▶ PLAY</button><button class="b alt sm" onclick="partyMenu()">👥 Play with friends</button></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><div class="cap" style="margin:0;font-size:22px">👤 ${esc(AUTH.u)}</div><div id="stl" class="cap" style="margin:0;font-size:15px">${stTxt()}</div><button class="b go2" onclick="modeMenu()">▶ PLAY</button><button class="b alt sm" onclick="partyMenu()">👥 Play with friends</button><button class="b alt sm" onclick="logout()">Log out</button></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 function modeMenu(){
  const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
  const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 5 minutes.','#2b8cff']];
@@ -188,7 +210,7 @@ function playAgain(){leaveRoom();enterPublic(S.pm)}
 /* pre-warm: open the socket while the player is still typing their name, so pressing Play skips the TCP/TLS handshake (and wakes a sleeping server early) */
 let WARM=null,WARM_URL='';
 function warm(){if(WARM&&WARM.readyState<=1)return;
- try{const u=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host),w=new WebSocket(u);WARM=w;WARM_URL=u;w.onerror=()=>{};w.onmessage=()=>{};w.onclose=()=>{if(WARM===w)WARM=null}}catch(e){WARM=null}}
+ try{const u=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host),w=new WebSocket(u);WARM=w;WARM_URL=u;w.onopen=()=>{try{w.send(authMsg())}catch(e){}};w.onerror=()=>{};w.onmessage=()=>{};w.onclose=()=>{if(WARM===w)WARM=null}}catch(e){WARM=null}}
 function takeWarm(url){const w=WARM;if(w&&w.readyState===1&&WARM_URL===url){WARM=null;return w}return null}
 function openWS(url,first,wait){return new Promise((resolve,reject)=>{
  let ws,done=0,to=0;
@@ -196,8 +218,9 @@ function openWS(url,first,wait){return new Promise((resolve,reject)=>{
  const pre=takeWarm(url);
  try{ws=pre||new WebSocket(url)}catch(e){return reject({code:'ws'})}
  to=setTimeout(()=>fail('timeout'),wait||12000);
- ws.onopen=()=>{try{ws.send(JSON.stringify(first))}catch(e){fail('send')}};
+ ws.onopen=()=>{try{ws.send(authMsg());ws.send(JSON.stringify(first))}catch(e){fail('send')}};
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
+  if(m.t=='st'){setSt(m);return}
   if(!done){if(m.t=='hello'){done=1;clearTimeout(to);resolve({ws,hello:m})}else if(m.t=='err')fail(m.e||'closed');return}
   onMsg(m,ws)};
  ws.onerror=()=>{if(!done)fail('connect')};
@@ -214,8 +237,8 @@ async function enter0(kind){
  let o=null,jerr=null;
  for(let at=0;at<3&&!o;at++){
   try{o=await openWS(WS_URL,first,at?25000:12000)}
-  catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'||e.code=='nf'||e.code=='busy'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
- if(!o){const c=jerr&&jerr.code;return menu(c=='full'?'Room is full (10 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':c=='busy'?'Servers are busy right now. Try again in a minute.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
+  catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'||e.code=='nf'||e.code=='busy'||e.code=='auth'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
+ if(!o){const c=jerr&&jerr.code;if(c=='auth')return logout('Session expired. Please log in again.');return menu(c=='full'?'Room is full (10 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':c=='busy'?'Servers are busy right now. Try again in a minute.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
  return finishJoin(o,WS_URL)}
 function finishJoin(o,WS_URL){
  const h=o.hello;myId=h.id;
@@ -239,9 +262,11 @@ function partyGo(kind){
  const u=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host);
  let ws;try{ws=takeWarm(u)||new WebSocket(u)}catch(e){return partyEnd('Could not reach the server.')}
  const P=PT={ws,code:''};
- const go=()=>{try{ws.send(JSON.stringify({t:kind,nm,code}))}catch(e){}};
+ const go=()=>{try{ws.send(authMsg());ws.send(JSON.stringify({t:kind,nm,code}))}catch(e){}};
  ws.onopen=go;ws.onerror=()=>{};
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
+  if(m.t=='st'){setSt(m);return}
+  if(m.t=='err'&&m.e=='auth'){PT=null;return logout('Session expired. Please log in again.')}
   if(m.t=='party'){P.st=m;return partyUI()}
   if(m.t=='err')return partyEnd(m.e=='full'?'Party is full (3 max).':m.e=='nf'?'Party not found. Check the code.':m.e=='bad'?'Invalid party code.':m.e=='busy'?'Servers are busy. Try again in a minute.':'Could not join the party.');
   if(m.t=='hello'){P.joined=1;if(PT===P)PT=null;return finishJoin({ws,hello:m},u)}
@@ -733,5 +758,5 @@ function draw(){
  if(S.mode=='play'&&S.st=='play'&&ME.alive&&cd<=0&&S.ev&&S.ev.t=='b'){const rm=S.ev.rem-(performance.now()-S.ev.at)/1000,a=Math.max(0,Math.min(1,(10-rm)/.3,rm/.3)),X=TX+(ME.x+PW/2)*s,Y=TY+(ME.y+PH/2)*s,r=120*s,g=cx.createRadialGradient(X,Y,r*.55,X,Y,r);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'#000');cx.setTransform(1,0,0,1,0,0);cx.globalAlpha=a;cx.fillStyle=g;cx.fillRect(0,0,cv.width,cv.height);cx.globalAlpha=1}
  if(S.mode=='play'&&cd>0){cx.setTransform(DPR,0,0,DPR,0,0);cx.font='bold '+Math.round(60+(cd%.6)*60)+'px "Lilita One",Impact';cx.textAlign='center';cx.strokeStyle='#1b2a6b';cx.lineWidth=6;cx.lineJoin='round';cx.fillStyle='#fff';const t=cd>.4?String(Math.ceil((cd-.4)/.6)):'GO!';cx.strokeText(t,W/2,H*.42);cx.fillText(t,W/2,H*.42)}
 }
-buildWorld();menu();requestAnimationFrame(frame);
+buildWorld();boot();requestAnimationFrame(frame);
 </script></body></html>
