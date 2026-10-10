@@ -1113,7 +1113,8 @@ wss.on('connection', (ws, req) => {
       if (m.t === 'create') {
         if (rooms.size >= MAX_ROOMS) return err('busy');
         let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
-        return addPlayer(mkRoom(code, false), ws.acct.n);
+        const nr = mkRoom(code, false); nr.prac = m.pr ? 1 : 0;   // practice room: host picks mode + map, every match gets 4 bots, nothing is counted
+        return addPlayer(nr, ws.acct.n);
       }
       if (m.t === 'join') {
         const code = typeof m.code === 'string' ? m.code.toUpperCase() : '';
@@ -1155,7 +1156,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'ready' && r.st === 'lobby' && !r.pub) { p.rdy = m.v ? 1 : 0; return bcastRoom(r); }
     if (m.t === 'map' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.sel = Math.max(0, Math.min(MAPS.length, m.m | 0)); return bcastRoom(r); }
     if (m.t === 'mode' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { r.inf = Math.max(0, Math.min(2, m.m | 0)); return bcastRoom(r); }
-    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { if (conn(r) < (r.inf === 1 ? 4 : r.inf === 2 ? 3 : 1)) return; if ([...r.players.values()].some(q => q.ws && !q.rdy)) return; return startMatch(r, now()); }   // infection needs 4+ players, freeze tag 3+
+    if (m.t === 'start' && r.st === 'lobby' && !r.pub && r.hostId === p.id) { if (r.prac) { for (const b of [...r.players.values()]) if (b.bot) r.players.delete(b.id); addBots(r, 4); return startMatch(r, now()); } if (conn(r) < (r.inf === 1 ? 4 : r.inf === 2 ? 3 : 1)) return; if ([...r.players.values()].some(q => q.ws && !q.rdy)) return; return startMatch(r, now()); }   // infection needs 4+ players, freeze tag 3+
     if (m.t === 'lobby' && r.st === 'over' && !r.pub && r.hostId === p.id) return toLobby(r);
   });
 
