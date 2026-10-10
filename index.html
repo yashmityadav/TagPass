@@ -112,17 +112,11 @@ input{box-shadow:inset 0 3px 0 rgba(27,42,107,.15)}
 #fl{overflow-y:auto;max-height:270px;display:flex;flex-direction:column;gap:5px}.fr{display:flex;align-items:center;gap:6px;background:rgba(27,42,107,.4);border-radius:12px;padding:5px 8px;font-size:17px}.fr[data-n]{cursor:pointer}.fr>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fr i{width:10px;height:10px;border-radius:50%;background:#777;flex:none}.fr i.on{background:#3dff7a;box-shadow:0 0 6px #3dff7a}.fr button{font:inherit;font-size:15px;color:#fff;background:#2b8cff;border:0;border-radius:8px;padding:2px 8px}.fr button.x{background:#c2415a}.fr.inv{background:rgba(255,210,63,.3)}#fl .em{font-size:15px;opacity:.7;text-align:center}
 #ft{position:fixed;z-index:99;display:none;background:#1b2a6b;color:#fff;border:2px solid rgba(255,255,255,.45);border-radius:14px;padding:8px 12px;font-size:15px;line-height:1.5;text-align:left;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ft b{display:block;font-weight:400;font-size:18px}
-/* ---- v3: stable layout, tabs, modal ---- */
-#hm{height:440px}.hb{flex:1;min-height:0}.fp{width:235px}.lc,.fp{overflow:hidden}
-#hm #msg{margin:0;min-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
-.sr{min-height:150px;align-items:center}.cc .row{min-height:84px}.tg .ph{width:100%;font-size:12px;line-height:1.2;opacity:.8;min-height:30px}
-.tabs{display:flex;gap:6px;margin-bottom:8px}.tab{flex:1;font:inherit;font-size:15px;color:#fff;background:rgba(27,42,107,.4);border:2px solid transparent;border-radius:12px;padding:5px 2px;white-space:nowrap}.tab.on{background:#2b8cff;border-color:#fff}
-.tab em{font-style:normal;background:#ff2d4a;border-radius:10px;padding:0 6px;margin-left:4px;font-size:13px}
-.pane{display:none;flex:1;min-height:0;flex-direction:column}.pane.on{display:flex}
-#fl,#nl,#im .il{flex:1;min-height:0;max-height:none;overflow-y:auto;touch-action:pan-y;display:flex;flex-direction:column;gap:5px}
-#nl .fr>span{white-space:normal;line-height:1.15;font-size:15px}.fr button+button{margin-left:0}
-#im{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:rgba(27,42,107,.7)}
-#im .card{width:min(330px,92vw);background:#2b3a8f;display:flex;flex-direction:column;gap:8px;align-items:center}#im .il{width:100%;max-height:50vh;flex:none}
+/* additions: tabs, invite popup, stable button row */
+.tabs{display:flex;gap:6px;margin-bottom:6px}.tab{flex:1;font:inherit;font-size:15px;color:#fff;background:rgba(27,42,107,.4);border:2px solid transparent;border-radius:12px;padding:4px 2px;white-space:nowrap}.tab.on{background:#2b8cff;border-color:#fff}.tab em{font-style:normal;font-size:13px}
+#nl{overflow-y:auto;max-height:270px;display:flex;flex-direction:column;gap:5px}#nl .em{font-size:15px;opacity:.7;text-align:center}#nl .fr>span{white-space:normal;line-height:1.15}
+.cc .row{min-height:80px}
+#im{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:rgba(27,42,107,.7)}#im .card{width:min(330px,92vw);background:#2b3a8f;display:flex;flex-direction:column;gap:8px;align-items:center}#im .il{width:100%;max-height:50vh;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -233,21 +227,22 @@ async function fAct(a,n,c){const d=await socPoll(a,{n,c:c||(PT&&PT.st&&PT.st.cod
 function fAdd(){const v=$('fa').value.trim();if(!v)return;$('fa').value='';fAct('add',v)}
 function fRm(n,b){if(rmN===n){rmN='';return fAct('rm',n)}rmN=n;b.textContent='Sure?';setTimeout(()=>{rmN='';fRender()},3000)}
 let CJ='',TAB=0,IM_T=0,LASTP='';
+function joinInv(c,n,r){if(PT){const P=PT;PT=null;try{P.ws.close()}catch(e){}}socPoll('idis',{n});if(!r)return partyGo('pjoin',c);if(S.joining)return;CJ=c;S.joining=1;enter0('join').finally(()=>{S.joining=0;CJ=''})}
 function dropParty(){const P=PT;PT=null;if(P)try{P.ws.close()}catch(e){}}
 function autoParty(){if(PT||!AUTH||S.mode!='menu'||S.joining||!$('hm')||Date.now()-(S.apAt||0)<2500)return;S.apAt=Date.now();const c=LASTP;partyGo(c?'pjoin':'pcreate',c);if(PT)PT.auto=1}
 function soloGo(){pSend({t:'prdy',v:1});pSend({t:'pstart'})}
 function practice(){S.prac=1;enter(1)}
 setInterval(autoParty,3000);
-function joinInv(c,n,r){if(PT){const P=PT;PT=null;try{P.ws.close()}catch(e){}}socPoll('idis',{n});if(!r)return partyGo('pjoin',c);if(S.joining)return;CJ=c;S.joining=1;enter0('join').finally(()=>{S.joining=0;CJ=''})}
-function tab(i){TAB=i;for(let j=0;j<2;j++){const t=$('t'+j),p=$('p'+j);t&&t.classList.toggle('on',j==i);p&&p.classList.toggle('on',j==i)}}
-function openFriends(a){tab(0);if(a&&!PT)partyGo('pcreate');if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{const f=$('fa');f&&f.focus()},60)}
-async function fInv(n){if(!PT){partyGo('pcreate');for(let i=0;i<40&&!(PT&&PT.st);i++)await new Promise(r=>setTimeout(r,150));if(!(PT&&PT.st))return}fAct('inv',n)}
+function tab(i){TAB=i;const a=$('p0'),b=$('nl'),t0=$('t0'),t1=$('t1');if(!a)return;a.style.display=i?'none':'';b.style.display=i?'':'none';t0.classList.toggle('on',!i);t1.classList.toggle('on',!!i)}
+function openFriends(a){tab(0);if(a&&!PT)autoParty();if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{const f=$('fa');f&&f.focus()},60)}
+async function fInv(n){if(!PT){autoParty();for(let i=0;i<40&&!(PT&&PT.st);i++)await new Promise(r=>setTimeout(r,150));if(!(PT&&PT.st))return}fAct('inv',n)}
 function invList(){const m=$('im');if(!m)return;const on=SOC.f.filter(f=>f.on);m.querySelector('.il').innerHTML=on.length?on.map(f=>`<div class="fr"><i class="on"></i><span>${esc(f.n)}</span><button onclick="fAct('inv','${esc(f.n)}',code)">📨 Invite</button></div>`).join(''):'<p class="em">No friends online.<br>Add friends from the main menu.</p>'}
 function invModal(){let m=$('im');if(m){clearInterval(IM_T);return m.remove()}m=document.createElement('div');m.id='im';m.innerHTML='<div class="card"><div class="cap">INVITE FRIENDS</div><div class="il"></div><button class="b alt sm" onclick="invModal()">Close</button></div>';document.body.appendChild(m);invList();socPoll('');IM_T=setInterval(()=>$('im')?socPoll(''):clearInterval(IM_T),4000)}
-function privMenu(){S.prac=0;const q=(location.search+location.hash).match(/room=([a-z0-9]{3,6})/i);ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">🔒 PRIVATE ROOM</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:300px"><button class="b go2" style="font-size:26px;padding:12px 24px;width:100%;min-width:0" onclick="enter(1)">＋ Create room</button><div class="cap" style="margin:0">OR JOIN WITH A CODE</div><div class="row" style="flex-wrap:nowrap"><input id="cd" maxlength="5" placeholder="Code" value="${q?q[1].toUpperCase():''}" style="width:130px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div></div><p id="msg" style="margin:0;min-height:24px">Create a room, invite friends, or start alone to practice.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
-function fRender(){invList();const e=$('fl');if(!e)return;const d=SOC,k=d.rq.length+d.inv.length,b=$('nb');if(b){b.textContent=k;b.style.display=k?'':'none'}
+function privMenu(){S.prac=0;const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">🔒 PRIVATE ROOM</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:300px"><button class="b go2" style="font-size:26px;padding:12px 24px;width:100%;min-width:0" onclick="enter(1)">＋ Create room</button><div class="cap" style="margin:0">OR JOIN WITH A CODE</div><div class="row" style="flex-wrap:nowrap"><input id="cd" maxlength="5" placeholder="Code" value="${q?q[1].toUpperCase():''}" style="width:130px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div></div><p id="msg" style="margin:0;min-height:24px">Create a room and invite friends, or join with a code.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+
+function fRender(){invList();const e=$('fl');if(!e)return;const d=SOC,k=d.rq.length+d.inv.length;$('fb').textContent=k?'🔴'+k:'';
  $('nl').innerHTML=d.inv.map(i=>`<div class="fr inv"><span>📨 <b>${esc(i.n)}</b> invited you to ${i.r?'a private room':'a party'}</span><button onclick="joinInv('${esc(i.c)}','${esc(i.n)}',${i.r?1:0})">Join</button><button class="x" onclick="fAct('idis','${esc(i.n)}')">✖</button></div>`).join('')+d.rq.map(n=>`<div class="fr inv"><span>👋 <b>${esc(n)}</b> sent a friend request</span><button onclick="fAct('acc','${esc(n)}')">✔</button><button class="x" onclick="fAct('dec','${esc(n)}')">✖</button></div>`).join('')||'<p class="em">No notifications</p>';
- e.innerHTML=d.f.length?d.f.map(f=>`<div class="fr" data-n="${esc(f.n)}" data-s="${f.p},${f.w},${f.l}"><i class="${f.on?'on':''}"></i><span>${esc(f.n)}</span>${f.on?`<button onclick="fInv('${esc(f.n)}')">📨 Invite</button>`:''}<button class="x" onclick="fRm('${esc(f.n)}',this)">✖</button></div>`).join(''):'<p class="em">No friends yet.<br>Add someone by username!</p>'}
+ e.innerHTML=d.f.length?d.f.map(f=>`<div class="fr" data-n="${esc(f.n)}" data-s="${f.p},${f.w},${f.l}"><i class="${f.on?'on':''}"></i><span>${esc(f.n)}</span>${f.on?`<button onclick="fInv('${esc(f.n)}')">📨</button>`:''}<button class="x" onclick="fRm('${esc(f.n)}',this)">✖</button></div>`).join(''):'<p class="em">No friends yet.<br>Add someone by username!</p>'}
 function ftShow(r){const[p,w,l]=r.dataset.s.split(',').map(Number);ft.innerHTML=`<b>${r.dataset.n}</b>${r.querySelector('i').className?'🟢 Online':'⚫ Offline'}<br>🎮 ${p} played<br>🏆 ${w} won · 💀 ${l} lost<br>📈 ${p?Math.round(w/p*100):0}% win rate`;const b=r.getBoundingClientRect();ft.style.display='block';ft.style.top=Math.max(4,Math.min(innerHeight-ft.offsetHeight-4,b.top+b.height/2-ft.offsetHeight/2))+'px';ft.style.left=Math.max(4,b.left-ft.offsetWidth-8)+'px'}
 document.addEventListener('mouseover',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r?ftShow(r):ft.style.display='none'});
 document.addEventListener('click',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r&&!e.target.closest('button')?ftShow(r):ft.style.display='none'});
@@ -260,12 +255,11 @@ function homeRender(){
  const slot=i=>oth[i]?`<div class="sl"><div class="bl" style="--c:${COLS[hc(oth[i].nm)]}"><i></i><i></i></div><b>${esc(oth[i].nm)}${oth[i].id===st.lead?' ★':''}</b><em class="${oth[i].rd?'ok':''}">${oth[i].rd?'✔ Ready':'Not ready'}</em></div>`:`<button class="sl add" onclick="openFriends(1)"><span>＋</span><small>Invite</small></button>`;
  ovShow(`<div id="lobw"><div id="hm"><div class="tb"><div class="pn">👤 ${esc(AUTH.u)}</div><div id="stl" class="stp">${stTxt()}</div><button class="tbb" onclick="howTo()">❓ How to play</button><button class="tbb" onclick="logout()">⎋ Log out</button></div>
 <div class="hb"><div class="lc"><div class="card"><div class="cap" style="margin:0">MODE${st&&!lead?' (leader picks)':''}</div>${MODES.map((m,i)=>`<button class="mb${i==md?' on':''}" style="--c:${m[2]}" ${lead?'':'disabled'} onclick="setMode(${i})">${m[0]} ${m[1]}</button>`).join('')}</div>
-<button class="b alt sm" style="width:100%" onclick="privMenu()">🔒 Private Room</button>
-<button class="b alt sm" style="width:100%" onclick="practice()">🎯 Practice</button></div>
+<div class="card"><button class="b alt sm" style="width:100%" onclick="privMenu()">🔒 Private Room</button></div>
+<div class="card"><button class="b alt sm" style="width:100%" onclick="practice()">🎯 Practice</button></div></div>
 <div class="cc"><div class="sr">${slot(0)}<div class="sl"><div class="bl big" style="--c:${COLS[hc(AUTH.u)]}"><i></i><i></i></div><b>${esc(AUTH.u)}${st&&st.lead===st.you?' ★':''}</b></div>${slot(1)}</div>
 <div class="row">${!st?`<button class="b go2" style="font-size:26px;padding:12px 36px;opacity:.5" disabled>Connecting…</button>`:!oth.length?`<button class="b go2" style="font-size:32px;padding:14px 60px" onclick="soloGo()">▶ PLAY</button>`:`<button class="b sm${me.rd?' go2':' alt'}" style="font-size:22px;padding:10px 20px;min-width:130px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="b go2" style="font-size:26px;padding:12px 30px${all?'':';opacity:.5'}" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<p>Waiting for the leader…</p>')}</div></div>
-</div></div>
-<div class="card fp"><div class="tabs"><button id="t0" class="tab${TAB?'':' on'}" onclick="tab(0)">👥 Friends</button><button id="t1" class="tab${TAB?' on':''}" onclick="tab(1)">🔔 Alerts<em id="nb" style="display:none"></em></button></div><div id="p0" class="pane${TAB?'':' on'}"><div class="fa"><input id="fa" maxlength="12" placeholder="Add friend" value="${esc(fav)}" autocapitalize="off" onkeydown="if(event.key=='Enter')fAdd()"><button onclick="fAdd()">＋</button></div><div id="fl"></div></div><div id="p1" class="pane${TAB?' on':''}"><div id="nl"></div></div></div></div>
+<div class="card fp"><div class="tabs"><button id="t0" class="tab${TAB?'':' on'}" onclick="tab(0)">👥 Friends</button><button id="t1" class="tab${TAB?' on':''}" onclick="tab(1)">🔔 Alerts <em id="fb"></em></button></div><div id="p0" style="${TAB?'display:none':''}"><div class="fa"><input id="fa" maxlength="12" placeholder="Add friend" value="${esc(fav)}" autocapitalize="off" onkeydown="if(event.key=='Enter')fAdd()"><button onclick="fAdd()">＋</button></div><div id="fl"></div></div><div id="nl" style="${TAB?'':'display:none'}"></div></div></div>
 <p id="msg">${esc(HM)||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out.'}</p></div></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fRender();if(q&&!S.qo){S.qo=1;privMenu()}}
 function modeMenu(){
@@ -361,7 +355,8 @@ addEventListener('pagehide',e=>{if(e.persisted)return;try{if(room){room.left=1;n
 /* coming back to a tab (phones often kill sockets in the background): reconnect at once instead of waiting for a watchdog */
 document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
 function leaveRoom(msg){if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
-function fitLobby(){const w=$('lobw');if(!w)return;if(document.activeElement&&document.activeElement.tagName=='INPUT'&&w.dataset.k)return;w.style.transform='none';const hm=!!w.querySelector('#hm');let k=Math.min(hm?1.35:1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);if(!hm&&w.dataset.k)k=Math.min(k,+w.dataset.k);w.dataset.k=k;w.style.transform=k!=1?'scale('+k+')':'none'}
+function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';const k=Math.min(1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);w.style.transform=k<1?'scale('+k+')':'none'}
+addEventListener('resize',()=>setTimeout(fitLobby,60));
 function lobbyUI(f){if(S.prac){S.prac=0;netSend({t:'ready',v:1});setTimeout(()=>netSend({t:'start'}),200)}
  if(S.pub)return pubUI(f);
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)+(p.presence.rd||0)).join()+isHost+S.md+'/'+(S.sl|0);
@@ -819,7 +814,7 @@ function draw(){
  if(S.mode=='play'&&S.st=='play'&&ME.alive&&cd<=0&&S.ev&&S.ev.t=='b'){const rm=S.ev.rem-(performance.now()-S.ev.at)/1000,a=Math.max(0,Math.min(1,(10-rm)/.3,rm/.3)),X=TX+(ME.x+PW/2)*s,Y=TY+(ME.y+PH/2)*s,r=120*s,g=cx.createRadialGradient(X,Y,r*.55,X,Y,r);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'#000');cx.setTransform(1,0,0,1,0,0);cx.globalAlpha=a;cx.fillStyle=g;cx.fillRect(0,0,cv.width,cv.height);cx.globalAlpha=1}
  if(S.mode=='play'&&cd>0){cx.setTransform(DPR,0,0,DPR,0,0);cx.font='bold '+Math.round(60+(cd%.6)*60)+'px "Lilita One",Impact';cx.textAlign='center';cx.strokeStyle='#1b2a6b';cx.lineWidth=6;cx.lineJoin='round';cx.fillStyle='#fff';const t=cd>.4?String(Math.ceil((cd-.4)/.6)):'GO!';cx.strokeText(t,W/2,H*.42);cx.fillText(t,W/2,H*.42)}
 }
-/* back navigation: phone/browser back button and Esc step back one screen instead of leaving the page */
+/* back: phone/browser back button and Esc step back one screen */
 function goBack(){if($('im'))return invModal();if(S.mode=='menu'){if(AUTH&&!$('hm'))menu();return}if(S.mode=='play'||S.mode=='over'){if(room&&confirm('Leave the game?'))leaveRoom();return}if(room)leaveRoom()}
 try{history.replaceState({t:1},'');history.pushState({t:2},'')}catch(e){}
 addEventListener('popstate',()=>{try{history.pushState({t:2},'')}catch(e){}goBack()});
