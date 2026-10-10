@@ -175,7 +175,7 @@ function startMusic(){if(mus)return;mus=setInterval(()=>{if(MUTE||S.mode!='play'
 function menu(msg){warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
  let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
  const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="modeMenu()">▶ PLAY</button></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><input id="nm" maxlength="12" placeholder="Your name" value="${esc(sv)}"><button class="b go2" onclick="modeMenu()">▶ PLAY</button><button class="b alt sm" onclick="partyMenu()">👥 Play with friends</button></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 function modeMenu(){
  const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
  const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 5 minutes.','#2b8cff']];
@@ -216,11 +216,49 @@ async function enter0(kind){
   try{o=await openWS(WS_URL,first,at?25000:12000)}
   catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'||e.code=='nf'||e.code=='busy'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
  if(!o){const c=jerr&&jerr.code;return menu(c=='full'?'Room is full (10 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':c=='busy'?'Servers are busy right now. Try again in a minute.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
+ return finishJoin(o,WS_URL)}
+function finishJoin(o,WS_URL){
  const h=o.hello;myId=h.id;
  room={ws:o.ws,id:h.id,tk:h.tk,rk:h.rk,url:WS_URL,left:0,rx:Date.now(),resuming:0};
  code=h.code||'';resetMatch();S.pub=h.pub?1:0;S.mode='lobby';$('leave').style.display='block';
  let sv='';try{sv=localStorage.getItem('tagab')||''}catch(e){}MYAB=AB[sv]?sv:(AB[h.ab]?h.ab:'fake');netSend({t:'ab',k:MYAB});   /* remembered ability choice */
  if(S.rm)applyRoom(S.rm)}
+/* ---------- party (play public lobbies with friends) ---------- */
+let PT=null;const PMN=['Classic','Infection','Freeze Tag'];
+function partyMenu(){
+ const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
+ ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">👥 PLAY WITH FRIENDS</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><button class="b go2" onclick="partyGo('pcreate')">＋ Create party</button><div class="row"><input id="pc" maxlength="5" placeholder="Party code" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="partyGo('pjoin')">Join</button></div></div><p id="msg">Up to 3 players. The leader shares the code, everyone readies up, the leader starts.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
+ ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+function partyEnd(msg){const P=PT;PT=null;if(P)try{P.ws.close()}catch(e){}menu(msg||'')}
+function partyGo(kind){
+ if(PT)return;
+ const nm=(name||'').trim().slice(0,12)||'Player',code=($('pc')?$('pc').value:'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+ if(kind=='pjoin'&&code.length<3)return $('msg').textContent='Enter the party code first.';
+ try{lockLand();startMusic();AC&&AC.resume&&AC.resume()}catch(e){}
+ $('msg').textContent='Connecting…';
+ const u=window.TAG_WS||((location.protocol=='https:'?'wss://':'ws://')+location.host);
+ let ws;try{ws=takeWarm(u)||new WebSocket(u)}catch(e){return partyEnd('Could not reach the server.')}
+ const P=PT={ws,code:''};
+ const go=()=>{try{ws.send(JSON.stringify({t:kind,nm,code}))}catch(e){}};
+ ws.onopen=go;ws.onerror=()=>{};
+ ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
+  if(m.t=='party'){P.st=m;return partyUI()}
+  if(m.t=='err')return partyEnd(m.e=='full'?'Party is full (3 max).':m.e=='nf'?'Party not found. Check the code.':m.e=='bad'?'Invalid party code.':m.e=='busy'?'Servers are busy. Try again in a minute.':'Could not join the party.');
+  if(m.t=='hello'){P.joined=1;if(PT===P)PT=null;return finishJoin({ws,hello:m},u)}
+  if(P.joined)onMsg(m,ws)};
+ ws.onclose=()=>{if(P.joined)onClose(ws);else if(PT===P)partyEnd('Party connection lost.')};
+ if(ws.readyState==1)go()}
+function pSend(m){try{PT.ws.send(JSON.stringify(m))}catch(e){}}
+function partyUI(){
+ const s=PT&&PT.st;if(!s)return;
+ const lead=s.lead===s.you,me=s.mem.find(x=>x.id===s.you)||{},all=s.mem.every(x=>x.rd);
+ const list=`<div class="cap">PARTY ${s.mem.length}/3</div>`+s.mem.map(x=>`<div class="chip">${esc(x.nm)}${x.id===s.lead?' ★':''}${x.id===s.you?' (you)':''} · ${x.rd?'✔ Ready':'…'}</div>`).join('');
+ const act=`<button class="b sm" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready (tap to cancel)':'Ready'}</button>`+(lead?`<div class="opt"><b>MODE</b><button onclick="pSend({t:'pmode',m:${(s.md+1)%3}})">${PMN[s.md]} ↻</button></div><button class="b go2" ${all?'':'disabled style="opacity:.5"'} onclick="pSend({t:'pstart'})">▶ START</button>`:`<p>Waiting for the leader to start…</p>`);
+ if($('ptw')&&PT.code===s.code){$('ptl').innerHTML=list;$('pta').innerHTML=act;return fitLobby()}
+ PT.code=s.code;
+ ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">👥 PARTY</div><div class="card"><div class="cap">PARTY CODE</div><div class="code">${esc(s.code)}</div></div><div class="card" id="ptw"><div id="ptl">${list}</div><div id="pta" style="display:flex;flex-direction:column;gap:6px;align-items:center;margin-top:8px">${act}</div></div><button class="b alt sm" onclick="partyEnd('')">← Leave party</button></div>`);
+ ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+
 function resetMatch(){clearFx();S.rn=0;S.gm=0;S.rs=-1;S.bt=null;S.ov=null;S.st='lobby';S.practice=false;S.tl=null;S.cdl=0;S.lc=0;S.lastN=null;S.psig='';S.mc=0;S.sig='';S.lobCode=null;PEND.length=0;OUT.length=0;VO.x=VO.y=0;ME.alive=true;ME.it=0;rem={};peers=[];isHost=false;cd=0}
 function netSend(m){const w=room&&room.ws;if(w&&w.readyState==1)w.send(JSON.stringify(m))}
 /* a dropped connection keeps your character on the server for ~15 s: we silently reconnect and carry on */

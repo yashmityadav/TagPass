@@ -57,6 +57,8 @@ const ABIL = new Set(['fake', 'smoke', 'trap']);
 /* ---- lightning: random warning circle, strike after LT_WARN s, launches everyone inside (no damage) ---- */
 const LT_R = 110, LT_WARN = 1, LT_FLASH = .35, LT_MIN = 3, LT_MAX = 6, LT_VY = 1500, LT_VX = 620;
 
+const parties = new Map();     // friends waiting together before entering a public lobby
+const PARTY_MAX = 3;
 const rooms = new Map();       // key -> room   (private: the room code, public: 'p-xxxx')
 
 /* ---------------- static file (cached + gzipped; reloaded automatically if it changes on disk) ---------------- */
@@ -885,6 +887,9 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { const n = Date.now(); ws.lastSeen = n; if (ws.pingAt) { const m = n - ws.pingAt; ws.rtt = ws.rtt ? ws.rtt * .7 + m * .3 : m; } });
 
   let r = null, p = null, cnt = 0, winStart = Date.now();
+  const pid = hex(4); let pt = null;     // party membership (before a room exists)
+  const pbc = P => { const mem = [...P.mem.values()]; const lst = mem.map(x => ({ id: x.id, nm: x.nm, rd: x.rd })); for (const q of mem) send(q.ws, JSON.stringify({ t: 'party', code: P.code, you: q.id, lead: P.lead, md: P.md, mem: lst })); };
+  const pdrop = () => { if (!pt) return; const P = pt; pt = null; P.mem.delete(pid); if (!P.mem.size) { parties.delete(P.code); return; } if (P.lead === pid) P.lead = P.mem.keys().next().value; for (const q of P.mem.values()) q.rd = 0; pbc(P); };
   const err = e => { send(ws, '{"t":"err","e":"' + e + '"}'); ws.close(); };
 
   const attach = (rr, pp) => {
@@ -936,6 +941,47 @@ wss.on('connection', (ws, req) => {
 
     /* ---- joining ---- */
     if (!r) {
+      /* ---- party: leader makes a code, friends join, all ready, leader picks mode + starts -> everyone enters the same public lobby ---- */
+      if (m.t === 'pcreate' || m.t === 'pjoin') {
+        if (pt) return;
+        let P;
+        if (m.t === 'pcreate') {
+          if (parties.size >= MAX_ROOMS) return err('busy');
+          let c; do { c = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (parties.has(c) || rooms.has(c));
+          P = { code: c, lead: pid, md: 0, mem: new Map() }; parties.set(c, P);
+        } else {
+          const c = typeof m.code === 'string' ? m.code.toUpperCase() : '';
+          if (!/^[A-Z0-9]{3,6}$/.test(c)) return err('bad');
+          P = parties.get(c); if (!P) return err('nf');
+          if (P.mem.size >= PARTY_MAX) return err('full');
+        }
+        for (const q of P.mem.values()) q.rd = 0;                 // someone new arrived: everybody readies up again
+        const nm = cleanName(m.nm);
+        P.mem.set(pid, { id: pid, ws, nm, rd: 0, go: rr => { pt = null; addPlayer(rr, nm); } });
+        pt = P; ws.joined = 1;
+        return pbc(P);
+      }
+      if (pt) {
+        const P = pt;
+        if (m.t === 'prdy') { P.mem.get(pid).rd = m.v ? 1 : 0; return pbc(P); }
+        if (m.t === 'pmode' && P.lead === pid) { P.md = Math.max(0, Math.min(2, m.m | 0)); return pbc(P); }
+        if (m.t === 'pstart' && P.lead === pid) {
+          const mem = [...P.mem.values()], n = mem.length;
+          if (mem.some(q => !q.rd)) return;
+          let best = null;
+          for (const rr of rooms.values()) {                      // a lobby with room for the WHOLE party, fullest first
+            if (!rr.pub || rr.inf !== P.md || rr.st !== 'lobby' || conn(rr) + n > PUB_SIZE) continue;
+            if (!best || conn(rr) > conn(best)) best = rr;
+          }
+          if (!best && rooms.size >= MAX_ROOMS) return err('busy');
+          if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true, P.md); }   // no space for all -> fresh lobby
+          while (best.players.size + n > PUB_SIZE) { const b = [...best.players.values()].find(q => q.bot || !q.ws); if (!b) break; best.players.delete(b.id); }
+          parties.delete(P.code);
+          for (const q of mem) q.go(best);
+          return;
+        }
+        return;
+      }
       if (m.t === 'create') {
         if (rooms.size >= MAX_ROOMS) return err('busy');
         let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
@@ -986,6 +1032,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    pdrop();
     const left = (perIp.get(ip) || 1) - 1;
     if (left <= 0) perIp.delete(ip); else perIp.set(ip, left);
     if (r && p && p.ws === ws) {
