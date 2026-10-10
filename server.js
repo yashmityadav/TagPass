@@ -139,15 +139,16 @@ function authReq(req, res) {
         } else if (a === 'rm' && T) {
           me.f = me.f.filter(x => x !== T.k); T.f = T.f.filter(x => x !== me.k); accSave(T); accSave(me);
         } else if (a === 'inv') {
-          const c = String(m.c || '').toUpperCase(), P = parties.get(c);
-          if (!T || !me.f.includes(T.k) || !P || P.mem.size >= PARTY_MAX || ![...P.mem.values()].some(q => q.ws && q.ws.acct === me)) return out(400, { e: 'nop' });
-          const l = (INV.get(T.k) || []).filter(x => x.n !== me.n && Date.now() - x.t < 120000); l.push({ n: me.n, c, t: Date.now() }); INV.set(T.k, l);
+          const c = String(m.c || '').toUpperCase(), P = parties.get(c), R = !P && rooms.get(c);
+          const ok = P ? (P.mem.size < PARTY_MAX && [...P.mem.values()].some(q => q.ws && q.ws.acct === me)) : !!(R && !R.pub && R.st === 'lobby' && R.players.size < roomMax(R) && [...R.players.values()].some(q => q.acct === me));
+          if (!T || !me.f.includes(T.k) || !ok) return out(400, { e: 'nop' });
+          const l = (INV.get(T.k) || []).filter(x => x.n !== me.n && Date.now() - x.t < 120000); l.push({ n: me.n, c, t: Date.now(), r: P ? 0 : 1 }); INV.set(T.k, l);
         } else if (a === 'idis' && T) INV.set(me.k, (INV.get(me.k) || []).filter(x => x.n !== T.n));
         const on = new Set(); for (const w of wss.clients) if (w.acct && w.readyState === 1) on.add(w.acct.k);
         const fl = [], rq = [];
         for (const k of me.f) { const f = await getAcc(k); if (f) fl.push({ n: f.n, on: on.has(f.k) ? 1 : 0, p: f.p, w: f.w, l: f.l }); }
         for (const k of me.rq) { const f = await getAcc(k); if (f) rq.push(f.n); }
-        const inv = (INV.get(me.k) || []).filter(x => Date.now() - x.t < 120000 && parties.has(x.c)).map(x => ({ n: x.n, c: x.c }));
+        const inv = (INV.get(me.k) || []).filter(x => Date.now() - x.t < 120000 && (parties.has(x.c) || rooms.has(x.c))).map(x => ({ n: x.n, c: x.c, r: x.r ? 1 : 0 }));
         return out(200, { ok: 1, f: fl, rq, inv });
       }
       if (m.m === 'tk') { const a = await tokAcc(m.tk); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
