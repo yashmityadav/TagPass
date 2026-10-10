@@ -265,7 +265,7 @@ function homeRender(){
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fRender();if(q&&!S.qo){S.qo=1;privMenu()}}
 function modeMenu(){
  const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
- const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 5 minutes.','#2b8cff']];
+ const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 100 seconds.','#2b8cff']];
  ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 async function enter(host){if(S.joining)return;if(PT)return toast('Turn Party off first');S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}

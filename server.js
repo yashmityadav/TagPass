@@ -27,7 +27,7 @@ const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
 const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
 const classicS = n => Math.max(25, 70 - 6 * n);   // classic: seconds per elimination, shrinks as players grow (2p 58s, 3p 52s, 5p 40s, 8+p 25s)
 
-const FREEZE_S = 300;          // freeze tag: always 300 s
+const FREEZE_S = 100;          // freeze tag: always 100 s
 
 const roundS = r => r.rs || (r.inf === 2 ? FREEZE_S : r.inf === 0 ? classicS(2) : ROUND_S);
 const CD_MS = 2200;            // 3-2-1-GO countdown before each round
@@ -585,7 +585,8 @@ function startMatch(r, t) {
 function finish(r, id, wt) {
   const p = id && r.players.get(id);
   r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
-  for (const q of r.players.values()) { q.it = 0; rec(q, q.id === id); }
+  const W = new Set(); for (const q of r.players.values()) if (wt === 1 ? q.it : wt === 2 ? !q.it : q.id === id) W.add(q.id);   // freeze tag: the whole winning team (freezers or runners) gets the win
+  for (const q of r.players.values()) { q.it = 0; rec(q, W.has(q.id)); }
   bcastRoom(r);
 }
 
