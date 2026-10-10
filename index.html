@@ -96,6 +96,22 @@ input{box-shadow:inset 0 3px 0 rgba(27,42,107,.15)}
 .abd{font-size:15px;max-width:520px}
 .keys{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;font-size:14px}.keys span{background:rgba(27,42,107,.4);border-radius:10px;padding:3px 10px}
 @media (max-height:480px){.card{padding:8px 12px;border-radius:16px}.abp{font-size:13px;padding:4px 8px;min-width:70px}.abp span{font-size:20px}.keys{font-size:11px}.opt{font-size:16px}.opt button{font-size:15px;min-width:110px;padding:4px 10px}.b.go{font-size:22px}.code{font-size:34px;letter-spacing:5px}#lob>.card{min-width:140px}}
+
+.bl{--c:#2b8cff;width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),transparent 40%),var(--c);border:4px solid #1b2a6b;position:relative;box-shadow:0 6px 0 rgba(27,42,107,.5);animation:bob 1.7s ease-in-out infinite}.bl.big{width:112px;height:112px}.bl i{position:absolute;top:34%;width:16%;height:22%;background:#1b2a6b;border-radius:50%}.bl i:first-child{left:28%}.bl i:last-child{right:28%}@keyframes bob{50%{transform:translateY(-8px)}}
+.lg{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 28px}.bls{display:flex;gap:14px;margin-bottom:4px}
+#hm{width:880px;display:flex;flex-direction:column;gap:10px;text-align:left}.tb{display:flex;align-items:center;gap:10px}.pn{font-size:30px;line-height:1}.stp{flex:1;font-size:16px;background:rgba(27,42,107,.45);border-radius:20px;padding:7px 14px}
+.tbb{font:inherit;font-size:15px;color:#fff;background:rgba(27,42,107,.5);border:2px solid rgba(255,255,255,.3);border-radius:14px;padding:6px 12px}
+.hb{display:flex;gap:14px;align-items:stretch}.lc,.fp{width:215px;flex:none;display:flex;flex-direction:column;gap:10px}.lc .card,.fp{padding:10px 12px}.lc input,.fp input{width:100%;min-width:0;font-size:18px;padding:6px 8px}
+.mb{font:inherit;font-size:18px;color:#fff;background:rgba(27,42,107,.4);border:2px solid transparent;border-radius:12px;padding:6px 10px;width:100%;text-align:left;margin-top:5px}.mb.on{background:var(--c);border-color:#fff}.mb:disabled{opacity:.6}
+.cc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}.sr{display:flex;align-items:flex-end;justify-content:center;gap:18px}
+.sl{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:100px;font:inherit;color:#fff}.sl b{font-weight:400;font-size:20px}.sl em{font-style:normal;font-size:13px;opacity:.7}.sl em.ok{color:#7dff9e;opacity:1}
+.sl.add{background:rgba(255,255,255,.12);border:3px dashed rgba(255,255,255,.4);border-radius:20px;height:112px;justify-content:center}.sl.add span{font-size:40px;line-height:1}.sl.add small{font-size:13px}
+.sw{width:64px;height:32px;border-radius:20px;border:0;background:#556;position:relative;padding:0}.sw s{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:.2s}.sw.on{background:#2fd16b}.sw.on s{left:35px}
+.tg{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}.tg .code{width:100%;font-size:28px;letter-spacing:5px;margin:2px 0 0;text-align:center;padding:4px}
+.fa{display:flex;gap:6px;margin-bottom:6px}.fa button{font:inherit;font-size:20px;color:#fff;background:#2fd16b;border:0;border-radius:12px;padding:0 12px}
+#fl{overflow-y:auto;max-height:270px;display:flex;flex-direction:column;gap:5px}.fr{display:flex;align-items:center;gap:6px;background:rgba(27,42,107,.4);border-radius:12px;padding:5px 8px;font-size:17px}.fr[data-n]{cursor:pointer}.fr>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr i{width:10px;height:10px;border-radius:50%;background:#777;flex:none}.fr i.on{background:#3dff7a;box-shadow:0 0 6px #3dff7a}.fr button{font:inherit;font-size:15px;color:#fff;background:#2b8cff;border:0;border-radius:8px;padding:2px 8px}.fr button.x{background:#c2415a}.fr.inv{background:rgba(255,210,63,.3)}#fl .em{font-size:15px;opacity:.7;text-align:center}
+#ft{position:fixed;z-index:99;display:none;background:#1b2a6b;color:#fff;border:2px solid rgba(255,255,255,.45);border-radius:14px;padding:8px 12px;font-size:15px;line-height:1.5;text-align:left;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ft b{display:block;font-weight:400;font-size:18px}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -179,10 +195,11 @@ const stTxt=()=>'🎮 '+AUTH.st.p+' played · 🏆 '+AUTH.st.w+' won · 💀 '+A
 function saveAuth(){try{localStorage.setItem('tagauth',JSON.stringify(AUTH))}catch(e){}}
 function setSt(m){if(!AUTH)return;AUTH.st={p:m.p,w:m.w,l:m.l};saveAuth();const e=$('stl');if(e)e.textContent=stTxt()}
 function setAuth(d){AUTH={u:d.u,tk:d.tk,st:d.st};saveAuth();name=d.u}
-function logout(msg){try{localStorage.removeItem('tagauth')}catch(e){}AUTH=null;try{WARM&&WARM.close()}catch(e){}WARM=null;loginScreen(msg)}
+function logout(msg){try{localStorage.removeItem('tagauth')}catch(e){}AUTH=null;SOC={f:[],rq:[],inv:[]};seen=null;socSig='';try{PT&&PT.ws.close()}catch(e){}PT=null;try{WARM&&WARM.close()}catch(e){}WARM=null;loginScreen(msg)}
 const post=b=>fetch(AURL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
 function loginScreen(msg){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">LOGIN / SIGN UP</div><input id="lu" maxlength="12" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="lp" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key=='Enter')doAuth('login')"><div class="row"><button class="b go2 sm" onclick="doAuth('login')">Login</button><button class="b alt sm" onclick="doAuth('reg')">Sign up</button></div></div><p id="msg">${esc(msg||'Sign up once - you stay logged in on this device and your stats are saved.')}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+ ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div class="card lg"><div class="bls">${[3,1,4].map(k=>`<div class="bl" style="--c:${COLS[k]}"><i></i><i></i></div>`).join('')}</div><input id="lu" maxlength="12" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" onkeydown="if(event.key=='Enter')$('lp').focus()"><input id="lp" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key=='Enter')doAuth('login')"><div class="row"><button class="b go2" style="font-size:24px;padding:10px 28px;min-width:0" onclick="doAuth('login')">Login</button><button class="b alt" style="font-size:24px;padding:10px 28px;min-width:0" onclick="doAuth('reg')">Sign up</button></div></div><p id="msg">${esc(msg||'Sign up once - you stay logged in on this device and your stats are saved.')}</p></div>`);
+ ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 async function doAuth(m){const u=$('lu').value.trim(),p=$('lp').value,g=$('msg');
  if(!/^[A-Za-z0-9_]{3,12}$/.test(u))return g.textContent='Username: 3-12 letters, numbers or _';
  if(p.length<4)return g.textContent='Password must be at least 4 characters.';
@@ -194,16 +211,45 @@ function boot(){menu();if(!AUTH)return;
  post({m:'tk',tk:AUTH.tk}).then(r=>r.status==401?logout('Session expired. Please log in again.'):r.json().then(d=>{if(d.ok&&AUTH){AUTH.st=d.st;saveAuth();const e=$('stl');if(e)e.textContent=stTxt()}})).catch(()=>{})}
 
 /* ---------- screens ---------- */
-function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
- let sv='';try{sv=localStorage.getItem('tagname')||''}catch(e){}
- const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div id="mm"><div class="mcol"><div class="cap" style="margin:0;font-size:22px">👤 ${esc(AUTH.u)}</div><div id="stl" class="cap" style="margin:0;font-size:15px">${stTxt()}</div><button class="b go2" onclick="modeMenu()">▶ PLAY</button><button class="b alt sm" onclick="partyMenu()">👥 Play with friends</button><button class="b alt sm" onclick="logout()">Log out</button></div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">PRIVATE ROOM</div><div class="row"><input id="cd" maxlength="5" placeholder="Room code" value="${q?esc(q[1].toUpperCase()):''}" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%" onclick="enter(1)">＋ Create room</button></div></div><p id="msg">${msg||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out. Last one standing wins.'}</p></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
+let HM='',SOC={f:[],rq:[],inv:[]},socSig='',seen=null,rmN='';
+const MODES=[['🏃','Classic','#ff2d7a'],['🦠','Infection','#2fb85f'],['❄','Freeze Tag','#2b8cff']],hc=s=>([...s].reduce((a,c)=>(a*31+c.charCodeAt(0))|0,7)>>>0)%10,ft=document.createElement('div');ft.id='ft';document.body.appendChild(ft);
+const sp=(a,x)=>post(Object.assign({m:'soc',tk:AUTH&&AUTH.tk,a},x||{})).then(r=>r.json()).catch(()=>null);
+async function socPoll(a,x){if(!AUTH)return;const d=await sp(a,x);if(!d)return null;if(d.e=='tk'){logout('Session expired. Please log in again.');return null}if(!d.ok)return d;
+ if(seen&&!a){d.rq.forEach(n=>seen.has('r'+n)||toast('👋 '+n+' sent you a friend request',3200));d.f.forEach(f=>seen.has('f'+f.n)||toast('🤝 '+f.n+' is now your friend',3200));d.inv.forEach(i=>seen.has('i'+i.n+i.c)||toast('📨 '+i.n+' invited you to a party',3500))}
+ seen=new Set([...d.rq.map(n=>'r'+n),...d.f.map(f=>'f'+f.n),...d.inv.map(i=>'i'+i.n+i.c)]);SOC=d;const s=JSON.stringify(d);if(s!==socSig){socSig=s;fRender()}return d}
+async function fAct(a,n){const d=await socPoll(a,{n,c:PT&&PT.code});if(!d)return toast('Server busy. Try again.');if(!d.ok)return toast(({nf:'Player not found',self:"That's you!",dup:'Already friends',nop:'Friend must be online and you must be in a party'})[d.e]||'Failed. Try again.');
+ const t={add:'Request sent ✔',inv:'Invite sent 📨',acc:'Friend added 🤝'}[a];if(t)toast(t,1600)}
+function fAdd(){const v=$('fa').value.trim();if(!v)return;$('fa').value='';fAct('add',v)}
+function fRm(n,b){if(rmN===n){rmN='';return fAct('rm',n)}rmN=n;b.textContent='Sure?';setTimeout(()=>{rmN='';fRender()},3000)}
+function joinInv(c,n){if(PT){const P=PT;PT=null;try{P.ws.close()}catch(e){}}socPoll('idis',{n});partyGo('pjoin',c)}
+function fRender(){const e=$('fl');if(!e)return;const d=SOC,k=d.rq.length+d.inv.length;$('fb').textContent=k?'🔴'+k:'';
+ e.innerHTML=d.inv.map(i=>`<div class="fr inv"><span>📨 <b>${esc(i.n)}</b>'s party</span><button onclick="joinInv('${esc(i.c)}','${esc(i.n)}')">Join</button></div>`).join('')+d.rq.map(n=>`<div class="fr inv"><span>👋 <b>${esc(n)}</b></span><button onclick="fAct('acc','${esc(n)}')">✔</button><button class="x" onclick="fAct('dec','${esc(n)}')">✖</button></div>`).join('')+(d.f.length?d.f.map(f=>`<div class="fr" data-n="${esc(f.n)}" data-s="${f.p},${f.w},${f.l}"><i class="${f.on?'on':''}"></i><span>${esc(f.n)}</span>${PT&&f.on?`<button onclick="fAct('inv','${esc(f.n)}')">📨</button>`:''}<button class="x" onclick="fRm('${esc(f.n)}',this)">✖</button></div>`).join(''):'<p class="em">No friends yet.<br>Add someone by username!</p>')}
+function ftShow(r){const[p,w,l]=r.dataset.s.split(',').map(Number);ft.innerHTML=`<b>${r.dataset.n}</b>${r.querySelector('i').className?'🟢 Online':'⚫ Offline'}<br>🎮 ${p} played<br>🏆 ${w} won · 💀 ${l} lost<br>📈 ${p?Math.round(w/p*100):0}% win rate`;const b=r.getBoundingClientRect();ft.style.display='block';ft.style.top=Math.max(4,Math.min(innerHeight-ft.offsetHeight-4,b.top+b.height/2-ft.offsetHeight/2))+'px';ft.style.left=Math.max(4,b.left-ft.offsetWidth-8)+'px'}
+document.addEventListener('mouseover',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r?ftShow(r):ft.style.display='none'});
+document.addEventListener('click',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r&&!e.target.closest('button')?ftShow(r):ft.style.display='none'});
+setInterval(()=>{if(AUTH&&S.mode=='menu'&&!document.hidden){socPoll('');try{WARM&&WARM.readyState==1&&WARM.send('{"t":"hb"}')}catch(e){}}},6000);
+function setMode(i){if(PT&&PT.st){if(PT.st.lead===PT.st.you)pSend({t:'pmode',m:i})}else{S.pm=i;homeRender()}}
+function partyToggle(){if(PT)return partyEnd('');partyGo('pcreate')}
+function howTo(){ovShow(`<div id="lobw"><div class="card" style="max-width:540px;text-align:left;font-size:17px;line-height:1.55"><div class="cap">HOW TO PLAY</div>🎯 Touch a player to pass them the arrow. When the timer hits 0 the holder is out.<br>🦠 Infection: infected players spread it by touch.<br>❄ Freeze Tag: freezers freeze runners; touch frozen friends to free them.<br>🕹 Move ◀ ▶ (arrows/A/D), jump ▲, ⚡ Shift = dash, E = ability.<br>👥 Party: turn it on, invite friends, everyone readies up, the leader starts.</div><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;if(!PT)warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';ft.style.display='none';HM=msg||'';homeRender();socPoll('')}
+function homeRender(){
+ const cdv=$('cd')?$('cd').value:'',fav=$('fa')?$('fa').value:'',q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i),st=PT&&PT.st,md=st?st.md:(S.pm|0),lead=!st||st.lead===st.you,me=(st&&st.mem.find(x=>x.id===st.you))||{},all=st&&st.mem.every(x=>x.rd),oth=st?st.mem.filter(x=>x.id!==st.you):[];
+ const slot=i=>oth[i]?`<div class="sl"><div class="bl" style="--c:${COLS[hc(oth[i].nm)]}"><i></i><i></i></div><b>${esc(oth[i].nm)}${oth[i].id===st.lead?' ★':''}</b><em class="${oth[i].rd?'ok':''}">${oth[i].rd?'✔ Ready':'Not ready'}</em></div>`:`<button class="sl add" onclick="toast(PT?'Tap 📨 next to an online friend':'Turn Party on first',1800)"><span>＋</span><small>${PT?'Invite':'Party off'}</small></button>`;
+ ovShow(`<div id="lobw"><div id="hm"><div class="tb"><div class="pn">👤 ${esc(AUTH.u)}</div><div id="stl" class="stp">${stTxt()}</div><button class="tbb" onclick="howTo()">❓ How to play</button><button class="tbb" onclick="logout()">⎋ Log out</button></div>
+<div class="hb"><div class="lc"><div class="card"><div class="cap" style="margin:0">MODE${st&&!lead?' (leader picks)':''}</div>${MODES.map((m,i)=>`<button class="mb${i==md?' on':''}" style="--c:${m[2]}" ${lead?'':'disabled'} onclick="setMode(${i})">${m[0]} ${m[1]}</button>`).join('')}</div>
+<div class="card"><div class="cap" style="margin:0 0 6px">ROOM CODE</div><div class="row" style="flex-wrap:nowrap"><input id="cd" maxlength="5" placeholder="Code" value="${esc(cdv||(q?q[1].toUpperCase():''))}" style="text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div><button class="b alt sm" style="width:100%;margin-top:8px" onclick="enter(1)">🔒 Private / Practice</button></div>
+<div class="card tg"><span class="cap" style="margin:0">PARTY ${PT?'ON':'OFF'}</span><button class="sw${PT?' on':''}" onclick="partyToggle()"><s></s></button>${st?`<div class="code">${esc(st.code)}</div>`:''}</div></div>
+<div class="cc"><div class="sr">${slot(0)}<div class="sl"><div class="bl big" style="--c:${COLS[hc(AUTH.u)]}"><i></i><i></i></div><b>${esc(AUTH.u)}${st&&st.lead===st.you?' ★':''}</b></div>${slot(1)}</div>
+<div class="row">${st?`<button class="b sm${me.rd?' go2':' alt'}" style="font-size:24px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="b go2" style="font-size:28px;padding:12px 40px${all?'':';opacity:.5'}" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<p>Waiting for the leader…</p>'):`<button class="b go2" style="font-size:32px;padding:14px 60px" onclick="enterPublic(${md})">▶ PLAY</button>`}</div></div>
+<div class="card fp"><div class="cap" style="margin:0 0 6px">FRIENDS <span id="fb"></span></div><div class="fa"><input id="fa" maxlength="12" placeholder="Add friend" value="${esc(fav)}" autocapitalize="off" onkeydown="if(event.key=='Enter')fAdd()"><button onclick="fAdd()">＋</button></div><div id="fl"></div></div></div>
+<p id="msg">${esc(HM)||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out.'}</p></div></div>`);
+ ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fRender()}
 function modeMenu(){
  const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
  const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 5 minutes.','#2b8cff']];
  ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
-async function enter(host){if(S.joining)return;S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
+async function enter(host){if(S.joining)return;if(PT)return toast('Turn Party off first');S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
 function playAgain(){leaveRoom();enterPublic(S.pm)}
 /* open a socket and send the first message (quick / create / join / resume); resolves on the server's "hello". Later messages go to onMsg. */
@@ -253,9 +299,9 @@ function partyMenu(){
  ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">👥 PLAY WITH FRIENDS</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><button class="b go2" onclick="partyGo('pcreate')">＋ Create party</button><div class="row"><input id="pc" maxlength="5" placeholder="Party code" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="partyGo('pjoin')">Join</button></div></div><p id="msg">Up to 3 players. The leader shares the code, everyone readies up, the leader starts.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 function partyEnd(msg){const P=PT;PT=null;if(P)try{P.ws.close()}catch(e){}menu(msg||'')}
-function partyGo(kind){
+function partyGo(kind,ca){
  if(PT)return;
- const nm=(name||'').trim().slice(0,12)||'Player',code=($('pc')?$('pc').value:'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+ const nm=(name||'').trim().slice(0,12)||'Player',code=(ca||($('pc')?$('pc').value:'')).trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
  if(kind=='pjoin'&&code.length<3)return $('msg').textContent='Enter the party code first.';
  try{lockLand();startMusic();AC&&AC.resume&&AC.resume()}catch(e){}
  $('msg').textContent='Connecting…';
@@ -274,16 +320,7 @@ function partyGo(kind){
  ws.onclose=()=>{if(P.joined)onClose(ws);else if(PT===P)partyEnd('Party connection lost.')};
  if(ws.readyState==1)go()}
 function pSend(m){try{PT.ws.send(JSON.stringify(m))}catch(e){}}
-function partyUI(){
- const s=PT&&PT.st;if(!s)return;
- const lead=s.lead===s.you,me=s.mem.find(x=>x.id===s.you)||{},all=s.mem.every(x=>x.rd);
- const list=`<div class="cap">PARTY ${s.mem.length}/3</div>`+s.mem.map(x=>`<div class="chip">${esc(x.nm)}${x.id===s.lead?' ★':''}${x.id===s.you?' (you)':''} · ${x.rd?'✔ Ready':'…'}</div>`).join('');
- const act=`<button class="b sm" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready (tap to cancel)':'Ready'}</button>`+(lead?`<div class="opt"><b>MODE</b><button onclick="pSend({t:'pmode',m:${(s.md+1)%3}})">${PMN[s.md]} ↻</button></div><button class="b go2" ${all?'':'disabled style="opacity:.5"'} onclick="pSend({t:'pstart'})">▶ START</button>`:`<p>Waiting for the leader to start…</p>`);
- if($('ptw')&&PT.code===s.code){$('ptl').innerHTML=list;$('pta').innerHTML=act;return fitLobby()}
- PT.code=s.code;
- ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">👥 PARTY</div><div class="card"><div class="cap">PARTY CODE</div><div class="code">${esc(s.code)}</div></div><div class="card" id="ptw"><div id="ptl">${list}</div><div id="pta" style="display:flex;flex-direction:column;gap:6px;align-items:center;margin-top:8px">${act}</div></div><button class="b alt sm" onclick="partyEnd('')">← Leave party</button></div>`);
- ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
-
+function partyUI(){if(S.mode=='menu'&&PT&&PT.st)homeRender()}
 function resetMatch(){clearFx();S.rn=0;S.gm=0;S.rs=-1;S.bt=null;S.ov=null;S.st='lobby';S.practice=false;S.tl=null;S.cdl=0;S.lc=0;S.lastN=null;S.psig='';S.mc=0;S.sig='';S.lobCode=null;PEND.length=0;OUT.length=0;VO.x=VO.y=0;ME.alive=true;ME.it=0;rem={};peers=[];isHost=false;cd=0}
 function netSend(m){const w=room&&room.ws;if(w&&w.readyState==1)w.send(JSON.stringify(m))}
 /* a dropped connection keeps your character on the server for ~15 s: we silently reconnect and carry on */

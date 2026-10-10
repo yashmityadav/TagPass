@@ -110,17 +110,46 @@ async function accFlush() {
   catch (e) { console.error('account save failed:', e.message); for (const a of l) dirty.add(a); if (!accT) accT = setTimeout(accFlush, 10000); }
 }
 const accOut = (a, tk) => ({ ok: 1, u: a.n, tk, st: { p: a.p, w: a.w, l: a.l } });
-const LIVE = new WeakMap(), authIp = new Map(); setInterval(() => authIp.clear(), 60000).unref();
+const LIVE = new WeakMap(), authIp = new Map(), socIp = new Map(), INV = new Map(); setInterval(() => { authIp.clear(); socIp.clear(); }, 60000).unref();
 function authReq(req, res) {
   const out = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(o)); };
   const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  const n = (authIp.get(ip) || 0) + 1; authIp.set(ip, n);
-  if (n > 30) return out(429, { e: 'rate' });
   let b = ''; req.on('data', d => { b += d; if (b.length > 1024) req.destroy(); });
   req.on('end', async () => {
     try {
       let m; try { m = JSON.parse(b); } catch { return out(400, { e: 'bad' }); }
       if (!m || typeof m !== 'object') return out(400, { e: 'bad' });
+      const soc = m.m === 'soc', mp = soc ? socIp : authIp, n = (mp.get(ip) || 0) + 1; mp.set(ip, n);
+      if (n > (soc ? 90 : 30)) return out(429, { e: 'rate' });
+      if (m.m === 'soc') {   // friends: poll + add / accept / decline / remove / invite
+        const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' });
+        me.f = me.f || []; me.rq = me.rq || [];
+        const a = m.a, nm = String(m.n || '').toLowerCase(), T = /^[a-z0-9_]{3,12}$/.test(nm) ? await getAcc(nm) : null;
+        if (T) { T.f = T.f || []; T.rq = T.rq || []; }
+        if (a === 'add') {
+          if (!T) return out(404, { e: 'nf' }); if (T.k === me.k) return out(400, { e: 'self' });
+          if (me.f.includes(T.k)) return out(400, { e: 'dup' });
+          if (me.rq.includes(T.k)) { me.rq = me.rq.filter(x => x !== T.k); me.f.push(T.k); T.f.push(me.k); accSave(T); }   // they already asked me: instant friends
+          else if (!T.rq.includes(me.k) && T.rq.length < 30) { T.rq.push(me.k); accSave(T); }
+          accSave(me);
+        } else if ((a === 'acc' || a === 'dec') && T && me.rq.includes(T.k)) {
+          me.rq = me.rq.filter(x => x !== T.k);
+          if (a === 'acc' && me.f.length < 50) { if (!me.f.includes(T.k)) me.f.push(T.k); if (!T.f.includes(me.k)) T.f.push(me.k); accSave(T); }
+          accSave(me);
+        } else if (a === 'rm' && T) {
+          me.f = me.f.filter(x => x !== T.k); T.f = T.f.filter(x => x !== me.k); accSave(T); accSave(me);
+        } else if (a === 'inv') {
+          const c = String(m.c || '').toUpperCase(), P = parties.get(c);
+          if (!T || !me.f.includes(T.k) || !P || P.mem.size >= PARTY_MAX || ![...P.mem.values()].some(q => q.ws && q.ws.acct === me)) return out(400, { e: 'nop' });
+          const l = (INV.get(T.k) || []).filter(x => x.n !== me.n && Date.now() - x.t < 120000); l.push({ n: me.n, c, t: Date.now() }); INV.set(T.k, l);
+        } else if (a === 'idis' && T) INV.set(me.k, (INV.get(me.k) || []).filter(x => x.n !== T.n));
+        const on = new Set(); for (const w of wss.clients) if (w.acct && w.readyState === 1) on.add(w.acct.k);
+        const fl = [], rq = [];
+        for (const k of me.f) { const f = await getAcc(k); if (f) fl.push({ n: f.n, on: on.has(f.k) ? 1 : 0, p: f.p, w: f.w, l: f.l }); }
+        for (const k of me.rq) { const f = await getAcc(k); if (f) rq.push(f.n); }
+        const inv = (INV.get(me.k) || []).filter(x => Date.now() - x.t < 120000 && parties.has(x.c)).map(x => ({ n: x.n, c: x.c }));
+        return out(200, { ok: 1, f: fl, rq, inv });
+      }
       if (m.m === 'tk') { const a = await tokAcc(m.tk); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
       const u = String(m.u || ''), pw = String(m.p || ''), k = u.toLowerCase();
       if (!/^[A-Za-z0-9_]{3,12}$/.test(u) || pw.length < 4 || pw.length > 64) return out(400, { e: 'bad' });
@@ -1030,7 +1059,7 @@ wss.on('connection', (ws, req) => {
       }
       return;
     }
-    if (m.t === 'hb') { send(ws, '{"t":"hb"}'); return; }
+    if (m.t === 'hb') { ws.pres = t; send(ws, '{"t":"hb"}'); return; }
     if (m.t === 'leave' && r && p) { removePlayer(r, p, now()); p.ws = null; r = null; p = null; return; }   // deliberate exit: no grace period
 
     /* ---- joining ---- */
@@ -1144,7 +1173,7 @@ wss.on('connection', (ws, req) => {
 setInterval(() => {
   const t = Date.now();
   for (const ws of wss.clients) {
-    if (t - ws.lastSeen > 15000 || (!ws.joined && t - ws.born > 120000)) { ws.terminate(); continue; }
+    if (t - ws.lastSeen > 15000 || (!ws.joined && t - (ws.pres || ws.born) > 120000)) { ws.terminate(); continue; }
     try { ws.pingAt = Date.now(); ws.ping(); } catch {}
     send(ws, '{"t":"hb"}');
   }
