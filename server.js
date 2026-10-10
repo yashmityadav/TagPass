@@ -586,7 +586,7 @@ function finish(r, id, wt) {
   const p = id && r.players.get(id);
   r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
   const W = new Set(); for (const q of r.players.values()) if (wt === 1 ? q.it : wt === 2 ? !q.it : q.id === id) W.add(q.id);   // freeze tag: the whole winning team (freezers or runners) gets the win
-  for (const q of r.players.values()) { q.it = 0; rec(q, W.has(q.id)); }
+  for (const q of r.players.values()) { q.it = 0; if (r.inf === 1 && q.id === r.first && !W.has(q.id)) { q.rec = 0; continue; } rec(q, W.has(q.id)); }   // infection: the starting IT can't win by design, so it is not counted as a loss
   bcastRoom(r);
 }
 
@@ -881,7 +881,7 @@ function simRoom(r, t) {
     if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
     if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && tagHit(h, q)) { q.it = 1; r.lastInf = q.id; break; }
     const hl = al.filter(p => !p.it);
-    if (!r.practice && al.length > 1) { if (hl.length <= 1) finish(r, hl.length ? hl[0].id : r.lastInf); }
+    if (!r.practice && al.length > 1) { if (hl.length <= 1) finish(r, hl.length ? hl[0].id : null); }   // only a still-healthy survivor can win; if nobody is left healthy (e.g. the last one quit) nobody gets a win
     return;
   }
 
