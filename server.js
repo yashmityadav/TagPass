@@ -995,8 +995,9 @@ wss.on('connection', (ws, req) => {
 
   let r = null, p = null, cnt = 0, winStart = Date.now();
   const pid = hex(4); let pt = null;     // party membership (before a room exists)
-  const pbc = P => { const mem = [...P.mem.values()]; const lst = mem.map(x => ({ id: x.id, nm: x.nm, rd: x.rd })); for (const q of mem) send(q.ws, JSON.stringify({ t: 'party', code: P.code, you: q.id, lead: P.lead, md: P.md, mem: lst })); };
-  const pdrop = () => { if (!pt) return; const P = pt; pt = null; P.mem.delete(pid); if (!P.mem.size) { parties.delete(P.code); return; } if (P.lead === pid) P.lead = P.mem.keys().next().value; for (const q of P.mem.values()) q.rd = 0; pbc(P); };
+  const pbc = P => { const act = [...P.mem.values()].filter(x => !x.inr); if (!act.length) return; const L = P.mem.get(P.lead); if (!L || L.inr) P.lead = act[0].id; const lst = act.map(x => ({ id: x.id, nm: x.nm, rd: x.rd })); for (const q of act) send(q.ws, JSON.stringify({ t: 'party', code: P.code, you: q.id, lead: P.lead, md: P.md, mem: lst })); };   // members still inside a match are hidden until they come back
+  let hp = null;   // the party I belong to while I'm inside a match (the party survives the match so friends stay together)
+  const pdrop = () => { const P = pt || hp; if (!P) return; pt = hp = null; P.mem.delete(pid); if (!P.mem.size) { P.kill = setTimeout(() => { if (!P.mem.size) parties.delete(P.code); }, 60000); return; } if (P.lead === pid) P.lead = ([...P.mem.values()].find(x => !x.inr) || P.mem.values().next().value).id; for (const q of P.mem.values()) q.rd = 0; pbc(P); };
   const err = e => { send(ws, '{"t":"err","e":"' + e + '"}'); ws.close(); };
 
   const attach = (rr, pp) => {
@@ -1078,11 +1079,14 @@ wss.on('connection', (ws, req) => {
           const c = typeof m.code === 'string' ? m.code.toUpperCase() : '';
           if (!/^[A-Z0-9]{3,6}$/.test(c)) return err('bad');
           P = parties.get(c); if (!P) return err('nf');
+          for (const [k, q] of [...P.mem]) if (q.ws !== ws && q.ws && q.ws.acct === ws.acct) P.mem.delete(k);   // same account coming back from a match: replace the stale entry
           if (P.mem.size >= PARTY_MAX) return err('full');
         }
         for (const q of P.mem.values()) q.rd = 0;                 // someone new arrived: everybody readies up again
         const nm = ws.acct.n;
-        P.mem.set(pid, { id: pid, ws, nm, rd: 0, go: rr => { pt = null; addPlayer(rr, nm); } });
+        if (P.kill) { clearTimeout(P.kill); P.kill = 0; }
+        const LL = P.mem.get(P.lead); if (!LL || LL.inr) P.lead = pid;
+        P.mem.set(pid, { id: pid, ws, nm, rd: 0, inr: 0, go: rr => { hp = pt; pt = null; const me = P.mem.get(pid); if (me) me.inr = 1; addPlayer(rr, nm); } });
         pt = P; ws.joined = 1;
         return pbc(P);
       }
@@ -1091,7 +1095,7 @@ wss.on('connection', (ws, req) => {
         if (m.t === 'prdy') { P.mem.get(pid).rd = m.v ? 1 : 0; return pbc(P); }
         if (m.t === 'pmode' && P.lead === pid) { P.md = Math.max(0, Math.min(2, m.m | 0)); return pbc(P); }
         if (m.t === 'pstart' && P.lead === pid) {
-          const mem = [...P.mem.values()], n = mem.length;
+          const mem = [...P.mem.values()].filter(q => !q.inr), n = mem.length;
           if (mem.some(q => !q.rd)) return;
           let best = null;
           for (const rr of rooms.values()) {                      // a lobby with room for the WHOLE party, fullest first
@@ -1101,8 +1105,7 @@ wss.on('connection', (ws, req) => {
           if (!best && rooms.size >= MAX_ROOMS) return err('busy');
           if (!best) { let k; do { k = 'p-' + hex(3); } while (rooms.has(k)); best = mkRoom(k, true, P.md); }   // no space for all -> fresh lobby
           while (best.players.size + n > PUB_SIZE) { const b = [...best.players.values()].find(q => q.bot || !q.ws); if (!b) break; best.players.delete(b.id); }
-          parties.delete(P.code);
-          for (const q of mem) q.go(best);
+          for (const q of mem) { q.rd = 0; q.go(best); }   // the party stays alive on the server: everybody rejoins it after the match
           return;
         }
         return;

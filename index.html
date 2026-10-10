@@ -232,14 +232,19 @@ async function fAct(a,n,c){const d=await socPoll(a,{n,c:c||(PT&&PT.st&&PT.st.cod
  const t={add:'Request sent ✔',inv:'Invite sent 📨',acc:'Friend added 🤝'}[a];if(t)toast(t,1600)}
 function fAdd(){const v=$('fa').value.trim();if(!v)return;$('fa').value='';fAct('add',v)}
 function fRm(n,b){if(rmN===n){rmN='';return fAct('rm',n)}rmN=n;b.textContent='Sure?';setTimeout(()=>{rmN='';fRender()},3000)}
-let CJ='',TAB=0,IM_T=0;
+let CJ='',TAB=0,IM_T=0,LASTP='';
+function dropParty(){const P=PT;PT=null;if(P)try{P.ws.close()}catch(e){}}
+function autoParty(){if(PT||!AUTH||S.mode!='menu'||S.joining||!$('hm')||Date.now()-(S.apAt||0)<2500)return;S.apAt=Date.now();const c=LASTP;partyGo(c?'pjoin':'pcreate',c);if(PT)PT.auto=1}
+function soloGo(){pSend({t:'prdy',v:1});pSend({t:'pstart'})}
+function practice(){S.prac=1;enter(1)}
+setInterval(autoParty,3000);
 function joinInv(c,n,r){if(PT){const P=PT;PT=null;try{P.ws.close()}catch(e){}}socPoll('idis',{n});if(!r)return partyGo('pjoin',c);if(S.joining)return;CJ=c;S.joining=1;enter0('join').finally(()=>{S.joining=0;CJ=''})}
 function tab(i){TAB=i;for(let j=0;j<2;j++){const t=$('t'+j),p=$('p'+j);t&&t.classList.toggle('on',j==i);p&&p.classList.toggle('on',j==i)}}
 function openFriends(a){tab(0);if(a&&!PT)partyGo('pcreate');if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{const f=$('fa');f&&f.focus()},60)}
 async function fInv(n){if(!PT){partyGo('pcreate');for(let i=0;i<40&&!(PT&&PT.st);i++)await new Promise(r=>setTimeout(r,150));if(!(PT&&PT.st))return}fAct('inv',n)}
 function invList(){const m=$('im');if(!m)return;const on=SOC.f.filter(f=>f.on);m.querySelector('.il').innerHTML=on.length?on.map(f=>`<div class="fr"><i class="on"></i><span>${esc(f.n)}</span><button onclick="fAct('inv','${esc(f.n)}',code)">📨 Invite</button></div>`).join(''):'<p class="em">No friends online.<br>Add friends from the main menu.</p>'}
 function invModal(){let m=$('im');if(m){clearInterval(IM_T);return m.remove()}m=document.createElement('div');m.id='im';m.innerHTML='<div class="card"><div class="cap">INVITE FRIENDS</div><div class="il"></div><button class="b alt sm" onclick="invModal()">Close</button></div>';document.body.appendChild(m);invList();socPoll('');IM_T=setInterval(()=>$('im')?socPoll(''):clearInterval(IM_T),4000)}
-function privMenu(){if(PT)return toast('Turn Party off first',1800);const q=(location.search+location.hash).match(/room=([a-z0-9]{3,6})/i);ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">🔒 PRIVATE ROOM</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:300px"><button class="b go2" style="font-size:26px;padding:12px 24px;width:100%;min-width:0" onclick="enter(1)">＋ Create room</button><div class="cap" style="margin:0">OR JOIN WITH A CODE</div><div class="row" style="flex-wrap:nowrap"><input id="cd" maxlength="5" placeholder="Code" value="${q?q[1].toUpperCase():''}" style="width:130px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div></div><p id="msg" style="margin:0;min-height:24px">Create a room, invite friends, or start alone to practice.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
+function privMenu(){S.prac=0;const q=(location.search+location.hash).match(/room=([a-z0-9]{3,6})/i);ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">🔒 PRIVATE ROOM</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:300px"><button class="b go2" style="font-size:26px;padding:12px 24px;width:100%;min-width:0" onclick="enter(1)">＋ Create room</button><div class="cap" style="margin:0">OR JOIN WITH A CODE</div><div class="row" style="flex-wrap:nowrap"><input id="cd" maxlength="5" placeholder="Code" value="${q?q[1].toUpperCase():''}" style="width:130px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div></div><p id="msg" style="margin:0;min-height:24px">Create a room, invite friends, or start alone to practice.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 function fRender(){invList();const e=$('fl');if(!e)return;const d=SOC,k=d.rq.length+d.inv.length,b=$('nb');if(b){b.textContent=k;b.style.display=k?'':'none'}
  $('nl').innerHTML=d.inv.map(i=>`<div class="fr inv"><span>📨 <b>${esc(i.n)}</b> invited you to ${i.r?'a private room':'a party'}</span><button onclick="joinInv('${esc(i.c)}','${esc(i.n)}',${i.r?1:0})">Join</button><button class="x" onclick="fAct('idis','${esc(i.n)}')">✖</button></div>`).join('')+d.rq.map(n=>`<div class="fr inv"><span>👋 <b>${esc(n)}</b> sent a friend request</span><button onclick="fAct('acc','${esc(n)}')">✔</button><button class="x" onclick="fAct('dec','${esc(n)}')">✖</button></div>`).join('')||'<p class="em">No notifications</p>';
  e.innerHTML=d.f.length?d.f.map(f=>`<div class="fr" data-n="${esc(f.n)}" data-s="${f.p},${f.w},${f.l}"><i class="${f.on?'on':''}"></i><span>${esc(f.n)}</span>${f.on?`<button onclick="fInv('${esc(f.n)}')">📨 Invite</button>`:''}<button class="x" onclick="fRm('${esc(f.n)}',this)">✖</button></div>`).join(''):'<p class="em">No friends yet.<br>Add someone by username!</p>'}
@@ -248,18 +253,18 @@ document.addEventListener('mouseover',e=>{const r=e.target.closest&&e.target.clo
 document.addEventListener('click',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r&&!e.target.closest('button')?ftShow(r):ft.style.display='none'});
 setInterval(()=>{if(AUTH&&S.mode=='menu'&&!document.hidden){socPoll('');try{WARM&&WARM.readyState==1&&WARM.send('{"t":"hb"}')}catch(e){}}},6000);
 function setMode(i){if(PT&&PT.st){if(PT.st.lead===PT.st.you)pSend({t:'pmode',m:i})}else{S.pm=i;homeRender()}}
-function partyToggle(){if(PT)return partyEnd('');partyGo('pcreate')}
 function howTo(){ovShow(`<div id="lobw"><div class="card" style="max-width:540px;text-align:left;font-size:17px;line-height:1.55"><div class="cap">HOW TO PLAY</div>🎯 Touch a player to pass them the arrow. When the timer hits 0 the holder is out.<br>🦠 Infection: infected players spread it by touch.<br>❄ Freeze Tag: freezers freeze runners; touch frozen friends to free them.<br>🕹 Move ◀ ▶ (arrows/A/D), jump ▲, ⚡ Shift = dash, E = ability.<br>👥 Party: turn it on, invite friends, everyone readies up, the leader starts.</div><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
-function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;if(!PT)warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';ft.style.display='none';HM=msg||'';homeRender();socPoll('')}
+function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;if(!PT)warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';ft.style.display='none';HM=msg||'';homeRender();socPoll('');autoParty()}
 function homeRender(){
  const fav=$('fa')?$('fa').value:'',q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i),st=PT&&PT.st,md=st?st.md:(S.pm|0),lead=!st||st.lead===st.you,me=(st&&st.mem.find(x=>x.id===st.you))||{},all=st&&st.mem.every(x=>x.rd),oth=st?st.mem.filter(x=>x.id!==st.you):[];
  const slot=i=>oth[i]?`<div class="sl"><div class="bl" style="--c:${COLS[hc(oth[i].nm)]}"><i></i><i></i></div><b>${esc(oth[i].nm)}${oth[i].id===st.lead?' ★':''}</b><em class="${oth[i].rd?'ok':''}">${oth[i].rd?'✔ Ready':'Not ready'}</em></div>`:`<button class="sl add" onclick="openFriends(1)"><span>＋</span><small>Invite</small></button>`;
  ovShow(`<div id="lobw"><div id="hm"><div class="tb"><div class="pn">👤 ${esc(AUTH.u)}</div><div id="stl" class="stp">${stTxt()}</div><button class="tbb" onclick="howTo()">❓ How to play</button><button class="tbb" onclick="logout()">⎋ Log out</button></div>
 <div class="hb"><div class="lc"><div class="card"><div class="cap" style="margin:0">MODE${st&&!lead?' (leader picks)':''}</div>${MODES.map((m,i)=>`<button class="mb${i==md?' on':''}" style="--c:${m[2]}" ${lead?'':'disabled'} onclick="setMode(${i})">${m[0]} ${m[1]}</button>`).join('')}</div>
 <button class="b alt sm" style="width:100%" onclick="privMenu()">🔒 Private Room</button>
-<div class="card tg"><span class="cap" style="margin:0">PARTY ${PT?'ON':'OFF'}</span><button class="sw${PT?' on':''}" onclick="partyToggle()"><s></s></button><div class="ph">${PT?'Invite friends from the Friends tab':'Play public games with friends'}</div></div></div>
+<button class="b alt sm" style="width:100%" onclick="practice()">🎯 Practice</button></div>
 <div class="cc"><div class="sr">${slot(0)}<div class="sl"><div class="bl big" style="--c:${COLS[hc(AUTH.u)]}"><i></i><i></i></div><b>${esc(AUTH.u)}${st&&st.lead===st.you?' ★':''}</b></div>${slot(1)}</div>
-<div class="row">${st?`<button class="b sm${me.rd?' go2':' alt'}" style="font-size:24px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="b go2" style="font-size:28px;padding:12px 40px${all?'':';opacity:.5'}" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<p>Waiting for the leader…</p>'):`<button class="b go2" style="font-size:32px;padding:14px 60px" onclick="enterPublic(${md})">▶ PLAY</button>`}</div></div>
+<div class="row">${!st?`<button class="b go2" style="font-size:26px;padding:12px 36px;opacity:.5" disabled>Connecting…</button>`:!oth.length?`<button class="b go2" style="font-size:32px;padding:14px 60px" onclick="soloGo()">▶ PLAY</button>`:`<button class="b sm${me.rd?' go2':' alt'}" style="font-size:22px;padding:10px 20px;min-width:130px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="b go2" style="font-size:26px;padding:12px 30px${all?'':';opacity:.5'}" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<p>Waiting for the leader…</p>')}</div></div>
+</div></div>
 <div class="card fp"><div class="tabs"><button id="t0" class="tab${TAB?'':' on'}" onclick="tab(0)">👥 Friends</button><button id="t1" class="tab${TAB?' on':''}" onclick="tab(1)">🔔 Alerts<em id="nb" style="display:none"></em></button></div><div id="p0" class="pane${TAB?'':' on'}"><div class="fa"><input id="fa" maxlength="12" placeholder="Add friend" value="${esc(fav)}" autocapitalize="off" onkeydown="if(event.key=='Enter')fAdd()"><button onclick="fAdd()">＋</button></div><div id="fl"></div></div><div id="p1" class="pane${TAB?' on':''}"><div id="nl"></div></div></div></div>
 <p id="msg">${esc(HM)||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out.'}</p></div></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fRender();if(q&&!S.qo){S.qo=1;privMenu()}}
@@ -268,7 +273,7 @@ function modeMenu(){
  const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 100 seconds.','#2b8cff']];
  ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
  ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
-async function enter(host){if(S.joining)return;if(PT)return toast('Turn Party off first');S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
+async function enter(host){if(S.joining)return;if(PT)dropParty();S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
 function playAgain(){leaveRoom();enterPublic(S.pm)}
 /* open a socket and send the first message (quick / create / join / resume); resolves on the server's "hello". Later messages go to onMsg. */
@@ -332,7 +337,8 @@ function partyGo(kind,ca){
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(m.t=='st'){setSt(m);return}
   if(m.t=='err'&&m.e=='auth'){PT=null;return logout('Session expired. Please log in again.')}
-  if(m.t=='party'){P.st=m;return partyUI()}
+  if(m.t=='party'){P.st=m;LASTP=m.code;return partyUI()}
+  if(m.t=='err'){if(P.auto&&(m.e=='nf'||m.e=='full')){LASTP='';PT=null;try{ws.close()}catch(x){}S.apAt=0;return autoParty()}LASTP=''}
   if(m.t=='err')return partyEnd(m.e=='full'?'Party is full (3 max).':m.e=='nf'?'Party not found. Check the code.':m.e=='bad'?'Invalid party code.':m.e=='busy'?'Servers are busy. Try again in a minute.':'Could not join the party.');
   if(m.t=='hello'){P.joined=1;if(PT===P)PT=null;return finishJoin({ws,hello:m},u)}
   if(P.joined)onMsg(m,ws)};
@@ -356,7 +362,7 @@ addEventListener('pagehide',e=>{if(e.persisted)return;try{if(room){room.left=1;n
 document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
 function leaveRoom(msg){if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 function fitLobby(){const w=$('lobw');if(!w)return;if(document.activeElement&&document.activeElement.tagName=='INPUT'&&w.dataset.k)return;w.style.transform='none';const hm=!!w.querySelector('#hm');let k=Math.min(hm?1.35:1,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);if(!hm&&w.dataset.k)k=Math.min(k,+w.dataset.k);w.dataset.k=k;w.style.transform=k!=1?'scale('+k+')':'none'}
-function lobbyUI(f){
+function lobbyUI(f){if(S.prac){S.prac=0;netSend({t:'ready',v:1});setTimeout(()=>netSend({t:'start'}),200)}
  if(S.pub)return pubUI(f);
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)+(p.presence.rd||0)).join()+isHost+S.md+'/'+(S.sl|0);
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
