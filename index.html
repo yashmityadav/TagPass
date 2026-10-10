@@ -117,6 +117,17 @@ input{box-shadow:inset 0 3px 0 rgba(27,42,107,.15)}
 #nl{overflow-y:auto;max-height:270px;display:flex;flex-direction:column;gap:5px}#nl .em{font-size:15px;opacity:.7;text-align:center}#nl .fr>span{white-space:normal;line-height:1.15}
 .cc .row{min-height:80px}
 #im{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:rgba(27,42,107,.7)}#im .card{width:min(330px,92vw);max-height:92vh;overflow:auto;box-sizing:border-box;background:#2b3a8f;display:flex;flex-direction:column;gap:8px;align-items:center}#im .il{width:100%;max-height:min(50vh,260px);overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+/* end screen + elimination banner */
+.endc{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 40px 22px;border-radius:30px;background:linear-gradient(rgba(43,60,150,.85),rgba(27,42,107,.85));border:4px solid #fff;box-shadow:0 8px 0 rgba(0,0,0,.25);animation:endpop .55s cubic-bezier(.2,1.4,.4,1)}
+.endc.win{border-color:#ffd23f;box-shadow:0 0 0 4px rgba(255,210,63,.25),0 0 46px rgba(255,210,63,.55)}
+.endk{font-size:18px;letter-spacing:4px;opacity:.85}.endc.win .endk{color:#ffd23f;opacity:1}
+.endt{font-size:min(11vh,56px);line-height:1.05;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill;max-width:80vw;overflow-wrap:anywhere}
+.endc .bl.big{animation:endbob 1.2s ease-in-out infinite}
+.cfw{position:absolute;inset:0;overflow:hidden;pointer-events:none}.cf{position:absolute;top:-16px;width:10px;height:15px;border-radius:2px;animation:cff linear forwards}
+@keyframes endpop{from{opacity:0;transform:scale(.6) translateY(30px)}to{opacity:1;transform:none}}@keyframes endbob{50%{transform:translateY(-8px)}}@keyframes cff{to{transform:translateY(110vh) rotate(720deg)}}
+.elim{position:fixed;top:22%;left:50%;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;white-space:nowrap;pointer-events:none;padding:8px 24px;border-radius:40px;background:linear-gradient(#ff4d6d,#c2184a);border:3px solid #fff;box-shadow:0 6px 0 #7a0f30,0 12px 30px rgba(0,0,0,.35);font-size:min(6vh,30px);-webkit-text-stroke:2px #7a0f30;paint-order:stroke fill;animation:elin .35s cubic-bezier(.2,1.5,.4,1),elout .3s 2.3s forwards}
+.elim.me{font-size:min(9vh,46px);padding:12px 36px}
+@keyframes elin{from{opacity:0;transform:translate(-50%,-30px) scale(.6)}to{opacity:1;transform:translate(-50%,0)}}@keyframes elout{to{opacity:0;transform:translate(-50%,-12px)}}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -183,6 +194,7 @@ ME.alive=true;ME.ci=0;
 let cam={x:800,y:418,z:.6};
 const AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* AR: the glide of the arrow between heads */
 const ovShow=h=>{const im=document.getElementById('im');im&&im.remove();ov.innerHTML=h;ov.classList.remove('off','fit');ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>{ov.classList.add('off');const im=document.getElementById('im');im&&im.remove()};
+function elimBanner(me,n){const e=document.createElement('div');e.className='elim'+(me?' me':'');e.innerHTML=me?'💀 YOU\'RE OUT!':'💀 <b style="font-weight:400">'+esc(n||'Someone')+'</b> is out';document.body.appendChild(e);setTimeout(()=>e.remove(),2700)}
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
 let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped)?'flex':'none'}
@@ -423,12 +435,12 @@ function applyRoom(m){
   if(S.mode!='play'){S.bt=null;playView(m,meP)}
   const bk=m.gm+':'+m.rn+':'+m.loser;if(S.bt!==bk){S.bt=bk;
    const lr=m.loser==myId?ME:rem[m.loser];if(lr)burst(lr.x+15,lr.y+17,40,'#ffd23f',500);
-   shake=1;snd(150,.6,'sawtooth',.08,-100);toast('💀 '+(m.loser==myId?'You are':(m.ln||'Someone')+' is')+' eliminated!',3000);
+   shake=1;snd(150,.6,'sawtooth',.08,-100);elimBanner(m.loser==myId,m.ln);
    if(m.loser==myId){ME.alive=false;ME.it=0;document.body.classList.remove('pl')}}
  }else if(m.st=='over'){
   if(S.ov!==m.gm+':'+m.rn){S.ov=m.gm+':'+m.rn;S.mode='over';document.body.classList.remove('pl');
    const mine=m.win==myId,w=mine?name:(m.wn||'');jingle(mine);
-   ovShow(`<h1 style="font-size:min(13vh,68px)">${m.wt?(m.wt==1?'❄ Freezers win!':'🏃 Runners win!'):w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</h1>${S.pub?'<button class="b" onclick="playAgain()">Play again</button>':(isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>')}<button class="b alt" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>`)}
+   ovShow(`${mine?Array.from({length:40},()=>`<i class="cf" style="left:${Math.random()*100}%;background:${['#ffd23f','#ff2d7a','#2b8cff','#3dff7a','#fff'][Math.random()*5|0]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*1.2}s"></i>`).join('').replace(/^/,'<div class="cfw">')+'</div>':''}<div class="endc${mine?' win':''}"><div class="endk">${mine?'🏆 VICTORY':'GAME OVER'}</div>${!m.wt&&w?`<div class="bl big" style="--c:${COLS[hc(w)]}"><i></i><i></i></div>`:`<div style="font-size:64px;line-height:1">${m.wt==1?'❄':m.wt?'🏃':'🏁'}</div>`}<div class="endt">${m.wt?(m.wt==1?'❄ Freezers win!':'🏃 Runners win!'):w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</div></div>${S.pub?'<button class="b" onclick="playAgain()">Play again</button>':(isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>')}<button class="b alt" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>`)}
  }else if(m.st=='lobby'&&S.mode!='lobby'&&S.mode!='menu')toLobbyView();
  if(S.mode=='lobby')lobbyUI();
  board()}
