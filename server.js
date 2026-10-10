@@ -548,7 +548,7 @@ function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
   r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
-  for (const q of r.players.values()) q.rec = (!r.practice && q.acct && ids.includes(q.id)) ? 1 : 0;   // solo practice never counts
+  for (const q of r.players.values()) q.rec = (r.pub && !r.practice && q.acct && ids.includes(q.id)) ? 1 : 0;   // only public lobbies (incl. party joins) count; private rooms and solo practice never do
   startRound(r, ids, t);
 }
 
