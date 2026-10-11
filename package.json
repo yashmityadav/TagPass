@@ -1,10 +1,10 @@
 {
   "name": "tag-game",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --max-semi-space-size=16 server.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

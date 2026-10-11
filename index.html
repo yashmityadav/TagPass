@@ -188,7 +188,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6','#ff8a3d','#ff6fd8','#29d3ff','#b6e03a','#ffffff'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,zip:-1,zd:1,zs:0,zcd:0,ac:0,acAt:0,gt:0,gk:0,hb:0,gs:0,gc:0,gcAt:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,mi=0,mus=0,toastT,lastBoard='';
-const PHYS_HZ=60,SEND_S=0,INTERP_MIN=33,INTERP_MAX=110,EXTRAP_MS=120,PUB_SIZE=10;   /* PUB_SIZE: players needed before a public match starts */
+const PHYS_HZ=60,SEND_S=0,INTERP_MIN=40,INTERP_MAX=160,EXTRAP_MS=120,PUB_SIZE=10;   /* PUB_SIZE: players needed before a public match starts */
 const S={mode:'menu',gm:0,rn:0,rs:-1,st:'lobby',bt:null,ov:null,rm:null,practice:false,tl:null,tlAt:0,cdl:0,cdAt:0,lc:0,lcAt:0},ME=mk(0,700,500),NEUT={},PEND=[],OUT=[],VO={x:0,y:0};let seq=0;
 ME.alive=true;ME.ci=0;
 let cam={x:800,y:418,z:.6};
@@ -411,7 +411,7 @@ function fetchStats(){return;try{fetch('/stats',{cache:'no-store'}).then(r=>r.js
 /* ---------- net: the server owns the game. I send inputs; it sends back the truth ---------- */
 function hostStart(){if(peers.length<MINP[S.md|0]||!peers.every(p=>p.presence.rd))return;netSend({t:'start'})}
 function toLobby(){netSend({t:'lobby'})}
-function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:INTERP_MIN+6,late:0,rt:null,has:0}}
+function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:70,si:33,lt:0,late:0,rt:null,has:0}}
 function onMsg(m,ws){
  if(!room||room.ws!==ws)return;room.rx=Date.now();
  switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'fz':onFz(m);break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
@@ -475,19 +475,22 @@ function onTag(m){
  if(ra&&rb)burst((ra.x+rb.x)/2+15,(ra.y+rb.y)/2+10,a==myId||b==myId?22:12,'#fff',380);
  if(a==myId){shake=.35;snd(700,.18,'square',.07,-400);snd(300,.2,'sawtooth',.05,200)}
  else if(b==myId){shake=.3;snd(300,.2,'sawtooth',.05,200)}}
+let dN=0;
 function flush(){
  const w=room&&room.ws;if(!w||w.readyState!=1)return;
  if(!OUT.length&&!document.hidden)return;
  if(OUT.length>8)OUT.splice(0,OUT.length-8);
- w.send(JSON.stringify({t:'in',c:OUT}));OUT.length=0}
+ const m={t:'in',c:OUT};if(++dN>=40){dN=0;let a=0,n=0;for(const k in rem){const r=rem[k];if(r.alive&&r.has){a+=r.dly;n++}}if(n)m.d=Math.round(a/n)}   /* tell the server how far behind I draw others, so tags are judged on what I actually see */
+ w.send(JSON.stringify(m));OUT.length=0}
 setInterval(()=>{if(document.hidden)flush()},1000);   /* a hidden tab keeps its connection alive; the server keeps playing for it */
 function pushSnap(r,e,ts,now){
  const s=r.snaps,smp=now-ts;
  /* clock offset = fastest observed transit (leaky minimum); lateness above it = jitter */
- if(r.off===null||Math.abs(smp-r.off)>1500){r.off=smp;r.late=0;r.rt=null;s.length=0}
+ if(r.off===null||Math.abs(smp-r.off)>1500){r.off=smp;r.late=0;r.rt=null;r.lt=0;s.length=0}
  else if(smp<r.off)r.off=smp;else r.off+=(smp-r.off)*.02;
- const late=Math.max(0,smp-r.off);r.late=Math.max(late,r.late*.97);
- const tg=Math.min(INTERP_MAX,Math.max(INTERP_MIN,17+r.late*.9));r.dly+=(tg-r.dly)*(tg>r.dly?.25:.01);   /* adaptive jitter buffer */
+ const gap=r.lt?ts-r.lt:0,okg=gap>0&&gap<250;r.lt=ts;if(okg)r.si+=(Math.min(100,gap)-r.si)*.1;   /* measured snapshot interval (30/s normally, 20/s if the server is starved) */
+ const late=Math.max(0,smp-r.off);r.late=Math.max(late,r.late*Math.pow(.5,(okg?gap:33)/2500));   /* jitter memory: half-life 2.5 s, so one stall keeps the buffer wide instead of re-stuttering */
+ const tg=Math.min(INTERP_MAX,Math.max(INTERP_MIN,r.si*1.25+6+r.late*.9));r.dly+=(tg-r.dly)*(tg>r.dly?.25:.01);   /* adaptive jitter buffer */
  if(s.length&&ts<=s[s.length-1].t)return;
  s.push({t:ts,x:e[1],y:e[2],vx:e[3],vy:e[4],face:e[5],g:e[6],it:e[7],alive:1});
  if(s.length>24)s.shift();
@@ -576,11 +579,27 @@ function drawSmoke(){
   for(let i=0;i<9;i++){const u=Math.sin(c[0]*12.9898+i*78.233)*43758.5453,f=u-Math.floor(u),v=Math.sin(c[0]*39.3468+i*11.135)*24634.6345,g=v-Math.floor(v),ang=f*6.283,dist=SMOKE_R*(.2+.4*g),rad=SMOKE_R*(.28+.1*Math.sin(time*2+i));cx.beginPath();cx.arc(X+Math.cos(ang)*dist,Y+Math.sin(ang)*dist*.8,rad,0,7);cx.fill()}}
  cx.globalAlpha=1}
 function drawArrow(wx,wy,pk,s,TX,TY){const bob=Math.sin(time*7)*4;cx.setTransform(s*pk,0,0,s*pk,Math.round(TX+wx*s),Math.round(TY+wy*s+(-66+bob)*s));cx.fillStyle='#fff';cx.strokeStyle='#dfe9ff';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();cx.moveTo(-16,-8);cx.lineTo(16,-8);cx.lineTo(0,8);cx.closePath();cx.fill();cx.stroke()}
+const NAMEC=new Map(),GLOWC=new Map();
+if(document.fonts){document.fonts.ready.then(()=>NAMEC.clear());try{document.fonts.addEventListener('loadingdone',()=>NAMEC.clear())}catch(e){}}
+function nameSpr(txt,px,col,R){   /* name labels are rendered once into a tiny canvas; per frame it is a single drawImage */
+ const key=txt+'|'+px+'|'+col+'|'+R;let c=NAMEC.get(key);if(c)return c;
+ if(NAMEC.size>80)NAMEC.clear();
+ const f=px+'px "Lilita One",Impact,sans-serif',m=document.createElement('canvas'),g=m.getContext('2d');
+ g.font=f;const w=Math.ceil(g.measureText(txt).width)+12,h=Math.ceil(px*1.5)+8,bl=Math.ceil(px*1.15)+4;
+ m.width=w*R;m.height=h*R;g.scale(R,R);g.font=f;g.textAlign='center';g.lineJoin='round';g.miterLimit=2;g.lineWidth=4;g.strokeStyle='#1b2a6b';
+ g.strokeText(txt,w/2,bl);g.fillStyle=col;g.fillText(txt,w/2,bl);
+ c={m,w,h,bl};NAMEC.set(key,c);return c}
+function glowSpr(hc,R){   /* soft halo around the highlighted player, pre-rendered (no gradient / shadowBlur per frame) */
+ const key=hc+R;let c=GLOWC.get(key);if(c)return c;
+ const r=PH/2+22,sz=Math.ceil(r*2+2),m=document.createElement('canvas');m.width=sz*R;m.height=sz*R;
+ const g=m.getContext('2d');g.scale(R,R);const gr=g.createRadialGradient(sz/2,sz/2,6,sz/2,sz/2,r);
+ gr.addColorStop(0,hc+'00');gr.addColorStop(.7,hc+'55');gr.addColorStop(1,hc+'00');g.fillStyle=gr;g.beginPath();g.arc(sz/2,sz/2,r,0,7);g.fill();
+ c={m,sz};GLOWC.set(key,c);return c}
 function drawChar(p,s,TX,TY,al){
  const px=Math.round(TX+(p.x+PW/2)*s),py=Math.round(TY+(p.y+PH)*s);
  cx.setTransform(s,0,0,s,px,py);
  {const md=S.md&&S.mode=='play'&&ME.alive;let hc=0;if(p===ME)hc='#ffe14a';else if(md&&!p.o&&p.alive!==false)hc=ME.it?(p.it?0:'#2b8cff'):(p.it?'#ff2a2a':0);
- if(hc){cx.save();const pu=.5+.25*Math.sin(time*6),g=cx.createRadialGradient(0,-PH/2,6,0,-PH/2,PH/2+22);g.addColorStop(0,hc+'00');g.addColorStop(.7,hc+'55');g.addColorStop(1,hc+'00');cx.globalAlpha=al*(.7+pu*.5);cx.fillStyle=g;cx.beginPath();cx.arc(0,-PH/2,PH/2+22,0,7);cx.fill();cx.globalAlpha=al*(.6+pu);cx.strokeStyle=hc;cx.lineWidth=4;cx.shadowColor=hc;cx.shadowBlur=14;cx.beginPath();cx.ellipse(0,2,28+pu*6,8+pu*2,0,0,7);cx.stroke();cx.restore()}}cx.save();cx.globalAlpha=al;
+ if(hc){cx.save();const pu=.5+.25*Math.sin(time*6),gs=glowSpr(hc,Math.min(3,Math.max(1,Math.ceil(s)))),ra=Math.min(1,al*(.6+pu));cx.globalAlpha=Math.min(1,al*(.7+pu*.5));cx.drawImage(gs.m,-gs.sz/2,-PH/2-gs.sz/2,gs.sz,gs.sz);cx.strokeStyle=hc;cx.beginPath();cx.ellipse(0,2,28+pu*6,8+pu*2,0,0,7);cx.lineWidth=11;cx.globalAlpha=ra*.28;cx.stroke();cx.lineWidth=4;cx.globalAlpha=ra;cx.stroke();cx.restore()}}cx.save();cx.globalAlpha=al;
  const sy=p.sq,sx=1/Math.sqrt(sy);cx.scale(sx,sy);cx.rotate(p.vx/2500*(p.g?1:.5));
  const w=p.g&&Math.abs(p.vx)>60?Math.sin(time*26)*3:0;
  cx.fillStyle='#0a2c3a';rr(-11+w,-4,9,5,2);cx.fill();rr(2-w,-4,9,5,2);cx.fill();
@@ -592,7 +611,7 @@ function drawChar(p,s,TX,TY,al){
  cx.restore();
  if(p.fz){cx.globalAlpha=.65;cx.fillStyle='#aee9ff';cx.fillRect(-21,-PH-10,42,PH+12);cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(-21,-PH-10,42,PH+12);cx.globalAlpha=1}
  const nm=p===ME?name:p.nm;
- cx.globalAlpha=al;cx.font='15px "Lilita One",Impact,sans-serif';cx.textAlign='center';cx.lineJoin='round';cx.miterLimit=2;cx.lineWidth=4;cx.strokeStyle='#1b2a6b';cx.strokeText(nm,0,-80);cx.fillStyle='#fff';cx.fillText(nm,0,-80);if(p===ME){cx.font='18px "Lilita One",Impact,sans-serif';cx.strokeStyle='#1b2a6b';cx.strokeText('YOU ▼',0,-100);cx.fillStyle='#ffe14a';cx.fillText('YOU ▼',0,-100)}cx.globalAlpha=1}
+ {const R=Math.min(3,Math.max(1,Math.ceil(s))),c=nameSpr(String(nm||''),15,'#fff',R);cx.globalAlpha=al;cx.drawImage(c.m,-c.w/2,-80-c.bl,c.w,c.h);if(p===ME){const y=nameSpr('YOU ▼',18,'#ffe14a',R);cx.drawImage(y.m,-y.w/2,-100-y.bl,y.w,y.h)}cx.globalAlpha=1}}
 
 /* ---------- map features: drawing ---------- */
 function drawPad(q){
@@ -700,7 +719,7 @@ function frame(n){
   const timerText=S.inf?'':many?String(Math.ceil(tleft)):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&!S.inf&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
  if(S.mode=='play')hudUpd();
  if(S.mode=='lobby'&&S.pub)lobbyTick();
- const t=performance.now();for(const k in rem)stepRemote(rem[k],t,dt);for(const q of CRS){if(Math.abs(q.x-q.dx)>120||Math.abs(q.y-q.dy)>120){q.dx=q.x;q.dy=q.y}else{const e=1-Math.exp(-dt*35);q.dx+=(q.x-q.dx)*e;q.dy+=(q.y-q.dy)*e}}for(const k in DEC)stepRemote(DEC[k],t,dt);
+ const t=n||performance.now();for(const k in rem)stepRemote(rem[k],t,dt);for(const q of CRS){if(Math.abs(q.x-q.dx)>120||Math.abs(q.y-q.dy)>120){q.dx=q.x;q.dy=q.y}else{const e=1-Math.exp(-dt*35);q.dx+=(q.x-q.dx)*e;q.dy+=(q.y-q.dy)*e}}for(const k in DEC)stepRemote(DEC[k],t,dt);
  if(parts.length){
  let w=0;
  for(let i=0;i<parts.length;i++){const q=parts[i];q.l-=dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.vy+=500*dt;if(q.l>0)parts[w++]=q}

@@ -22,7 +22,8 @@ const LOBBY_GRACE_MS = 10000;  // a dropped connection in a lobby / results scre
 const ALLOWED = (process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);   // optional: restrict which sites may open a socket
 const TICK_MS = 1000 / 60;     // simulation rate (must match the client's PHYS_HZ = 60)
 const DT = 1 / 60;
-let snapEvery = +process.env.TAG_SNAP_EVERY || 1;   // send a snapshot every N ticks (1 = 60/s, 2 = 30/s). Adapts automatically when the server is overloaded (see the tick loop).
+const SNAP_BASE = 2;                                  // 30 snapshots/s: the client interpolates with velocities (Hermite), so it looks as smooth as 60/s but costs half the CPU/bandwidth
+let snapEvery = +process.env.TAG_SNAP_EVERY || SNAP_BASE;   // send a snapshot every N ticks (2 = 30/s, 3 = 20/s). Drops to 3 by itself when the server is starved of CPU (see the tick loop).
 const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
 const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
 const classicS = n => Math.max(25, 70 - 6 * n);   // classic: seconds per elimination, shrinks as players grow (2p 58s, 3p 52s, 5p 40s, 8+p 25s)
@@ -325,8 +326,8 @@ const onQ = (q, p) => q.dy ? (p.x + PW / 2 >= q.x && p.x + PW / 2 <= q.x + q.w &
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
 /* Lag compensation: the player who tags sees the others ~RTT+interp-delay in the past (and himself predicted in the present), so contact is judged on HIS screen:
    his current position against the other player's position from that many ticks ago. A bot holder has no screen -> the human runner's screen decides. */
-const LAGC_MAX = 10, LAGC_EXTRA = 55;
-const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + LAGC_EXTRA) / TICK_MS));
+const LAGC_MAX = 14, LAGC_EXTRA = 55;   // rewind cap (ticks) / default render delay until the client reports its real one
+const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + (p.rd ? p.rd + 8 : LAGC_EXTRA)) / TICK_MS));
 const hitRew = (a, b, k) => { const i = (b.hi - k) & 31, x = b.hx[i], y = b.hy[i]; return a.x < x + PW - 3 && a.x + PW > x + 3 && a.y < y + PH - 3 && a.y + PH > y + 3; };
 function tagHit(h, q) {
   if (!h.bot && h.ws) return hitRew(h, q, lagK(h));
@@ -433,7 +434,7 @@ const conn = r => { let n = 0; for (const p of r.players.values()) if (p.ws) n++
 function newPlayer(nm, ci) {
   return {
     id: hex(4), tk: hex(12), ws: null, nm, ci,
-    rdy: 0, q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0, lastB: 0, starve: 0, debt: 0, hx: new Float32Array(32), hy: new Float32Array(32), hi: 0, hrs: -1,
+    rdy: 0, q: [], lastIn: 0, lastSeq: 0, lastCmd: 0, dc: 0, gr: 0, credit: 0, lastB: 0, starve: 0, debt: 0, hx: new Float32Array(32), hy: new Float32Array(32), hi: 0, hrs: -1, rd: 0,
     alive: false, it: 0, rs: 0,
     x: 0, y: 0, vx: 0, vy: 0, g: 0, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: 1,
     ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, ab: 'fake', acd: 0, pa: 0, bst: 0, pcd: 0, bv: 0, zip: -1, zd: 1, zs: 0, zcd: 0,     // dash / ability / map-feature state (zip* = zipline)
@@ -467,7 +468,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = 0; b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
@@ -475,7 +476,7 @@ function addBots(r, cnt) {
 /* ---- bots: every 8 ticks they try 12 short plans on a copy of their own body (same physics as the real game), look ~0.5 s ahead and pick the best one ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk-- <= 0) { p.btk = 12; botPlan(r, p); p.k = 0; }
+  if (p.btk-- <= 0) { p.btk = lagEma > 6 ? 20 : 12; botPlan(r, p); p.k = 0; }
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0);
@@ -941,8 +942,11 @@ function snapshot(r, t, tt) {
 }
 
 let tickN = 0, nextTick = now();
-function tickAll(t, tt) {
+let snapDue = false;
+function tickAll(t, tt, last) {
   tickN++;
+  if (tickN % snapEvery === 0) snapDue = true;      // a snapshot is owed ...
+  const doSnap = last && snapDue;                   // ... but it is only sent after the last tick of a catch-up burst (stale in-between ones just cost CPU and arrive in a clump)
   const sweep = tickN % 15 === 0;               // housekeeping 4x/s is plenty; keeps the 60 Hz path free of allocations
   for (const r of rooms.values()) {
     try {
@@ -954,10 +958,11 @@ function tickAll(t, tt) {
         if (r.lobbyGo && t >= r.lobbyGo) { r.lobbyGo = 0; if (tot(r) >= PUB_SIZE) startMatch(r, t); else bcastRoom(r); }
       } else if (r.st === 'play' || r.st === 'between') {
         simRoom(r, t);
-        if (rooms.has(r.key) && (r.st === 'play' || r.st === 'between') && tickN % snapEvery === 0 && conn(r)) snapshot(r, t, tt);
+        if (rooms.has(r.key) && (r.st === 'play' || r.st === 'between') && doSnap && conn(r)) snapshot(r, t, tt);
       }
     } catch (e) { console.error('room error, closing room ' + r.key + ':', e); destroyRoom(r); }
   }
+  if (doSnap) snapDue = false;
 }
 let lagEma = 0, calmSince = 0;
 setInterval(() => {
@@ -967,11 +972,11 @@ setInterval(() => {
   const lag = Math.max(0, t - nextTick);
   lagEma += (lag - lagEma) * 0.05;
   if (!FIXED_SNAP) {
-    if (snapEvery === 1 && lagEma > 6) { snapEvery = 2; calmSince = 0; console.log('high load: snapshots at 30/s'); }
-    else if (snapEvery === 2) { if (lagEma < 1.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 20000) { snapEvery = 1; calmSince = 0; console.log('load normal: snapshots at 60/s'); } } else calmSince = 0; }
+    if (snapEvery === SNAP_BASE && lagEma > 6) { snapEvery = SNAP_BASE + 1; calmSince = 0; console.log('high load: snapshots at 20/s'); }
+    else if (snapEvery > SNAP_BASE) { if (lagEma < 1.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 20000) { snapEvery = SNAP_BASE; calmSince = 0; console.log('load normal: snapshots at 30/s'); } } else calmSince = 0; }
   }
-  let n = 0;
-  while (nextTick <= t && n++ < 5) { tickAll(t, nextTick); nextTick += TICK_MS; }   // fixed 60 Hz, catches up after a hiccup
+  let due = 0; for (let nt = nextTick; nt <= t && due < 5; nt += TICK_MS) due++;
+  for (let i = 0; i < due; i++) { tickAll(t, nextTick, i === due - 1); nextTick += TICK_MS; }   // fixed 60 Hz, catches up after a hiccup
   if (nextTick < t - 100) nextTick = t;
 }, 4);
 
@@ -1060,6 +1065,7 @@ wss.on('connection', (ws, req) => {
         p.lastIn = s;
         if (p.q.length < QCAP) p.q.push({ s, b });
       }
+      if (typeof m.d === 'number' && m.d >= 0) p.rd = Math.min(160, m.d | 0);   // how far behind (ms) this client draws other players: tags are judged against that view
       return;
     }
     if (m.t === 'hb') { ws.pres = t; send(ws, '{"t":"hb"}'); return; }
