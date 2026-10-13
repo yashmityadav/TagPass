@@ -36,7 +36,7 @@ const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
 const BOT_GAP_MS = 2000;       // public lobby not full: one bot joins every 2 s (a real player takes a bot's seat)
 const LOBBY_GO_MS = 3000;      // public lobby full -> match starts after this
-const LOCK_MS = 1200;          // the player who just passed the tag can't take it straight back
+const LOCK_MS = 1600;          // the player who just passed the tag can't take it straight back
 const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
 const STALL_MS = 150;          // wait this long for a late input packet before treating the player as idle
 const LOBBY_IDLE_MS = +process.env.TAG_LOBBY_IDLE_MS || 10 * 60 * 1000;   // a seat in a public lobby is held at most this long (no permanent idlers)
@@ -503,7 +503,8 @@ function botPlan(r, p) {
   let tg = null, mode = 2;   // 0 chase, 1 flee, 2 wander
   if (p.it) { if (near) { tg = near; mode = 0; } }
   else if (rescue && td > 320) { tg = rescue; mode = 0; }
-  else if (thr && td < 560) { tg = thr; mode = 1; }
+  else if (thr && td < (p.fl ? 700 : 520)) { tg = thr; mode = 1; }   // hysteresis: no flee/wander flip-flop
+  p.fl = mode === 1;
   if (mode < 2 && Math.hypot(p.x - p.sx, p.y - p.sy) < 6 && ++p.stk > 5 && (mode === 0 || td > 250)) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 12, s: 0, a: 0, g: 0 }; p.btk = 14; return; }   // stuck under a ledge: shake loose
   if (Math.hypot(p.x - p.sx, p.y - p.sy) >= 6) p.stk = 0;
   p.sx = p.x; p.sy = p.y;
@@ -534,15 +535,15 @@ function botPlan(r, p) {
     }
     if (dead) continue;
     if (mode === 0 && mn < 40) c -= 300; else if (mode === 1 && s.g) c -= 40; else if (mode === 2 && mn < 50) c -= 100;
-    if (j) c += 18;                                                // no pointless hopping: a jump must pay for itself
+    if (j) c += mode === 2 ? 60 : 35;                                                // no pointless hopping: a jump must pay for itself
     if (ds) c += mode === 1 && td < 220 ? 10 : 35;
     if (!d && mode === 0) c += 8;
-    if (p.pl && p.pl.d === d) c -= 8;                              // keep going the same way (smooth, human)
-    all.push({ d, j, s: ds, c: c + Math.random() * 3 });
+    if (p.pl && p.pl.d === d) c -= 25;                              // keep going the same way (smooth, human)
+    all.push({ d, j, s: ds, c: c + Math.random() });
   }
   if (!all.length) { p.pl = NP; return; }
   all.sort((a, b) => a.c - b.c);
-  const bp = Math.random() < (1 - p.sk) * .45 ? all[rnd(Math.min(3, all.length))] : all[0];   // sometimes a human-like slip
+  const bp = Math.random() < (1 - p.sk) * .45 ? Object.assign({}, all[rnd(Math.min(3, all.length))], { j: all[0].j }) : all[0];   // a slip may change direction, never adds random jumps   // sometimes a human-like slip
   const pl = { d: bp.d, j: bp.j, s: bp.s, a: 0, g: 0 }, D = p.it ? nd : td;
   if (r.st === 'play' && p.acd <= 0 && D < 1e8 && Math.random() < .55) {   // ability: fake / smoke / trap
     if (p.ab === 'fake') pl.a = D < (p.it ? 220 : 320) ? 1 : 0;
@@ -932,7 +933,7 @@ function simRoom(r, t) {
   // the passer can't take the tag straight back until they've separated (or 1.2 s passed)
   if (r.lk) {
     const a = r.players.get(r.lk.from), b = r.players.get(r.lk.to);
-    if (!a || !b || t > r.lk.until || !hit(a, b, -8)) r.lk = null;
+    if (!a || !b || t > r.lk.until) r.lk = null;   // lock lasts the FULL time (old code released it the moment they separated 8px -> instant re-tag)
   }
   if (t >= r.tagFrom) {
     for (const q of r.players.values()) {
