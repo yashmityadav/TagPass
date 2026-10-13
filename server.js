@@ -285,14 +285,14 @@ function step(p, inp, dt) {
     }
     return;
   }
-  const m = p.it ? 1.1 : 1, MAX = 340 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * ((p.gt || p.gk) ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
+  const m = p.it ? 1.1 : 1, MAX = 360 * m * (p.slow ? SLOW_K : 1) * (p.hb ? HELD_K : 1) * ((p.gt || p.gk) ? CARRY_K : 1) * (p.bst > 0 ? BST_K : 1);
   const ax = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
   const ds = inp.s && !p.ps; p.ps = !!inp.s;                                  // dash = rising edge of the dash button
   if (p.dcd > 0) p.dcd -= dt;
   if (ds && p.dcd <= .001 && p.dash <= 0) { p.dash = DASH_T; p.dcd = DASH_CD; p.dd = ax || p.face; p.face = p.dd; }
   if (p.dash > 0) { p.dash -= dt; p.vx = p.dd * DASH_V; if (p.dash <= 0) { p.dash = 0; p.vx = p.dd * MAX; } }
-  else if (ax) { const turn = Math.sign(p.vx) == -ax ? 1.8 : 1; p.vx += ax * (p.g ? 3000 : 2000) * turn * dt; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); p.face = ax; }
-  else { const f = (p.g ? 2800 : 500) * dt; p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f; }
+  else if (ax) { const turn = Math.sign(p.vx) == -ax ? 1.8 : 1; p.vx += ax * (p.g ? 4200 : 2600) * turn * dt; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); p.face = ax; }
+  else { const f = (p.g ? 3800 : 700) * dt; p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f; }
   const jp = inp.j && !p.pj; p.pj = !!inp.j; if (jp) p.buf = .13; else p.buf -= dt;
   p.coy = p.g ? .1 : p.coy - dt;
   if (p.buf > 0 && p.coy > 0) { p.vy = -840 * ((p.slow || p.hb) ? JUMP_K : 1); p.buf = p.coy = 0; p.g = 0; p.cut = 0; if (p.dash > 0) { p.dash = 0; p.vx = Math.max(-MAX, Math.min(MAX, p.vx)); } }
