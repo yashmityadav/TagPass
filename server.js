@@ -36,7 +36,7 @@ const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
 const BOT_GAP_MS = 2000;       // public lobby not full: one bot joins every 2 s (a real player takes a bot's seat)
 const LOBBY_GO_MS = 3000;      // public lobby full -> match starts after this
-const LOCK_MS = 1600;          // the player who just passed the tag can't take it straight back
+const LOCK_MS = 1200;          // the player who just passed the tag can't take it straight back
 const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
 const STALL_MS = 150;          // wait this long for a late input packet before treating the player as idle
 const LOBBY_IDLE_MS = +process.env.TAG_LOBBY_IDLE_MS || 10 * 60 * 1000;   // a seat in a public lobby is held at most this long (no permanent idlers)
@@ -933,7 +933,7 @@ function simRoom(r, t) {
   // the passer can't take the tag straight back until they've separated (or 1.2 s passed)
   if (r.lk) {
     const a = r.players.get(r.lk.from), b = r.players.get(r.lk.to);
-    if (!a || !b || t > r.lk.until) r.lk = null;   // lock lasts the FULL time (old code released it the moment they separated 8px -> instant re-tag)
+    if (!a || !b || t > r.lk.until || (t > r.lk.min && !hit(a, b, -24))) r.lk = null;   // released once truly apart (24px) AND the lag-comp rewind window has passed   // lock lasts the FULL time (old code released it the moment they separated 8px -> instant re-tag)
   }
   if (t >= r.tagFrom) {
     for (const q of r.players.values()) {
@@ -942,7 +942,7 @@ function simRoom(r, t) {
       if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
       holder.it = 0; q.it = 1;
       if (holder.gt === q.id) ungrab(r, holder, GRAB_CD); else if (q.gt === holder.id) ungrab(r, q, GRAB_CD);   // a tag ends the grip between the two
-      r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS };
+      r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 350 };
       bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id }));
       holder = q;
       break;
