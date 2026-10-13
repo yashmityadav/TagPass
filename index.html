@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#3d9bf7"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet"></noscript>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{--pink:#ff2d7a;--blue:#3d9bf7}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:none}
@@ -14,49 +14,21 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #timer{position:fixed;top:calc(env(safe-area-inset-top,0px) + 6px);left:0;right:0;text-align:center;font-size:64px;line-height:1;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill;text-shadow:0 4px 0 #1b2a6b;pointer-events:none}
 #timer.hot{color:#ffe14d;animation:p .5s infinite}
 @keyframes p{50%{transform:scale(1.25)}}
-#score{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;right:14px;display:flex;justify-content:space-between;font-size:24px;pointer-events:none;text-shadow:0 2px 0 #1b2a6b}
-#pause{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:50%;transform:translateX(-50%);width:44px;height:44px;border:0;background:rgba(255,255,255,.35);border-radius:12px;display:flex;gap:6px;align-items:center;justify-content:center}
-#pause i{width:8px;height:24px;background:#fff;border-radius:3px}
 #ov{position:fixed;inset:0;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;background:rgba(27,42,107,.55);text-align:center;padding:20px}
 #ov.off{display:none}
-#ov h1{font-size:min(15vh,110px);margin:0;line-height:.9;-webkit-text-stroke:4px #1b2a6b;paint-order:stroke fill;text-shadow:0 8px 0 #1b2a6b}
-#ov p{margin:0;font-size:20px;max-width:420px;opacity:.95}
-.b{font:inherit;font-size:28px;color:#fff;background:var(--pink);border:0;border-radius:18px;padding:12px 34px;box-shadow:0 6px 0 #b0124f;min-width:230px}
-.b:active{transform:translateY(4px);box-shadow:0 2px 0 #b0124f}
-.b.alt{background:#2b8cff;box-shadow:0 6px 0 #1552a8}
 #tc{position:fixed;left:0;right:0;bottom:0;height:40%;display:none;pointer-events:none}
 .t.pl #tc{display:block}
 #tc button{pointer-events:auto;position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 50px);width:76px;height:76px;border-radius:50%;border:0;background:rgba(255,255,255,.28);color:#fff;font-size:34px;font-family:inherit}
 #tc button.on{background:rgba(255,255,255,.6)}
-
-#ov{overflow:auto;justify-content:safe center;gap:10px}
-input{background:#fff;font:inherit;font-size:22px;padding:8px 14px;border-radius:14px;border:0;text-align:center;width:230px;color:#1b2a6b;outline:0}
 .row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
 .chip{display:flex;align-items:center;gap:8px;font-size:20px;text-align:left}.dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;flex:none}.out{opacity:.4;text-decoration:line-through}
 #board{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;display:flex;flex-direction:column;gap:3px;font-size:17px;pointer-events:none;text-shadow:0 2px 0 #1b2a6b}
 #toast{position:fixed;top:28%;left:0;right:0;text-align:center;font-size:min(9vh,48px);pointer-events:none;opacity:0;transition:opacity .25s;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill}#toast.show{opacity:1}
 .ib{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;width:44px;height:44px;border-radius:12px;border:0;background:rgba(255,255,255,.35);color:#fff;font-size:22px;font-family:inherit}
-input::placeholder{color:#8a94c4}
 #qr{background:#fff;padding:6px;border-radius:10px;display:inline-block;width:116px;height:116px;min-width:116px;min-height:116px;text-align:center}
 #qr img, #qr canvas{width:104px!important;height:104px!important;display:block;margin:0 auto}
 #fsp{display:none;position:fixed;inset:0;z-index:98;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}#rot{display:none;position:fixed;inset:0;z-index:99;background:#1b2a6b;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:26px;padding:30px}
 @media (orientation:portrait) and (pointer:coarse){#rot{display:flex}}
-#ov.fit{overflow:hidden;justify-content:center}#lobw{display:flex;flex-direction:column;align-items:center;gap:10px;transform-origin:center center}#lob{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}#lob>div{min-width:150px}#qrw{width:116px;height:116px;margin:4px auto 0}
-@media (max-height:480px){#lobh,#lobp{display:none}#lob{flex-wrap:nowrap;gap:22px}#ov{padding:8px;gap:6px}#qr{width:96px;height:96px;min-width:96px;min-height:96px;padding:4px}#qr img,#qr canvas{width:88px!important;height:88px!important}#qrw{width:96px;height:96px}.b{font-size:22px;padding:8px 24px;min-width:170px}#ov p{font-size:15px}input{font-size:18px}#timer{font-size:48px}}
-.b.sm{font-size:20px;padding:10px 18px;min-width:0;box-shadow:0 5px 0 #1552a8}
-#pubw{display:flex;flex-direction:column;align-items:center;gap:10px}
-#pcnt{font-size:min(8vh,40px);line-height:1;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill;text-shadow:0 3px 0 #1b2a6b}
-#pslots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}
-#mm{display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap}.mcol{display:flex;flex-direction:column;align-items:center;gap:10px}
-#mg{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-.mc{font:inherit;color:#fff;width:210px;padding:16px 12px;border-radius:22px;border:3px solid rgba(255,255,255,.35);background:linear-gradient(160deg,var(--c),#1b2a6b 150%);box-shadow:0 8px 0 rgba(27,42,107,.5);display:flex;flex-direction:column;align-items:center;gap:6px}
-.mc:active{transform:translateY(5px);box-shadow:0 3px 0 rgba(27,42,107,.5)}.mc .mi{font-size:54px;line-height:1}.mc b{font-size:26px;font-weight:400;letter-spacing:1px}.mc small{font-size:14px;opacity:.92;line-height:1.25;min-height:36px}.mw{font-style:normal;font-size:13px;background:rgba(0,0,0,.28);border-radius:20px;padding:2px 10px;min-height:20px}
-@media (max-height:480px){.mc{width:170px;padding:10px 8px}.mc .mi{font-size:38px}.mc b{font-size:21px}.mc small{font-size:12px;min-height:30px}.slot{font-size:15px;padding:3px 10px;min-width:150px!important}#mm{gap:12px}}
-.slot{display:flex;align-items:center;gap:10px;font-size:18px;min-width:190px;padding:5px 12px;overflow:hidden;border-radius:12px;background:rgba(255,255,255,.16);text-align:left}
-.slot.e{opacity:.5;background:rgba(255,255,255,.06)}.slot.e .dot{background:transparent;animation:wt 1s infinite}
-@keyframes wt{50%{opacity:.25}}
-#pcd{font-size:22px;min-height:28px}
-/* abilities: HUD + lobby picker */
 #hud{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);display:none;gap:12px;pointer-events:none}
 .pl #hud{display:flex}
 #hud button{pointer-events:auto;position:relative;width:64px;height:64px;border-radius:16px;border:0;background:rgba(255,255,255,.3);color:#fff;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:0}
@@ -71,75 +43,119 @@ input::placeholder{color:#8a94c4}
 .t #ha{--ux:-1;--uy:0}.t #hd{--ux:-.7071;--uy:.7071}.t #hg{--ux:0;--uy:1}   /* quarter circle: 180° (left), 135°, 90° (straight up) */
 @media (max-height:400px){.t #hud{--R:94px;--S:62px}}
 .t #hud .kh{display:none}
-#abw{display:flex;flex-direction:column;align-items:center;gap:6px}
-.abrow{display:flex;gap:8px;justify-content:center}
-.abp{font:inherit;font-size:18px;color:#fff;background:rgba(255,255,255,.2);border:3px solid transparent;border-radius:14px;padding:6px 14px;display:flex;align-items:center;gap:6px}
-.abp.sel{background:var(--pink);border-color:#fff}
-.abd{font-size:15px;opacity:.95;max-width:460px;text-align:center}
-@media (max-height:480px){.abp{font-size:15px;padding:4px 10px}.abd{font-size:12px}}
-/* ---- polished menus ---- */
-.card{background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.3);border-radius:22px;padding:14px 18px;box-shadow:0 8px 0 rgba(27,42,107,.35),inset 0 2px 0 rgba(255,255,255,.18)}
-.cap{font-size:14px;letter-spacing:2.5px;opacity:.85;margin-bottom:6px}
-.code{font-size:min(12vh,56px);letter-spacing:8px;line-height:1.1;background:rgba(27,42,107,.45);border-radius:14px;padding:6px 12px 6px 20px;margin:4px 0 6px}
-#lob{align-items:stretch;gap:14px}#lob>.card{min-width:200px;display:flex;flex-direction:column;align-items:center}
-#lob #pl{width:100%;text-align:left;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 8px}#lob #pl .chip{background:rgba(255,255,255,.15);border-radius:12px;padding:4px 12px;margin-top:5px;font-size:19px}
-#act{width:100%;display:flex;flex-direction:column;gap:8px}
-.opt{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(27,42,107,.4);border-radius:14px;padding:6px 8px 6px 14px;font-size:20px}
-.opt b{font-weight:400;font-size:13px;letter-spacing:2px;opacity:.8}
-.opt button{font:inherit;font-size:19px;color:#fff;background:#2b8cff;border:0;border-radius:11px;padding:6px 14px;box-shadow:0 4px 0 #1552a8;min-width:140px}
-.opt button:active{transform:translateY(3px);box-shadow:0 1px 0 #1552a8}
-.b.go,.b.go2{background:#2fd16b;box-shadow:0 6px 0 #17934a}.b.go:active,.b.go2:active{box-shadow:0 2px 0 #17934a}
-.b.go{width:100%;font-size:28px;margin-top:2px}.b.go2{font-size:34px;padding:14px 56px}
-input{box-shadow:inset 0 3px 0 rgba(27,42,107,.15)}
-.abp{font-size:16px;background:rgba(27,42,107,.4);border-radius:16px;padding:8px 14px;flex-direction:column;gap:2px;min-width:92px}
-.abp span{font-size:28px;line-height:1}.abp.sel{box-shadow:0 4px 0 #b0124f}
-.abd{font-size:15px;max-width:520px}
-.keys{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;font-size:14px}.keys span{background:rgba(27,42,107,.4);border-radius:10px;padding:3px 10px}
-@media (max-height:480px){.card{padding:8px 12px;border-radius:16px}.abp{font-size:13px;padding:4px 8px;min-width:70px}.abp span{font-size:20px}.keys{font-size:11px}.opt{font-size:16px}.opt button{font-size:15px;min-width:110px;padding:4px 10px}.b.go{font-size:22px}.code{font-size:34px;letter-spacing:5px}#lob>.card{min-width:140px}}
-
-.bl{--c:#2b8cff;width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),transparent 40%),var(--c);border:4px solid #1b2a6b;position:relative;box-shadow:0 6px 0 rgba(27,42,107,.5);animation:bob 1.7s ease-in-out infinite}.bl.big{width:112px;height:112px}.bl i{position:absolute;top:34%;width:16%;height:22%;background:#1b2a6b;border-radius:50%}.bl i:first-child{left:28%}.bl i:last-child{right:28%}@keyframes bob{50%{transform:translateY(-8px)}}
-.lg{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 28px}.bls{display:flex;gap:14px;margin-bottom:4px}
-#hm{width:880px;display:flex;flex-direction:column;gap:10px;text-align:left}.tb{display:flex;align-items:center;gap:10px}.pn{font-size:30px;line-height:1}.stp{flex:1;font-size:16px;background:rgba(27,42,107,.45);border-radius:20px;padding:7px 14px}
-.tbb{font:inherit;font-size:15px;color:#fff;background:rgba(27,42,107,.5);border:2px solid rgba(255,255,255,.3);border-radius:14px;padding:6px 12px}
-.hb{display:flex;gap:14px;align-items:stretch}.lc,.fp{width:215px;flex:none;display:flex;flex-direction:column;gap:10px}.lc .card,.fp{padding:10px 12px}.lc input,.fp input{width:100%;min-width:0;font-size:18px;padding:6px 8px}
-.mb{font:inherit;font-size:18px;color:#fff;background:rgba(27,42,107,.4);border:2px solid transparent;border-radius:12px;padding:6px 10px;width:100%;text-align:left;margin-top:5px}.mb.on{background:var(--c);border-color:#fff}.mb:disabled{opacity:.6}
-.cc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}.sr{display:flex;align-items:flex-end;justify-content:center;gap:18px}
-.sl{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:100px;font:inherit;color:#fff}.sl b{font-weight:400;font-size:20px}.sl em{font-style:normal;font-size:13px;opacity:.7}.sl em.ok{color:#7dff9e;opacity:1}
-.sl.add{background:rgba(255,255,255,.12);border:3px dashed rgba(255,255,255,.4);border-radius:20px;height:112px;justify-content:center}.sl.add span{font-size:40px;line-height:1}.sl.add small{font-size:13px}
-.sw{width:64px;height:32px;border-radius:20px;border:0;background:#556;position:relative;padding:0}.sw s{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:.2s}.sw.on{background:#2fd16b}.sw.on s{left:35px}
-.tg{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}.tg .code{width:100%;font-size:28px;letter-spacing:5px;margin:2px 0 0;text-align:center;padding:4px}
-.fa{display:flex;gap:6px;margin-bottom:6px}.fa button{font:inherit;font-size:20px;color:#fff;background:#2fd16b;border:0;border-radius:12px;padding:0 12px}
-#fl{overflow-y:auto;max-height:270px;display:flex;flex-direction:column;gap:5px}.fr{display:flex;align-items:center;gap:6px;background:rgba(27,42,107,.4);border-radius:12px;padding:5px 8px;font-size:17px}.fr[data-n]{cursor:pointer}.fr>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fr i{width:10px;height:10px;border-radius:50%;background:#777;flex:none}.fr i.on{background:#3dff7a;box-shadow:0 0 6px #3dff7a}.fr button{font:inherit;font-size:15px;color:#fff;background:#2b8cff;border:0;border-radius:8px;padding:2px 8px}.fr button.x{background:#c2415a}.fr.inv{background:rgba(255,210,63,.3)}#fl .em{font-size:15px;opacity:.7;text-align:center}
 #ft{position:fixed;z-index:99;display:none;background:#1b2a6b;color:#fff;border:2px solid rgba(255,255,255,.45);border-radius:14px;padding:8px 12px;font-size:15px;line-height:1.5;text-align:left;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ft b{display:block;font-weight:400;font-size:18px}
-/* additions: tabs, invite popup, stable button row */
-.tabs{display:flex;gap:6px;margin-bottom:6px}.tab{flex:1;font:inherit;font-size:15px;color:#fff;background:rgba(27,42,107,.4);border:2px solid transparent;border-radius:12px;padding:4px 2px;white-space:nowrap}.tab.on{background:#2b8cff;border-color:#fff}.tab em{font-style:normal;font-size:13px}
-#nl{overflow-y:auto;max-height:270px;display:flex;flex-direction:column;gap:5px}#nl .em{font-size:15px;opacity:.7;text-align:center}#nl .fr>span{white-space:normal;line-height:1.15}
-.cc .row{min-height:80px}
 #im{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:rgba(27,42,107,.7)}#im .card{width:min(330px,92vw);max-height:92vh;overflow:auto;box-sizing:border-box;background:#2b3a8f;display:flex;flex-direction:column;gap:8px;align-items:center}#im .il{width:100%;max-height:min(50vh,260px);overflow-y:auto;display:flex;flex-direction:column;gap:5px}
-/* end screen + elimination banner */
-.endc{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 40px 22px;border-radius:30px;background:linear-gradient(rgba(43,60,150,.85),rgba(27,42,107,.85));border:4px solid #fff;box-shadow:0 8px 0 rgba(0,0,0,.25);animation:endpop .55s cubic-bezier(.2,1.4,.4,1)}
-.endc.win{border-color:#ffd23f;box-shadow:0 0 0 4px rgba(255,210,63,.25),0 0 46px rgba(255,210,63,.55)}
-.endk{font-size:18px;letter-spacing:4px;opacity:.85}.endc.win .endk{color:#ffd23f;opacity:1}
-.endt{font-size:min(11vh,56px);line-height:1.05;-webkit-text-stroke:3px #1b2a6b;paint-order:stroke fill;max-width:80vw;overflow-wrap:anywhere}
-.endc .bl.big{animation:endbob 1.2s ease-in-out infinite}
 .cfw{position:absolute;inset:0;overflow:hidden;pointer-events:none}.cf{position:absolute;top:-16px;width:10px;height:15px;border-radius:2px;animation:cff linear forwards}
 @keyframes endpop{from{opacity:0;transform:scale(.6) translateY(30px)}to{opacity:1;transform:none}}@keyframes endbob{50%{transform:translateY(-8px)}}@keyframes cff{to{transform:translateY(110vh) rotate(720deg)}}
 .elim{position:fixed;top:22%;left:50%;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;white-space:nowrap;pointer-events:none;padding:8px 24px;border-radius:40px;background:linear-gradient(#ff4d6d,#c2184a);border:3px solid #fff;box-shadow:0 6px 0 #7a0f30,0 12px 30px rgba(0,0,0,.35);font-size:min(6vh,30px);-webkit-text-stroke:2px #7a0f30;paint-order:stroke fill;animation:elin .35s cubic-bezier(.2,1.5,.4,1),elout .3s 2.3s forwards}
 .elim.me{font-size:min(9vh,46px);padding:12px 36px}
 @keyframes elin{from{opacity:0;transform:translate(-50%,-30px) scale(.6)}to{opacity:1;transform:translate(-50%,0)}}@keyframes elout{to{opacity:0;transform:translate(-50%,-12px)}}
-#ov{background:rgba(14,18,48,.8)}
-.b{background:#ff2d7a;border-radius:16px;font-size:26px;box-shadow:0 4px 0 #b0124f;transition:transform .12s,filter .12s}.b:hover{filter:brightness(1.07)}.b:active{transform:translateY(3px);box-shadow:0 1px 0 #b0124f}
-.b.alt{background:#3b82f6;box-shadow:0 4px 0 #1e4fa8}
-.b.go2{background:#22c55e;box-shadow:0 4px 0 #15803d}
-.card{background:#222d6e;border:1px solid rgba(255,255,255,.14);border-radius:20px;box-shadow:0 12px 30px rgba(0,0,0,.3)}
-.cap{color:rgba(255,255,255,.65);opacity:1;letter-spacing:3px}
-.mb{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:12px;box-shadow:none}.mb.on{background:var(--c);border-color:transparent}
-.tab{border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12)}.tab.on{background:#fff;color:#1b2a6b}
-.fr,.tbb{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);box-shadow:none}
-input{border-radius:12px;border:0}
 #timer:empty{display:none}
 #timer{background:rgba(14,18,48,.5);width:max-content;margin:0 auto;padding:4px 20px 0;border-radius:0 0 20px 20px}
+:root{--k:1;--line:rgba(255,255,255,.13);--cy:#29d3ff}
+#ov{font-family:'Nunito','Lilita One',system-ui,sans-serif;font-weight:800;gap:0;padding:0;overflow:hidden;text-align:left}
+#ov:not(.bg){background:rgba(8,10,34,.74)}
+#ov.bg{background:radial-gradient(900px 520px at 12% 8%,rgba(80,60,230,.55),transparent 60%),radial-gradient(800px 500px at 92% 95%,rgba(255,45,122,.38),transparent 60%),linear-gradient(160deg,#0a1030,#151a52 55%,#23126b)}
+#ov.bg::before{content:'';position:fixed;inset:-60px;z-index:-1;background-image:radial-gradient(rgba(255,255,255,.09) 2px,transparent 2.6px);background-size:46px 46px;animation:drift 24s linear infinite;pointer-events:none}
+@keyframes drift{to{transform:translate(46px,46px)}}@keyframes wt{50%{opacity:.25}}@keyframes pop2{from{opacity:0;transform:scale(.85)}}@keyframes bob{50%{transform:translateY(-6px)}}@keyframes flt{50%{transform:translateY(-18px) rotate(4deg)}}@keyframes glw{50%{box-shadow:0 0 18px rgba(255,210,63,.6)}}@keyframes rp{from{transform:scale(.4);opacity:.9}to{transform:scale(1.3);opacity:0}}@keyframes fin{from{opacity:0}}@keyframes pop{from{opacity:0;transform:scale(calc(var(--k)*.85))}}@keyframes trl{from{opacity:1;transform:translate(0,0)}to{opacity:0;transform:translate(calc(var(--s)*-.5),calc(var(--s)*-.2)) scale(.5)}}
+body.inm #mute,body.inm #leave{display:none!important}
+#toast{z-index:150}#ft{font-family:'Nunito',sans-serif;font-weight:800;background:#151a52}
+#board{background:rgba(10,14,50,.45);padding:8px 10px;border-radius:14px}#board:empty{display:none}
+.ib{background:rgba(10,14,50,.5)!important;border:1px solid rgba(255,255,255,.18)!important}
+#lobw{position:relative;flex:none;transform-origin:center;text-align:left;font-size:16px;color:#fff}
+.lt{font-family:'Lilita One',Impact,sans-serif;font-weight:400}
+.xb{font:400 20px 'Lilita One',Impact,sans-serif;color:#fff;border:0;border-radius:14px;padding:10px 20px;cursor:pointer;background:linear-gradient(#ff5a9a,#ff2d7a);box-shadow:0 4px 0 #a80f4c,0 8px 18px rgba(255,45,122,.3);transition:transform .12s,filter .12s;white-space:nowrap}
+.xb:hover{filter:brightness(1.1);transform:translateY(-1px)}.xb:active{transform:translateY(3px);box-shadow:0 1px 0 #a80f4c}
+.xb.g{background:linear-gradient(#4be486,#22c55e);box-shadow:0 4px 0 #15803d,0 8px 18px rgba(34,197,94,.3)}.xb.g:active{box-shadow:0 1px 0 #15803d}
+.xb.b{background:linear-gradient(#5aa8ff,#3b82f6);box-shadow:0 4px 0 #1e4fa8,0 8px 18px rgba(59,130,246,.3)}.xb.b:active{box-shadow:0 1px 0 #1e4fa8}
+.xb.d{background:rgba(255,255,255,.09);box-shadow:none;border:1px solid var(--line)}.xb.d:active{transform:none}
+.xb.big{font-size:32px;padding:12px 54px;border-radius:20px}.xb.sm{font-size:13px;padding:4px 10px;border-radius:9px;box-shadow:0 2px 0 #15803d}
+.xb[disabled]{opacity:.45;filter:grayscale(.5);pointer-events:none}
+.xc{background:rgba(20,26,78,.78);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.28);padding:14px}
+.xi{display:flex;align-items:center;gap:10px;background:rgba(8,10,40,.55);border:1.5px solid var(--line);border-radius:14px;padding:0 14px;height:52px;transition:.15s;width:100%}
+.xi:focus-within{border-color:var(--cy);box-shadow:0 0 0 4px rgba(41,211,255,.18)}
+.xi input{all:unset;flex:1;min-width:0;color:#fff;font:800 18px 'Nunito',sans-serif;-webkit-user-select:text;user-select:text}.xi input::placeholder{color:rgba(255,255,255,.4)}
+.stm{font-size:13px;opacity:.8;text-align:center;min-height:18px}
+.hd2{font-size:11px;letter-spacing:2px;opacity:.6;margin:2px 2px 6px}
+.pill{display:flex;align-items:center;gap:6px;height:38px;padding:0 12px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid var(--line);font:400 18px 'Lilita One'}.pill b{font-weight:400}
+.ico{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;font-size:18px;position:relative;cursor:pointer}.ico:hover{background:rgba(255,255,255,.17)}
+.dotn{position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;background:#ff3b5c;border:2px solid #151a52}
+.xp{height:8px;border-radius:9px;background:rgba(255,255,255,.14);overflow:hidden}.xp i{display:block;height:100%;background:linear-gradient(90deg,#29d3ff,#3dff7a);border-radius:9px;transition:width .9s cubic-bezier(.2,.9,.3,1)}
+.lv{min-width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font:400 20px 'Lilita One';background:linear-gradient(#ffd23f,#ff9f1c);color:#4a2b00;box-shadow:0 0 0 4px rgba(255,210,63,.25)}
+.hdr{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:12px;height:48px}.ttl{font:400 28px 'Lilita One';flex:1}
+#hm{position:absolute;inset:0;display:grid;grid-template-columns:224px minmax(0,1fr) 262px;grid-template-rows:56px minmax(0,1fr);gap:12px}
+.tp{grid-column:1/4;display:flex;align-items:center;gap:10px}.me{display:flex;align-items:center;gap:12px;flex:1;min-width:0}.me .nm{font:400 22px 'Lilita One';line-height:1}.me small{display:block;font-size:12px;opacity:.7}
+.lcol,.cn{display:flex;flex-direction:column;gap:10px;min-height:0}.cn{gap:8px}
+#mds{display:flex;flex-direction:column;gap:6px}
+.md{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:14px;border:1.5px solid transparent;background:rgba(255,255,255,.06);color:#fff;font:inherit;text-align:left;cursor:pointer;transition:.15s;position:relative}
+.md:hover{background:rgba(255,255,255,.12)}.md.on{border-color:#fff;background:linear-gradient(100deg,var(--c),rgba(255,255,255,.05));box-shadow:0 0 18px -2px var(--c)}
+.md .mi{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:20px;background:linear-gradient(135deg,var(--c),rgba(0,0,0,.35));flex:none}
+.md b{display:block;font:400 17px 'Lilita One'}.md small{font-size:11.5px;opacity:.75}.md.soon{opacity:.5}.md:disabled{opacity:.65;cursor:default}
+.tagx{margin-left:auto;font-style:normal;font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:99px;background:rgba(255,255,255,.16)}
+.ps{flex:1;position:relative;border-radius:24px;border:1px solid var(--line);overflow:hidden;background:radial-gradient(280px 200px at 50% 78%,rgba(255,255,255,.2),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.2));display:flex;align-items:flex-end;justify-content:center;gap:14px;padding:0 12px 24px}
+.ps::after{content:'';position:absolute;left:10%;right:10%;bottom:14px;height:46px;border-radius:50%;background:radial-gradient(closest-side,rgba(41,211,255,.38),transparent)}
+.sl2{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:104px;font:inherit;color:#fff;background:none;border:0;cursor:default}.sl2.me2{transform:translateY(-4px)}
+.nmx{font:400 18px 'Lilita One';max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl2 em{font-style:normal;font-size:12px;padding:2px 10px;border-radius:99px;background:rgba(255,255,255,.14)}.sl2 em.ok{background:#1fa95a}
+.sl2.add{cursor:pointer}.plus{width:80px;height:80px;border-radius:50%;border:2.5px dashed rgba(255,255,255,.35);display:grid;place-items:center;font-size:36px;transition:.15s;margin-bottom:8px}.sl2.add:hover .plus{border-color:#fff;background:rgba(255,255,255,.12);transform:scale(1.07)}
+.cb{position:absolute!important;top:10px;right:10px;z-index:2;font-size:15px!important;padding:6px 12px!important}
+.chipx{position:absolute;left:10px;top:10px;z-index:2;padding:5px 11px;border-radius:99px;background:rgba(0,0,0,.3);border:1px solid var(--line);color:#fff;font:800 12px 'Nunito';letter-spacing:1px;cursor:pointer}.chipx b{font:400 14px 'Lilita One';letter-spacing:2px;color:#ffd23f}
+.pr{display:flex;gap:10px;align-items:center;justify-content:center;min-height:50px}
+.rc{display:flex;flex-direction:column;min-height:0;padding:10px}.tbs{display:flex;gap:6px;margin-bottom:8px}
+.tbx{flex:1;height:36px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;font-size:16px;position:relative;cursor:pointer}.tbx.on{background:#fff;color:#151a52}
+.tbx em{position:absolute;top:-6px;right:-4px;font-style:normal;font-size:10px;background:#ff3b5c;color:#fff;border-radius:99px;padding:1px 5px}.tbx em:empty{display:none}
+.pn{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;touch-action:pan-y}.pn::-webkit-scrollbar{width:4px}.pn::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:9px}
+#p0{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}.fa{display:flex;gap:6px}.fa .xi{height:38px;border-radius:11px;padding:0 10px}.fa .xi input{font-size:15px}
+.fr{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:15px}.fr[data-n]{cursor:pointer}.fr>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr i{width:9px;height:9px;border-radius:50%;background:#6b7194;flex:none}.fr i.on{background:#3dff7a;box-shadow:0 0 8px #3dff7a}
+.fr button{font:400 14px 'Lilita One';color:#fff;background:#2b8cff;border:0;border-radius:9px;padding:4px 9px;cursor:pointer}.fr button.x{background:#c2415a}.fr.inv{background:rgba(255,210,63,.16);border-color:rgba(255,210,63,.4)}
+.av{width:28px;height:28px;border-radius:9px;background:var(--c);display:grid;place-items:center;color:#10123a;font:400 15px 'Lilita One';flex:none}
+.em{font-size:14px;opacity:.65;text-align:center;padding:16px 4px;line-height:1.4}
+.qs{padding:9px 10px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:14px}.qs .xp{margin:7px 0 5px}.qs .rw{display:flex;align-items:center;justify-content:space-between;font-size:12px;opacity:.9}
+.sg{display:flex;background:rgba(0,0,0,.28);border-radius:14px;padding:4px;gap:4px;width:100%;flex:none}.sg button{flex:1;height:34px;border:0;border-radius:11px;background:none;color:#fff;font:400 15px 'Lilita One';opacity:.6;cursor:pointer;transition:.15s}.sg button.on{background:#fff;color:#151a52;opacity:1}
+.lb{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:11px;background:rgba(255,255,255,.05);font-size:14px}.lb .rk{width:24px;text-align:center;font:400 15px 'Lilita One'}.lb b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lb .sc{font:400 15px 'Lilita One';color:#ffd23f}.lb.me3{background:rgba(41,211,255,.16);border:1px solid var(--cy)}
+.mp{position:relative;border-radius:16px;overflow:hidden;border:2px solid var(--line);background:#0c1236;cursor:pointer;transition:.18s;padding:0;color:#fff;font:inherit;text-align:left;display:block}.mp:hover{transform:translateY(-3px)}
+.mp.on{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25),0 12px 30px rgba(0,0,0,.45)}.mp.ro{cursor:default}.mp.ro:hover{transform:none}
+.mp canvas{position:static;display:block;width:100%;height:auto;aspect-ratio:1600/836}.mp .mt{padding:8px 10px}.mp b{font:400 18px 'Lilita One';display:block}.mp small{font-size:12px;opacity:.7}
+.mp .ck{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:#3dff7a;color:#043;display:grid;place-items:center;font-size:15px;transform:scale(0);transition:.2s}.mp.on .ck{transform:scale(1)}
+.mg2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mg2 .mp small{display:none}.mg2 .mt{padding:5px 9px}.mg2 .mp b{font-size:15px}
+.mrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.mrow .md{padding:6px;gap:6px}.mrow .md b{font-size:13px}.mrow .mi{width:28px;height:28px;font-size:16px}
+.ch{position:relative;width:calc(var(--s)*.92);height:var(--s);flex:none}.ch u{position:absolute;display:block;text-decoration:none}
+.ch .bd{position:absolute;left:0;right:0;top:12%;bottom:7%;background:var(--b);border-radius:30%;box-shadow:inset 0 calc(var(--s)*-.06) 0 rgba(0,0,0,.25)}
+.ch .er{top:-17%;width:30%;height:28%;background:var(--b);clip-path:polygon(0 100%,35% 0,100% 100%)}.ch .er.l{left:8%}.ch .er.r{right:8%;transform:scaleX(-1)}
+.ch .bn{left:0;right:0;top:20%;height:17%;background:var(--c)}.ch .ar{top:22%;width:32%;height:34%;background:var(--c);border-radius:22%;left:-12%;box-shadow:0 0 0 calc(var(--s)*.02) var(--b)}
+.ch .ey{top:42%;width:23%;height:25%;background:#fff;border-radius:50%;display:grid;place-items:center;overflow:hidden}.ch .ey.l{left:20%}.ch .ey.r{right:20%}.ch .ey b{width:48%;height:52%;background:#111;border-radius:50%;margin-left:30%}
+.ch .ey.hr{background:none;color:#ff3b6b;font-size:calc(var(--s)*.26);line-height:1}
+.ch .ft{bottom:0;width:30%;height:9%;background:#0a2c3a;border-radius:40%}.ch .ft.l{left:16%}.ch .ft.r{right:16%}
+.ch .ho{position:absolute;left:50%;top:-30%;transform:translateX(-50%) rotate(-6deg);font-size:calc(var(--s)*.5);line-height:1;z-index:3}
+.ch .sh{position:absolute;left:50%;top:36%;transform:translateX(-50%);font-size:calc(var(--s)*.5);line-height:1;z-index:2}
+.ch .hp{position:absolute;left:0;right:0;top:42%;text-align:center;font-family:'Lilita One';font-size:calc(var(--s)*.26);line-height:1;color:#fff;letter-spacing:.1em}
+.ch .tr{position:absolute;right:80%;bottom:12%;pointer-events:none;text-decoration:none}.ch .tr u{font-size:calc(var(--s)*.26);line-height:1;right:0;bottom:0;opacity:0;animation:trl 1.4s linear infinite}.ch .tr u:nth-child(2){animation-delay:.45s}.ch .tr u:nth-child(3){animation-delay:.9s}
+.ch.lv2{animation:bob 2.6s ease-in-out infinite}
+.cpv{display:flex;align-items:center;justify-content:center;flex-direction:column;background:radial-gradient(260px 220px at 50% 60%,rgba(255,255,255,.2),transparent 70%),rgba(20,26,78,.78)}#cpv{display:flex;flex-direction:column;align-items:center;padding-top:30px}
+.cts{display:flex;gap:6px}.cgr{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow-y:auto;touch-action:pan-y;align-content:start;flex:1}
+.it{position:relative;border-radius:14px;border:2px solid var(--line);background:rgba(255,255,255,.06);height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#fff;font:inherit;cursor:pointer;transition:.15s}.it:hover{background:rgba(255,255,255,.13)}.it.on{border-color:#3dff7a;background:rgba(61,255,122,.13)}
+.it .sw{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:3px solid rgba(255,255,255,.7)}.it small{font-size:13px}.pr2{font:400 14px 'Lilita One';color:#ffd23f}.eqd{position:absolute;top:6px;right:8px;color:#3dff7a}
+.pc{display:flex;align-items:center;gap:10px;padding:5px 10px 5px 8px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid var(--line);font-size:15px;min-width:0}.pc.me3{border-color:var(--cy)}.pc span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pc em{font-style:normal;opacity:.6}.pc em.ok{color:#3dff7a;opacity:1}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;flex:1;overflow-y:auto}
+.abrow2{display:flex;gap:8px}.abx{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;border-radius:14px;border:2px solid var(--line);background:rgba(255,255,255,.06);color:#fff;font:inherit;cursor:pointer;flex:1;transition:.15s}.abx.sel{border-color:#fff;background:linear-gradient(rgba(255,90,154,.35),rgba(255,45,122,.12))}
+.abx span{font-size:26px;line-height:1.1}.abx b{font:400 15px 'Lilita One'}.abx small{font-size:11px;opacity:.7;text-align:center;line-height:1.2}.ks{display:flex;gap:6px;justify-content:center;font-size:11.5px;margin-top:8px;flex-wrap:wrap}.ks span{padding:3px 9px;border-radius:99px;background:rgba(255,255,255,.1)}
+.rad{position:relative;width:130px;height:130px;display:grid;place-items:center;margin:8px auto}.rad::before,.rad::after{content:'';position:absolute;inset:0;border-radius:50%;border:3px solid var(--cy);animation:rp 2s ease-out infinite}.rad::after{animation-delay:1s}.rad b{font:400 50px 'Lilita One'}.rad small{font-size:20px;opacity:.6}
+.sgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.ms{height:104px;border-radius:16px;background:rgba(255,255,255,.05);border:1.5px dashed rgba(255,255,255,.2);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:8px;font-size:12px;gap:6px;overflow:hidden}
+.ms.f{border:1.5px solid var(--line);background:rgba(255,255,255,.1);animation:pop2 .3s}.ms.f span{max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ms.e::before{content:'';width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.4);animation:wt 1s infinite;margin-bottom:38px}
+.lgn{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.logo{font:400 128px/.9 'Lilita One';background:linear-gradient(#fff,#bde6ff 55%,#7cc4ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 0 #1b2a6b) drop-shadow(0 16px 24px rgba(0,0,0,.4))}
+.fl2{position:absolute;animation:flt 5s ease-in-out infinite}
+#mod{position:fixed;inset:0;z-index:130;display:flex;align-items:center;justify-content:center;background:rgba(6,8,30,.74);font-family:'Nunito',sans-serif;font-weight:800;color:#fff;animation:fin .2s}.mbx{transform:scale(var(--k));animation:pop .28s cubic-bezier(.2,1.4,.4,1)}
+#im{font-family:'Nunito',sans-serif;font-weight:800;color:#fff;background:rgba(6,8,30,.74)}#im .mbx{animation:pop .28s}
+.dg{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.dy{border-radius:14px;padding:10px 2px;text-align:center;background:rgba(255,255,255,.06);border:1.5px solid var(--line);font-size:12px}.dy b{display:block;font:400 18px 'Lilita One';margin:4px 0}.dy.dn{opacity:.45}.dy.td{border-color:#ffd23f;background:rgba(255,210,63,.16);animation:glw 1.4s infinite}
+.kc{display:inline-block;min-width:28px;padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.14);border-bottom:3px solid rgba(0,0,0,.3);text-align:center;font-size:13px;margin-right:4px}
+.res{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;animation:pop2 .45s cubic-bezier(.2,1.4,.4,1)}.res.win{border-color:#ffd23f;box-shadow:0 0 0 4px rgba(255,210,63,.2),0 0 60px rgba(255,210,63,.4)}
+.vk{letter-spacing:5px;font-size:15px;opacity:.8}.res.win .vk{color:#ffd23f;opacity:1}.vt{font:400 38px/1.05 'Lilita One'}.rwd{display:flex;gap:10px}.rwd div{padding:6px 14px;border-radius:99px;background:rgba(255,255,255,.1);font:400 18px 'Lilita One'}
+
+.md span{min-width:0;overflow:hidden}.md small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.mp{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="toast"></div>
@@ -205,7 +221,7 @@ const S={mode:'menu',gm:0,rn:0,rs:-1,st:'lobby',bt:null,ov:null,rm:null,practice
 ME.alive=true;ME.ci=0;
 let cam={x:800,y:418,z:.6};
 const AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* AR: the glide of the arrow between heads */
-const ovShow=h=>{const im=document.getElementById('im');im&&im.remove();ov.innerHTML=h;ov.classList.remove('off','fit');ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)},ovHide=()=>{ov.classList.add('off');const im=document.getElementById('im');im&&im.remove()};
+/* ovShow/ovHide: see UI layer */
 function elimBanner(me,n){const e=document.createElement('div');e.className='elim'+(me?' me':'');e.innerHTML=me?'💀 YOU\'RE OUT!':'💀 <b style="font-weight:400">'+esc(n||'Someone')+'</b> is out';document.body.appendChild(e);setTimeout(()=>e.remove(),2700)}
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
@@ -226,9 +242,6 @@ function setSt(m){if(!AUTH)return;AUTH.st={p:m.p,w:m.w,l:m.l};saveAuth();const e
 function setAuth(d){AUTH={u:d.u,tk:d.tk,st:d.st};saveAuth();name=d.u}
 function logout(msg){try{localStorage.removeItem('tagauth')}catch(e){}AUTH=null;SOC={f:[],rq:[],inv:[]};seen=null;socSig='';try{PT&&PT.ws.close()}catch(e){}PT=null;try{WARM&&WARM.close()}catch(e){}WARM=null;loginScreen(msg)}
 const post=b=>fetch(AURL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
-function loginScreen(msg){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(13vh,68px)">TAG</h1><div class="card lg"><div class="bls">${[3,1,4].map(k=>`<div class="bl" style="--c:${COLS[k]}"><i></i><i></i></div>`).join('')}</div><input id="lu" maxlength="12" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" onkeydown="if(event.key=='Enter')$('lp').focus()"><input id="lp" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key=='Enter')doAuth('login')"><div class="row"><button class="b go2" style="font-size:24px;padding:10px 28px;min-width:0" onclick="doAuth('login')">Login</button><button class="b alt" style="font-size:24px;padding:10px 28px;min-width:0" onclick="doAuth('reg')">Sign up</button></div></div><p id="msg">${esc(msg||'Sign up once - you stay logged in on this device and your stats are saved.')}</p></div>`);
- ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 async function doAuth(m){const u=$('lu').value.trim(),p=$('lp').value,g=$('msg');
  if(!/^[A-Za-z0-9_]{3,12}$/.test(u))return g.textContent='Username: 3-12 letters, numbers or _';
  if(p.length<4)return g.textContent='Password must be at least 4 characters.';
@@ -257,40 +270,16 @@ function autoParty(){if(PT||!AUTH||S.mode!='menu'||S.joining||!$('hm')||Date.now
 function soloGo(){pSend({t:'prdy',v:1});pSend({t:'pstart'})}
 function practice(){S.pr=1;enter(1)}
 setInterval(autoParty,3000);
-function tab(i){TAB=i;const a=$('p0'),b=$('nl'),t0=$('t0'),t1=$('t1');if(!a)return;a.style.display=i?'none':'';b.style.display=i?'':'none';t0.classList.toggle('on',!i);t1.classList.toggle('on',!!i)}
 function openFriends(a){tab(0);if(a&&!PT)autoParty();if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{const f=$('fa');f&&f.focus()},60)}
 async function fInv(n){if(!PT){autoParty();for(let i=0;i<40&&!(PT&&PT.st);i++)await new Promise(r=>setTimeout(r,150));if(!(PT&&PT.st))return}fAct('inv',n)}
 function invList(){const m=$('im');if(!m)return;const on=SOC.f.filter(f=>f.on);m.querySelector('.il').innerHTML=on.length?on.map(f=>`<div class="fr"><i class="on"></i><span>${esc(f.n)}</span><button onclick="fAct('inv','${esc(f.n)}',code)">📨 Invite</button></div>`).join(''):'<p class="em">No friends online.<br>Add friends from the main menu.</p>'}
-function invModal(){let m=$('im');if(m){clearInterval(IM_T);return m.remove()}m=document.createElement('div');m.id='im';m.innerHTML='<div class="card"><div class="cap">INVITE FRIENDS</div><div class="il"></div><button class="b alt sm" onclick="invModal()">Close</button></div>';document.body.appendChild(m);invList();socPoll('');IM_T=setInterval(()=>$('im')?socPoll(''):clearInterval(IM_T),4000)}
-function privMenu(){S.pr=0;const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">🔒 PRIVATE ROOM</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:300px"><button class="b go2" style="font-size:26px;padding:12px 24px;width:100%;min-width:0" onclick="enter(1)">＋ Create room</button><div class="cap" style="margin:0">OR JOIN WITH A CODE</div><div class="row" style="flex-wrap:nowrap"><input id="cd" maxlength="5" placeholder="Code" value="${q?q[1].toUpperCase():''}" style="width:130px;text-transform:uppercase"><button class="b alt sm" onclick="enter(0)">Join</button></div></div><p id="msg" style="margin:0;min-height:24px">Create a room and invite friends, or join with a code.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 
-function fRender(){invList();const e=$('fl');if(!e)return;const d=SOC,k=d.rq.length+d.inv.length;$('fb').textContent=k?'🔴'+k:'';
- $('nl').innerHTML=d.inv.map(i=>`<div class="fr inv"><span>📨 <b>${esc(i.n)}</b> invited you to ${i.r?'a private room':'a party'}</span><button onclick="joinInv('${esc(i.c)}','${esc(i.n)}',${i.r?1:0})">Join</button><button class="x" onclick="fAct('idis','${esc(i.n)}')">✖</button></div>`).join('')+d.rq.map(n=>`<div class="fr inv"><span>👋 <b>${esc(n)}</b> sent a friend request</span><button onclick="fAct('acc','${esc(n)}')">✔</button><button class="x" onclick="fAct('dec','${esc(n)}')">✖</button></div>`).join('')||'<p class="em">No notifications</p>';
- e.innerHTML=d.f.length?d.f.map(f=>`<div class="fr" data-n="${esc(f.n)}" data-s="${f.p},${f.w},${f.l}"><i class="${f.on?'on':''}"></i><span>${esc(f.n)}</span>${f.on?`<button onclick="fInv('${esc(f.n)}')">📨</button>`:''}<button class="x" onclick="fRm('${esc(f.n)}',this)">✖</button></div>`).join(''):'<p class="em">No friends yet.<br>Add someone by username!</p>'}
 function ftShow(r){const[p,w,l]=r.dataset.s.split(',').map(Number);ft.innerHTML=`<b>${r.dataset.n}</b>${r.querySelector('i').className?'🟢 Online':'⚫ Offline'}<br>🎮 ${p} played<br>🏆 ${w} won · 💀 ${l} lost<br>📈 ${p?Math.round(w/p*100):0}% win rate`;const b=r.getBoundingClientRect();ft.style.display='block';ft.style.top=Math.max(4,Math.min(innerHeight-ft.offsetHeight-4,b.top+b.height/2-ft.offsetHeight/2))+'px';ft.style.left=Math.max(4,b.left-ft.offsetWidth-8)+'px'}
 document.addEventListener('mouseover',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r?ftShow(r):ft.style.display='none'});
 document.addEventListener('click',e=>{const r=e.target.closest&&e.target.closest('.fr[data-n]');r&&!e.target.closest('button')?ftShow(r):ft.style.display='none'});
 setInterval(()=>{if(AUTH&&S.mode=='menu'&&!document.hidden){socPoll('');try{WARM&&WARM.readyState==1&&WARM.send('{"t":"hb"}')}catch(e){}}},6000);
 function setMode(i){if(PT&&PT.st){if(PT.st.lead===PT.st.you)pSend({t:'pmode',m:i})}else{S.pm=i;homeRender()}}
-function howTo(){ovShow(`<div id="lobw"><div class="card" style="max-width:540px;text-align:left;font-size:17px;line-height:1.55"><div class="cap">HOW TO PLAY</div>🎯 Touch a player to pass them the arrow. When the timer hits 0 the holder is out.<br>🦠 Infection: infected players spread it by touch.<br>❄ Freeze Tag: freezers freeze runners; touch frozen friends to free them.<br>🕹 Move ◀ ▶ (arrows/A/D), jump ▲, ⚡ Shift = dash, E = ability.<br>👥 Party: turn it on, invite friends, everyone readies up, the leader starts.</div><button class="b alt sm" onclick="menu()">← Back</button></div>`);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;if(!PT)warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';ft.style.display='none';HM=msg||'';homeRender();socPoll('');autoParty()}
-function homeRender(){
- const fav=$('fa')?$('fa').value:'',q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i),st=PT&&PT.st,md=st?st.md:(S.pm|0),lead=!st||st.lead===st.you,me=(st&&st.mem.find(x=>x.id===st.you))||{},all=st&&st.mem.every(x=>x.rd),oth=st?st.mem.filter(x=>x.id!==st.you):[];
- const slot=i=>oth[i]?`<div class="sl"><div class="bl" style="--c:${COLS[hc(oth[i].nm)]}"><i></i><i></i></div><b>${esc(oth[i].nm)}${oth[i].id===st.lead?' ★':''}</b><em class="${oth[i].rd?'ok':''}">${oth[i].rd?'✔ Ready':'Not ready'}</em></div>`:`<button class="sl add" onclick="openFriends(1)"><span>＋</span><small>Invite</small></button>`;
- ovShow(`<div id="lobw"><div id="hm"><div class="tb"><div class="pn">👤 ${esc(AUTH.u)}</div><div id="stl" class="stp">${stTxt()}</div><button class="tbb" onclick="howTo()">❓ How to play</button><button class="tbb" onclick="logout()">⎋ Log out</button></div>
-<div class="hb"><div class="lc"><div class="card"><div class="cap" style="margin:0">MODE${st&&!lead?' (leader picks)':''}</div>${MODES.map((m,i)=>`<button class="mb${i==md?' on':''}" style="--c:${m[2]}" ${lead?'':'disabled'} onclick="setMode(${i})">${m[0]} ${m[1]}</button>`).join('')}</div>
-<div class="card"><button class="b alt sm" style="width:100%" onclick="privMenu()">🔒 Private Room</button></div>
-<div class="card"><button class="b alt sm" style="width:100%" onclick="practice()">🎯 Practice</button></div></div>
-<div class="cc"><div class="sr">${slot(0)}<div class="sl"><div class="bl big" style="--c:${COLS[hc(AUTH.u)]}"><i></i><i></i></div><b>${esc(AUTH.u)}${st&&st.lead===st.you?' ★':''}</b></div>${slot(1)}</div>
-<div class="row">${!st?`<button class="b go2" style="font-size:26px;padding:12px 36px;opacity:.5" disabled>Connecting…</button>`:!oth.length?`<button class="b go2" style="font-size:32px;padding:14px 60px" onclick="soloGo()">▶ PLAY</button>`:`<button class="b sm${me.rd?' go2':' alt'}" style="font-size:22px;padding:10px 20px;min-width:130px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="b go2" style="font-size:26px;padding:12px 30px${all?'':';opacity:.5'}" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<p>Waiting for the leader…</p>')}</div></div>
-<div class="card fp"><div class="tabs"><button id="t0" class="tab${TAB?'':' on'}" onclick="tab(0)">👥 Friends</button><button id="t1" class="tab${TAB?' on':''}" onclick="tab(1)">🔔 Alerts <em id="fb"></em></button></div><div id="p0" style="${TAB?'display:none':''}"><div class="fa"><input id="fa" maxlength="12" placeholder="Add friend" value="${esc(fav)}" autocapitalize="off" onkeydown="if(event.key=='Enter')fAdd()"><button onclick="fAdd()">＋</button></div><div id="fl"></div></div><div id="nl" style="${TAB?'':'display:none'}"></div></div></div>
-<p id="msg">${esc(HM)||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out.'}</p></div></div>`);
- ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fRender();if(q&&!S.qo){S.qo=1;privMenu()}}
-function modeMenu(){
- const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
- const M=[['🏃','CLASSIC','Whoever holds the arrow when time runs out is out. Last one wins.','#ff2d7a'],['🦠','INFECTION','Touch to spread it. Last healthy player wins.','#2fb85f'],['❄','FREEZE TAG','Freezers freeze runners. Survive 100 seconds.','#2b8cff']];
- ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">CHOOSE YOUR MODE</div><div id="mg">${M.map((m,i)=>`<button class="mc" style="--c:${m[3]}" onclick="enterPublic(${i})"><span class="mi">${m[0]}</span><b>${m[1]}</b><small>${m[2]}</small></button>`).join('')}</div><p id="msg"></p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
- ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);fetchStats()}
 async function enter(host){if(S.joining)return;if(PT)dropParty();S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
 function playAgain(){const md=(S.md|0);S.pm=md;try{if(PT&&PT.st&&PT.st.lead===PT.st.you)pSend({t:'pmode',m:md})}catch(e){}leaveRoom();enterPublic(md)}
@@ -333,14 +322,10 @@ function finishJoin(o,WS_URL){
  const h=o.hello;myId=h.id;
  room={ws:o.ws,id:h.id,tk:h.tk,rk:h.rk,url:WS_URL,left:0,rx:Date.now(),resuming:0};
  code=h.code||'';resetMatch();S.pub=h.pub?1:0;S.mode='lobby';$('leave').style.display='block';
- let sv='';try{sv=localStorage.getItem('tagab')||''}catch(e){}MYAB=AB[sv]?sv:(AB[h.ab]?h.ab:'fake');netSend({t:'ab',k:MYAB});   /* remembered ability choice */
+ let sv='';try{sv=localStorage.getItem('tagab')||''}catch(e){}MYAB=AB[sv]?sv:(AB[h.ab]?h.ab:'fake');netSend({t:'ab',k:MYAB});if(S.pmap>0)netSend({t:'map',m:S.pmap});   /* remembered ability choice */
  if(S.rm)applyRoom(S.rm)}
 /* ---------- party (play public lobbies with friends) ---------- */
 let PT=null;const PMN=['Classic','Infection','Freeze Tag'];
-function partyMenu(){
- const n=$('nm');if(n){const v=n.value.trim().slice(0,12);if(v){name=v;try{localStorage.setItem('tagname',v)}catch(e){}}}
- ovShow(`<div id="lobw"><div class="cap" style="font-size:22px">👥 PLAY WITH FRIENDS</div><div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><button class="b go2" onclick="partyGo('pcreate')">＋ Create party</button><div class="row"><input id="pc" maxlength="5" placeholder="Party code" style="width:150px;text-transform:uppercase"><button class="b alt sm" onclick="partyGo('pjoin')">Join</button></div></div><p id="msg">Up to 3 players. The leader shares the code, everyone readies up, the leader starts.</p><button class="b alt sm" onclick="menu()">← Back</button></div>`);
- ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby)}
 function partyEnd(msg){const P=PT;PT=null;if(P)try{P.ws.close()}catch(e){}menu(msg||'')}
 function partyGo(kind,ca){
  if(PT)return;
@@ -380,37 +365,9 @@ addEventListener('pagehide',e=>{if(e.persisted)return;try{if(room){room.left=1;n
 /* coming back to a tab (phones often kill sockets in the background): reconnect at once instead of waiting for a watchdog */
 document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
 function leaveRoom(msg){if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
-function fitLobby(){const w=$('lobw');if(!w)return;w.style.transform='none';const k=Math.min(1.4,(innerHeight-24)/w.offsetHeight,(innerWidth-24)/w.offsetWidth);w.style.transform=Math.abs(k-1)>.01?'scale('+k+')':'none'}
 addEventListener('resize',()=>setTimeout(fitLobby,60));
-function lobbyUI(f){
- if(S.pub)return pubUI(f);
- const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)+(p.presence.rd||0)).join()+isHost+S.md+'/'+(S.sl|0);
- if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
- const list=`<div class="cap">PLAYERS ${peers.length}/10</div>${peers.map(p=>`<div class="chip"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}${p.isMe?' (you)':''}${p.presence.rd?' ✔':''}</div>`).join('')}`;
- const mn=MN[S.md|0],mpn=['Random','Classic','Ice','Desert'][S.sl|0];
- const me=peers.find(p=>p.isMe)||{presence:{}},allR=peers.every(p=>p.presence.rd),nR=peers.filter(p=>p.presence.rd).length,rb=`<button class="b sm" style="margin-top:6px" onclick="netSend({t:'ready',v:${me.presence.rd?0:1}})">${me.presence.rd?'✔ Ready (tap to undo)':'Ready'}</button>`;
- const act=(S.pr&&isHost)?`<div class="opt"><b>MODE</b><button onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">${mn} ↻</button></div><div class="opt"><b>MAP</b><button onclick="netSend({t:'map',m:${((S.sl|0)+1)%4}})">${mpn} ↻</button></div><button class="b go" onclick="netSend({t:'start'})">▶ Start (with 4 bots)</button>`:isHost?`<div class="opt"><b>MODE</b><button onclick="netSend({t:'mode',m:${((S.md|0)+1)%3}})">${mn} ↻</button></div><div class="opt"><b>MAP</b><button onclick="netSend({t:'map',m:${((S.sl|0)+1)%4}})">${mpn} ↻</button></div>${rb}<button class="b go" ${peers.length<MINP[S.md|0]||!allR?'disabled style="opacity:.5"':''} onclick="hostStart()">${peers.length<MINP[S.md|0]?'Need '+MINP[S.md|0]+' players ('+peers.length+'/'+MINP[S.md|0]+')':!allR?'Waiting for ready ('+nR+'/'+peers.length+')':peers.length<2?'▶ Solo practice':'▶ Start game'}</button>`:`<div class="opt"><b>MODE</b><span>${mn}</span></div><div class="opt"><b>MAP</b><span>${mpn}</span></div>${rb}<div class="cap" style="text-align:center;margin:4px 0 0">${allR?'Waiting for the host to start…':'Waiting for everyone to be ready ('+nR+'/'+peers.length+')'}</div>`;
- if($('lob')&&S.lobCode===code){$('pl').innerHTML=list;$('act').innerHTML=act;fitLobby();return}
- S.lobCode=code;
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="lob"><div class="card"${S.pr?' style="display:none"':''}><div class="cap">ROOM CODE</div><div class="code">${esc(code)}</div><div id="qrw"><div id="qr"></div></div><button class="b alt sm" style="margin-top:8px" onclick="invModal()">📨 Invite friends</button></div><div class="card"${S.pr?' style="display:none"':''}><div id="pl">${list}</div></div><div class="card"><div class="cap">GAME</div><div id="act">${act}</div></div></div><div id="abw" style="width:100%">${abHTML()}</div><p id="lobp"${S.pr?' style="display:none"':''}>Friends join with the code, or by scanning the QR.</p><button class="b alt sm" onclick="leaveRoom()">← Back</button></div>`);
- ov.classList.add('fit');ov.style.opacity='0';ov.style.transition='opacity .15s';
- const drawQR=()=>{const q=$('qr');if(!q||q.firstChild)return 1;if(!window.QRCode)return 0;try{const tmp=document.createElement('div');new QRCode(tmp,{text:BASE+'?room='+code,width:104,height:104});const c=tmp.querySelector('canvas');if(c){const im=new Image(104,104);im.src=c.toDataURL('image/png');im.style.cssText='display:block;width:104px;height:104px';q.appendChild(im);return 1}}catch(e){}return 0};
- if(!drawQR())setTimeout(()=>{if(!drawQR()){const w=$('qrw');if(w){w.style.display='none';fitLobby()}}},1800);
- const shown=()=>{fitLobby();requestAnimationFrame(()=>requestAnimationFrame(()=>{if($('lobw'))ov.style.opacity='1'}))};
- fitLobby();setTimeout(shown,400);
- if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(shown,60))}
 
 /* ---------- public lobby ---------- */
-function pubUI(f){
- const ps=peers.slice(),n=ps.length,full=n>=PUB_SIZE;
- const sig=ps.map(p=>p.peer+(p.presence.nm||'')+(p.presence.ci||0)).join()+S.md,live=!ov.classList.contains('off')&&$('pubw');
- if(!f&&live&&S.psig===sig)return;S.psig=sig;
- if(S.lastN!=null&&n>S.lastN)snd(660,.09,'square',.04,200);S.lastN=n;
- let sl='';for(let i=0;i<PUB_SIZE;i++){const p=ps[i];sl+=p?`<div class="slot"><span class="dot" style="background:${COLS[p.presence.ci||0]}"></span>${esc(p.presence.nm||'Player')}${p.isMe?' (you)':''}</div>`:'<div class="slot e"><span class="dot"></span>Searching…</div>'}
- const head=['🏃 CLASSIC','🦠 INFECTION','❄ FREEZE TAG'][S.md|0]+'<br>'+(full?'Match found!':'Finding players…')+' <span style="opacity:.8">'+n+'/'+PUB_SIZE+'</span>';
- if(live&&!f){$('pcnt').innerHTML=head;$('pslots').innerHTML=sl;const c=$('pcd');if(c&&!full)c.textContent='Waiting for more players…';fitLobby();return}
- ovShow(`<div id="lobw"><h1 id="lobh" style="font-size:min(11vh,60px)">TAG</h1><div id="pubw"><div id="pcnt">${head}</div><div id="pslots">${sl}</div><div id="pcd">${full?'Starting…':'Waiting for more players…'}</div></div><div id="abw">${abHTML()}</div><button class="b alt sm" onclick="leaveRoom()">Cancel</button></div>`);
- ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(fitLobby,30))}
 /* public lobby: the SERVER starts the match 3 s after the room fills; this only shows the countdown */
 function lobbyTick(){
  if(!room)return;
@@ -452,7 +409,7 @@ function applyRoom(m){
  }else if(m.st=='over'){
   if(S.ov!==m.gm+':'+m.rn){S.ov=m.gm+':'+m.rn;S.mode='over';document.body.classList.remove('pl');
    const mine=m.win==myId,w=mine?name:(m.wn||'');jingle(mine);
-   ovShow(`${mine?Array.from({length:40},()=>`<i class="cf" style="left:${Math.random()*100}%;background:${['#ffd23f','#ff2d7a','#2b8cff','#3dff7a','#fff'][Math.random()*5|0]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*1.2}s"></i>`).join('').replace(/^/,'<div class="cfw">')+'</div>':''}<div class="endc${mine?' win':''}"><div class="endk">${mine?'🏆 VICTORY':'GAME OVER'}</div>${!m.wt&&w?`<div class="bl big" style="--c:${COLS[hc(w)]}"><i></i><i></i></div>`:`<div style="font-size:64px;line-height:1">${m.wt==1?'❄':m.wt?'🏃':'🏁'}</div>`}<div class="endt">${m.wt?(m.wt==1?'❄ Freezers win!':'🏃 Runners win!'):w?esc(w)+(mine?', you win!':' wins!'):'Game over'}</div></div>${S.pub?'<button class="b" onclick="playAgain()">Play again</button>':(isHost?'<button class="b" onclick="toLobby()">Back to lobby</button>':'<p>Waiting for the host…</p>')}<button class="b alt" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>`)}
+   endScr(m,mine,w)}
  }else if(m.st=='lobby'&&S.mode!='lobby'&&S.mode!='menu')toLobbyView();
  if(S.mode=='lobby')lobbyUI();
  board()}
@@ -549,7 +506,6 @@ function clearFx(){CRS.length=0;SX=SOL;FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];F
 function slowLv(){return(ME.lv||0)-(performance.now()-(ME.lvAt||0))/1000>0?1:0}
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
-function abHTML(){return`<div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px"><div class="cap" style="margin:0">YOUR ABILITY</div><div class="abrow">${Object.keys(AB).map(k=>`<button class="abp${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span>${AB[k].n}</button>`).join('')}</div><div class="abd">${AB[MYAB].d} · ${AB_CD}s cooldown</div><div class="keys"><span>⚡ Shift · Dash (${DASH_CD}s)</span><span>${AB[MYAB].i} E · Ability</span><span>✊ Q · Grab players &amp; crates</span></div></div>`}
 function pickAb(k){if(!AB[k]||S.mode!='lobby')return;MYAB=k;try{localStorage.setItem('tagab',k)}catch(e){}netSend({t:'ab',k});snd(660,.07,'square',.04,120);const w=$('abw');if(w){w.innerHTML=abHTML();fitLobby()}}
 function hudUpd(){const dc=Math.max(0,ME.dcd||0),ac=Math.max(0,(ME.ac||0)-(performance.now()-(ME.acAt||0))/1000),gc=Math.max(0,(ME.gc||0)-(performance.now()-(ME.gcAt||0))/1000),sig=Math.ceil(dc)+'|'+Math.ceil(ac)+'|'+Math.ceil(gc)+'|'+(ME.gs||0)+'|'+MYAB;if(sig===lastHud)return;lastHud=sig;
  const set=(b,c)=>{b.classList.toggle('cool',c>0);b.querySelector('.cdn').textContent=c>0?Math.ceil(c):''};set($('hd'),dc);set($('ha'),ac);set($('hg'),gc);$('hg').classList.toggle('act',!!ME.gs);$('ha').querySelector('.ic').textContent=AB[MYAB].i}
@@ -859,9 +815,131 @@ function draw(){
  if(S.mode=='play'&&cd>0){cx.setTransform(DPR,0,0,DPR,0,0);cx.font='bold '+Math.round(60+(cd%.6)*60)+'px "Lilita One",Impact';cx.textAlign='center';cx.strokeStyle='#1b2a6b';cx.lineWidth=6;cx.lineJoin='round';cx.fillStyle='#fff';const t=cd>.4?String(Math.ceil((cd-.4)/.6)):'GO!';cx.strokeText(t,W/2,H*.42);cx.fillText(t,W/2,H*.42)}
 }
 /* back: phone/browser back button and Esc step back one screen */
-function goBack(){if($('im'))return invModal();if(S.mode=='menu'){if(AUTH&&!$('hm'))menu();return}if(S.mode=='play'||S.mode=='over'){if(room&&confirm('Leave the game?'))leaveRoom();return}if(room)leaveRoom()}
+function goBack(){if($('mod'))return mclose();if($('im'))return invModal();if(S.mode=='menu'){if(AUTH&&!$('hm'))menu();return}if(S.mode=='play'||S.mode=='over'){if(room&&confirm('Leave the game?'))leaveRoom();return}if(room)leaveRoom()}
 try{history.replaceState({t:1},'');history.pushState({t:2},'')}catch(e){}
 addEventListener('popstate',()=>{try{history.pushState({t:2},'')}catch(e){}goBack()});
 addEventListener('keydown',e=>{if(e.key=='Escape')goBack()});
+/* ===================== UI LAYER (redesigned screens; game engine untouched) ===================== */
+const MODES2=[['🏃','Classic','Hold it & you\'re out','#ff2d7a'],['🦠','Infection','Spread it by touch','#2fb85f'],['❄','Freeze Tag','Freeze & rescue','#2b8cff']],SOON=[['🥔','Hot Potato','#ff9f1c'],['⚔','Team Battle','#a45cff']];
+const MAPN=[['Random','Surprise me'],['Neon Park','Classic · 2 pads · 2 ziplines'],['Frozen Peaks','Slopes · 2 pads · 1 zipline'],['Desert Ruins','Tall ruins · 1 pad · 2 ziplines']];
+const MAPD=[0,{p:[[22,304,133],[191,384,99],[48,451,100],[334,451,210],[22,536,358],[323,626,227],[106,707,183],[572,354,209],[764,277,209],[606,451,365],[538,536,482],[837,586,203],[956,354,332],[1154,284,201],[1455,399,73],[1161,512,273],[1148,622,195],[1046,712,446],[22,800,1548]],d:[[1524,800],[417,451]],z:[[170,473,844,167],[1181,457,1505,289]]},
+{p:[[435,408,380],[1203,325,196],[887,487,176],[171,547,468],[22,659,167],[605,653,198],[366,721,224],[73,409,137,-138],[946,716,336,-265],[1250,583,256,-222],[22,800,1548]],d:[[284,547],[1518,800]],z:[[350,691,1273,177]]},
+{p:[[628,238,230],[1357,277,192],[83,367,119],[1138,388,285],[106,518,423],[977,507,237],[22,620,81],[1180,618,279],[66,715,131],[1372,725,198],[465,300,260,200],[805,500,260,-200],[22,800,1548]],d:[[743,800]],z:[[136,247,663,114],[781,107,1456,211]]}],
+MT=[0,['#3d97f7','#5ccdf5','#ff2d7a','#39d353'],['#aab0ff','#8a92f2','#b4baff','#eef0ff'],['#19ffb0','#fba58a','#f4b04a','#ffd878']];
+function drawThumb(c,i){const x=c.getContext('2d'),W=c.width,H=c.height,k=W/1600,j=i||1,D=MAPD[j],T=MT[j],g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,T[0]);g.addColorStop(1,T[1]);x.fillStyle=g;x.fillRect(0,0,W,H);
+ x.fillStyle='rgba(255,255,255,.35)';[[300,150],[900,110],[1350,200]].forEach(a=>{x.beginPath();x.ellipse(a[0]*k,a[1]*k,70*k,24*k,0,0,7);x.fill()});
+ x.lineCap='round';for(const z of D.z){x.strokeStyle='#1b2a6b';x.lineWidth=8*k;x.beginPath();x.moveTo(z[0]*k,z[1]*k);x.lineTo(z[2]*k,z[3]*k);x.stroke();x.strokeStyle='#ffd23f';x.lineWidth=4*k;x.stroke()}
+ for(const q of D.p){const a=q[0],b=q[1],w=q[2],d=q[3]||0,h=b==800?36:14;x.fillStyle=T[2];x.beginPath();x.moveTo(a*k,b*k);x.lineTo((a+w)*k,(b+d)*k);x.lineTo((a+w)*k,(b+d+h)*k);x.lineTo(a*k,(b+h)*k);x.fill();x.strokeStyle=T[3];x.lineWidth=7*k;x.beginPath();x.moveTo(a*k,b*k);x.lineTo((a+w)*k,(b+d)*k);x.stroke()}
+ x.fillStyle='#ffe14d';for(const p of D.d)x.fillRect(p[0]*k,(p[1]-14)*k,44*k,14*k);
+ if(!i){x.fillStyle='rgba(10,14,50,.62)';x.fillRect(0,0,W,H);x.fillStyle='#fff';x.font=Math.round(H*.7)+"px 'Lilita One',Impact";x.textAlign='center';x.fillText('?',W/2,H*.74)}}
+function thumbs(){document.querySelectorAll('canvas[data-m]').forEach(c=>{try{drawThumb(c,+c.dataset.m)}catch(e){}})}
+const mapCard=(i,sel,oc,ro)=>`<button class="mp${i==sel?' on':''}${ro?' ro':''}" ${ro?'':'onclick="'+oc+'"'}><canvas data-m="${i}" width="480" height="251"></canvas><div class="ck">✔</div><div class="mt"><b>${MAPN[i][0]}</b><small>${MAPN[i][1]}</small></div></button>`;
+
+/* dummy progression data (stored locally; wire to the server later) */
+const dk=d=>d.toISOString().slice(0,10),DAY=864e5,need=l=>100+(l-1)*40;
+let M=(()=>{let m=null;try{m=JSON.parse(localStorage.getItem('tagmeta')||'null')}catch(e){}return Object.assign({tok:1250,gem:35,xp:340,streak:3,last:dk(new Date(Date.now()-DAY)),own:{},eq:{sk:0,ac:0,hat:0,fc:0,tr:0},q:[{k:'play',t:'Play 3 matches',p:2,n:3,r:90,x:60},{k:'win',t:'Win a match',p:0,n:1,r:150,x:100},{k:'tag',t:'Tag 10 players',p:6,n:10,r:120,x:80},{k:'play',t:'Play 1 match with a friend',p:1,n:1,r:60,x:40}]},m||{})})();
+const msave=()=>{try{localStorage.setItem('tagmeta',JSON.stringify(M))}catch(e){}};
+function lvOf(x){let l=1;while(x>=need(l)){x-=need(l);l++}return{l,x,n:need(l)}}
+const CAT={sk:['Skin',[['Midnight','#0d3a4b',0],['Slate','#2b3350',0],['Crimson','#7a1230',200],['Forest','#0f4d2e',200],['Royal','#3a22a8',350],['Gold','#a8841a',800]]],
+ ac:['Accent',[['Auto',0,0]].concat(['Blue','Red','Gold','Violet','Mint','Orange','Pink','Cyan','Lime'].map((n,i)=>[n,COLS[i],i<3?0:150]))],
+ hat:['Hat',[['None','',0],['Cap','🧢',0],['Grad','🎓',250],['Top Hat','🎩',300],['Helmet','⛑️',350],['Crown','👑',900]]],
+ fc:['Face',[['Classic','',0],['Shades','🕶️',150],['Hearts','❤',200],['Happy','^',0]]],
+ tr:['Trail',[['None','',0],['Sparkle','✨',250],['Fire','🔥',400],['Bubble','🫧',300],['Rainbow','🌈',700]]]};
+const myLook=()=>({c:CAT.ac[1][M.eq.ac][1]||COLS[hc(AUTH?AUTH.u:'x')],sk:CAT.sk[1][M.eq.sk][1],hat:CAT.hat[1][M.eq.hat][1],fc:M.eq.fc,tr:CAT.tr[1][M.eq.tr][1]}),look=n=>({c:COLS[hc(n)]});
+function chH(o,s,live){const f=o.fc|0,e=f==2?'<u class="ey l hr">❤</u><u class="ey r hr">❤</u>':f==3?'<span class="hp">^ ^</span>':'<u class="ey l"><b></b></u><u class="ey r"><b></b></u>';
+ return`<div class="ch${live?' lv2':''}" style="--s:${s}px;--c:${o.c};--b:${o.sk||'#0d3a4b'}"><s class="tr">${o.tr?'<u>'+o.tr+'</u><u>'+o.tr+'</u><u>'+o.tr+'</u>':''}</s>${o.hat?'<div class="ho">'+o.hat+'</div>':''}<div class="bd"><u class="er l"></u><u class="er r"></u><u class="bn"></u><u class="ar"></u>${e}${f==1?'<span class="sh">🕶️</span>':''}</div><u class="ft l"></u><u class="ft r"></u></div>`}
+
+/* overlay + scaling: every screen is a fixed-size stage scaled to fit any device */
+function ovShow(h,full){const im=$('im');im&&im.remove();mclose();ov.innerHTML=h;ov.classList.remove('off','fit');ov.classList.toggle('bg',!!full);document.body.classList.toggle('inm',!!full);ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)}
+function ovHide(){ov.classList.add('off');document.body.classList.remove('inm');const im=$('im');im&&im.remove();mclose()}
+function fitLobby(){const w=$('lobw');if(!w)return;const dw=+w.dataset.w,dh=+w.dataset.h,k=Math.min((innerWidth-10)/dw,(innerHeight-10)/dh,1.7);w.style.transform='scale('+k.toFixed(3)+')';document.documentElement.style.setProperty('--k',Math.min(k,1.3).toFixed(3))}
+function scr(inner,w,h,full){ovShow('<div id="lobw" data-w="'+w+'" data-h="'+h+'" style="width:'+w+'px;height:'+h+'px">'+inner+'</div>',full);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);thumbs()}
+function modal(h,w){mclose();const m=document.createElement('div');m.id='mod';m.innerHTML='<div class="mbx" style="width:'+(w||560)+'px">'+h+'</div>';m.addEventListener('click',e=>{if(e.target===m)mclose()});document.body.appendChild(m)}
+function mclose(){const m=$('mod');m&&m.remove()}
+const copyCode=c=>{try{navigator.clipboard.writeText(c);toast('Code copied 📋',1200)}catch(e){}};
+
+/* ---------- login ---------- */
+let AM='login';
+function setAM(m){AM=m;$('sl').classList.toggle('on',m=='login');$('sr').classList.toggle('on',m=='reg');$('lgb').textContent=m=='login'?'Login':'Create account';$('lp').autocomplete=m=='login'?'current-password':'new-password'}
+function loginScreen(msg){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';AM='login';
+ const F=[[3,40,70,92,0],[1,820,60,100,1.1],[4,110,330,84,.6],[0,830,330,108,1.7],[5,330,430,70,2.3],[2,640,420,76,.9]];
+ scr(`${F.map(f=>`<div class="fl2" style="left:${f[1]}px;top:${f[2]}px;animation-delay:${f[4]}s;opacity:.85">${chH({c:COLS[f[0]]},f[3],0)}</div>`).join('')}<div class="lgn"><div class="logo">TAG</div><div class="xc" style="width:380px;padding:20px;display:flex;flex-direction:column;gap:12px"><div class="sg"><button id="sl" class="on" onclick="setAM('login')">Login</button><button id="sr" onclick="setAM('reg')">Sign up</button></div><div class="xi"><span>👤</span><input id="lu" maxlength="12" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" onkeydown="if(event.key=='Enter')$('lp').focus()"></div><div class="xi"><span>🔒</span><input id="lp" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key=='Enter')doAuth(AM)"></div><button id="lgb" class="xb g" style="font-size:24px;padding:12px" onclick="doAuth(AM)">Login</button><div id="msg" class="stm">${esc(msg||'Sign up once - you stay logged in and your stats are saved.')}</div></div></div>`,1000,560,1)}
+
+/* ---------- home ---------- */
+const qH=()=>M.q.map((q,i)=>`<div class="qs"><div>${q.t}</div><div class="xp"><i style="width:${Math.min(100,q.p/q.n*100)}%"></i></div><div class="rw"><span>${q.p}/${q.n} · 🪙${q.r} · ⭐${q.x}</span>${q.d?'<span>✔ Claimed</span>':`<button class="xb g sm" ${q.p>=q.n?'':'disabled'} onclick="qClaim(${i})">Claim</button>`}</div></div>`).join('');
+function qClaim(i){const q=M.q[i];if(q.d||q.p<q.n)return;q.d=1;M.tok+=q.r;M.xp+=q.x;msave();toast('+'+q.r+' 🪙  +'+q.x+' XP',1600);const e=$('p2');e&&(e.innerHTML=qH());const t=$('tp');t&&AUTH&&(t.innerHTML=topH())}
+let LBT=2;const LBN=['NovaRush','PixelFox','ZenTagger','Blitz','Mochi','Vortex','LunaX','Sprout','Kito','Rune'];
+function lbH(){const f=[.12,.5,1][LBT],rows=LBN.map((n,i)=>[n,Math.round((52000-i*4300)*f)]);rows.push([AUTH.u,Math.round((M.xp*9+AUTH.st.w*400)*f),1]);rows.sort((a,b)=>b[1]-a[1]);
+ return`<div class="sg">${['Daily','Weekly','All-time'].map((t,i)=>`<button class="${i==LBT?'on':''}" onclick="LBT=${i};$('p3').innerHTML=lbH()">${t}</button>`).join('')}</div>`+rows.map((r,i)=>`<div class="lb${r[2]?' me3':''}"><span class="rk">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><b>${esc(r[0])}</b><span class="sc">${r[1].toLocaleString()}</span></div>`).join('')}
+const topH=()=>{const L=lvOf(M.xp),can=M.last!==dk(new Date());return`<div class="me"><div class="lv">${L.l}</div><div style="min-width:0"><div class="nm">${esc(AUTH.u)}</div><div class="xp" title="${L.x}/${L.n} XP" style="width:180px;margin:5px 0 3px"><i style="width:${(L.x/L.n*100).toFixed(1)}%"></i></div><small id="stl">${stTxt()}</small></div></div><div class="pill" title="Daily streak">🔥 <b>${M.streak}</b></div><div class="pill">🪙 <b>${M.tok.toLocaleString()}</b></div><div class="pill">💎 <b>${M.gem}</b></div><button class="ico" onclick="dailyModal()">🎁${can?'<span class="dotn"></span>':''}</button><button class="ico" onclick="howTo()">❓</button><button class="ico" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">${MUTE?'🔇':'🔊'}</button><button class="ico" onclick="logout()">⎋</button>`};
+function homeParts(){const st=PT&&PT.st,md=st?st.md:(S.pm|0),lead=!st||st.lead===st.you,me=(st&&st.mem.find(x=>x.id===st.you))||{},all=st&&st.mem.every(x=>x.rd),oth=st?st.mem.filter(x=>x.id!==st.you):[],L=lvOf(M.xp);
+ const slot=i=>oth[i]?`<div class="sl2">${chH(look(oth[i].nm),98,1)}<div class="nmx">${esc(oth[i].nm)}${oth[i].id===st.lead?' ★':''}</div><em class="${oth[i].rd?'ok':''}">${oth[i].rd?'✔ Ready':'Not ready'}</em></div>`:`<button class="sl2 add" onclick="openFriends(1)"><div class="plus">＋</div><div class="nmx" style="opacity:.6;font-size:15px">Invite</div></button>`;
+ const act=!st?'<button class="xb g big" disabled>Connecting…</button>':!oth.length?'<button class="xb g big" onclick="soloGo()">▶ PLAY</button>':`<button class="xb ${me.rd?'g':'b'}" style="min-width:130px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="xb g big" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<div class="stm" style="font-size:16px">Waiting for the leader…</div>');
+ return{top:topH(),modes:MODES2.map((m,i)=>`<button class="md${i==md?' on':''}" style="--c:${m[3]}" ${lead?'':'disabled'} onclick="setMode(${i})"><div class="mi">${m[0]}</div><span><b>${m[1]}</b><small>${m[2]}</small></span></button>`).join('')+SOON.map(m=>`<button class="md soon" style="--c:${m[2]}" onclick="toast('Coming soon 🚧')"><div class="mi">${m[0]}</div><span><b>${m[1]}</b><small>Coming soon</small></span><i class="tagx">SOON</i></button>`).join(''),
+ cs:`<div class="ps">${st?`<button class="chipx" onclick="copyCode('${st.code}')">PARTY <b>${st.code}</b> ⧉</button>`:''}${slot(0)}<div class="sl2 me2">${chH(myLook(),128,1)}<div class="nmx" style="font-size:22px">${esc(AUTH.u)}${st&&st.lead===st.you?' ★':''}</div><em class="${me.rd&&oth.length?'ok':''}">${oth.length?(me.rd?'✔ Ready':'Not ready'):'Level '+L.l}</em></div>${slot(1)}<button class="xb d cb" onclick="cosScreen()">🎨 Customize</button></div><div class="pr">${act}</div><div class="pr" style="min-height:44px"><button class="xb b" onclick="privMenu()">🔒 Private Room</button><button class="xb b" onclick="practice()">🎯 Practice</button></div><div id="msg" class="stm">${esc(HM)||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out.'}</div>`}}
+function homeRender(){const P=homeParts();
+ if($('hm')&&$('cs')&&!ov.classList.contains('off')){$('tp').innerHTML=P.top;$('mds').innerHTML=P.modes;$('cs').innerHTML=P.cs;return}
+ const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i),pm=S.pmap|0;
+ scr(`<div id="hm"><div class="tp" id="tp">${P.top}</div><div class="lcol"><div class="xc" style="padding:10px"><div class="hd2">GAME MODES</div><div id="mds">${P.modes}</div></div><button class="md" style="--c:#29d3ff;border:1px solid var(--line)" onclick="mapScreen()"><canvas data-m="${pm}" width="140" height="73" style="position:static;width:64px;height:auto;border-radius:8px;flex:none"></canvas><span><b>Map</b><small id="pmn">${MAPN[pm][0]}</small></span></button></div><div class="cn" id="cs">${P.cs}</div><div class="xc rc"><div class="tbs"><button id="t0" class="tbx" onclick="tab(0)">👥</button><button id="t1" class="tbx" onclick="tab(1)">🔔<em id="fb"></em></button><button id="t2" class="tbx" onclick="tab(2)">📜</button><button id="t3" class="tbx" onclick="tab(3)">🏆</button></div><div id="p0"><div class="fa"><div class="xi"><input id="fa" maxlength="12" placeholder="Add friend…" autocapitalize="off" onkeydown="if(event.key=='Enter')fAdd()"></div><button class="xb g" style="padding:0;width:38px;height:38px;border-radius:11px" onclick="fAdd()">＋</button></div><div id="fl" class="pn"></div></div><div id="nl" class="pn"></div><div id="p2" class="pn">${qH()}</div><div id="p3" class="pn">${lbH()}</div></div></div>`,1000,560,1);
+ fRender();tab(TAB);if(q&&!S.qo){S.qo=1;privMenu()}}
+function tab(i){TAB=i;['p0','nl','p2','p3'].forEach((id,k)=>{const e=$(id);if(e)e.style.display=k==i?'':'none'});for(let k=0;k<4;k++){const b=$('t'+k);b&&b.classList.toggle('on',k==i)}}
+function fRender(){invList();const e=$('fl');if(!e)return;const d=SOC,can=M.last!==dk(new Date()),k=d.rq.length+d.inv.length+(can?1:0);$('fb').textContent=k||'';
+ $('nl').innerHTML=(can?'<div class="fr inv"><span>🎁 Your daily reward is ready!</span><button onclick="dailyModal()">Open</button></div>':'')+d.inv.map(i=>`<div class="fr inv"><span>📨 <b>${esc(i.n)}</b> invited you to ${i.r?'a private room':'a party'}</span><button onclick="joinInv('${esc(i.c)}','${esc(i.n)}',${i.r?1:0})">Join</button><button class="x" onclick="fAct('idis','${esc(i.n)}')">✖</button></div>`).join('')+d.rq.map(n=>`<div class="fr inv"><span>👋 <b>${esc(n)}</b> sent a friend request</span><button onclick="fAct('acc','${esc(n)}')">✔</button><button class="x" onclick="fAct('dec','${esc(n)}')">✖</button></div>`).join('')||'<p class="em">No notifications</p>';
+ e.innerHTML=d.f.length?d.f.map(f=>`<div class="fr" data-n="${esc(f.n)}" data-s="${f.p},${f.w},${f.l}"><div class="av" style="--c:${COLS[hc(f.n)]}">${esc(f.n[0].toUpperCase())}</div><i class="${f.on?'on':''}"></i><span>${esc(f.n)}</span>${f.on?`<button onclick="fInv('${esc(f.n)}')">📨</button>`:''}<button class="x" onclick="fRm('${esc(f.n)}',this)">✖</button></div>`).join(''):'<p class="em">No friends yet.<br>Add someone by username!</p>'}
+function invModal(){let m=$('im');if(m){clearInterval(IM_T);return m.remove()}m=document.createElement('div');m.id='im';m.innerHTML='<div class="mbx xc" style="width:400px;padding:18px"><div class="lt" style="font-size:24px;margin-bottom:10px">📨 Invite friends</div><div class="il pn" style="max-height:260px"></div><button class="xb d" style="margin-top:12px;width:100%" onclick="invModal()">Close</button></div>';document.body.appendChild(m);invList();socPoll('');IM_T=setInterval(()=>$('im')?socPoll(''):clearInterval(IM_T),4000)}
+function dailyModal(){const can=M.last!==dk(new Date()),idx=M.streak%7,done=can?idx:(M.streak%7||(M.streak?7:0)),R=[50,75,100,150,200,300,500];
+ modal(`<div class="xc" style="padding:22px"><div class="lt" style="font-size:30px">🎁 Daily Rewards</div><div style="opacity:.7;margin:2px 0 16px">🔥 ${M.streak}-day streak · come back every day for bigger rewards</div><div class="dg">${R.map((r,i)=>`<div class="dy${i<done?' dn':''}${can&&i==idx?' td':''}">Day ${i+1}<b>${i==6?'💎':'🪙'}</b>${i==6?'25 + ':''}${r}</div>`).join('')}</div><div style="display:flex;gap:10px;margin-top:18px"><button class="xb d" style="flex:1" onclick="mclose()">Close</button><button class="xb g" style="flex:2" ${can?'':'disabled'} onclick="claimDaily()">${can?'Claim reward':'Come back tomorrow'}</button></div></div>`,600)}
+function claimDaily(){if(M.last===dk(new Date()))return;const R=[50,75,100,150,200,300,500],cont=M.last===dk(new Date(Date.now()-DAY)),i=cont?M.streak%7:0;M.streak=cont?M.streak+1:1;M.last=dk(new Date());M.tok+=R[i];if(i==6)M.gem+=25;msave();toast('+'+R[i]+' 🪙'+(i==6?'  +25 💎':''),1800);dailyModal();const t=$('tp');t&&(t.innerHTML=topH());fRender()}
+function howTo(){modal(`<div class="xc" style="padding:22px;display:flex;flex-direction:column;gap:12px"><div class="lt" style="font-size:30px">❓ How to play</div><div>🎯 Touch a player to pass them the arrow. When the timer hits 0, whoever holds it is out. Last one standing wins.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:15px"><div><span class="kc">A</span><span class="kc">D</span> Move</div><div><span class="kc">W</span><span class="kc">Space</span> Jump</div><div><span class="kc">Shift</span> Dash</div><div><span class="kc">E</span> Ability</div><div><span class="kc">Q</span> Grab players &amp; crates</div><div><span class="kc">◀ ▶ ▲</span> On-screen (mobile)</div></div><div style="font-size:15px;line-height:1.6;opacity:.9">🦠 <b>Infection</b> – infected players spread it by touch.<br>❄ <b>Freeze Tag</b> – freezers freeze runners; touch frozen friends to free them.<br>👥 <b>Party</b> – invite friends with ＋, everyone readies up, the leader starts.</div><button class="xb b" onclick="mclose()">Got it</button></div>`,600)}
+
+/* ---------- private room join / maps / cosmetics ---------- */
+function privMenu(){S.pr=0;const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
+ scr(`<button class="xb d" style="position:absolute;left:0;top:0" onclick="menu()">← Back</button><div style="position:absolute;inset:0;display:grid;place-items:center"><div class="xc" style="width:440px;padding:26px;display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center"><div style="font-size:46px">🔒</div><div class="lt" style="font-size:34px">Private Room</div><div style="opacity:.7">Create a room for your friends, or jump into one with a code.</div><button class="xb g big" style="width:100%;font-size:26px;padding:14px" onclick="enter(1)">＋ Create room</button><div style="opacity:.5;font-size:12px;letter-spacing:3px">OR</div><div style="display:flex;gap:8px;width:100%"><div class="xi"><input id="cd" maxlength="5" placeholder="ROOM CODE" value="${q?q[1].toUpperCase():''}" style="text-transform:uppercase;letter-spacing:4px;text-align:center"></div><button class="xb b" onclick="enter(0)">Join</button></div><div id="msg" class="stm"></div></div></div>`,1000,560,1)}
+try{S.pmap=+(localStorage.getItem('tagmap')||0)}catch(e){S.pmap=0}
+function mapSel(i){S.pmap=i;try{localStorage.setItem('tagmap',i)}catch(e){}document.querySelectorAll('#mapg .mp').forEach((b,k)=>b.classList.toggle('on',k==i))}
+function mapScreen(){scr(`<div class="hdr"><button class="xb d" onclick="menu()">← Back</button><div class="ttl">🗺 Select Map</div></div><div id="mapg" style="position:absolute;left:0;right:0;top:110px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">${[0,1,2,3].map(i=>mapCard(i,S.pmap|0,'mapSel('+i+')')).join('')}</div><div class="stm" style="position:absolute;left:0;right:0;bottom:84px;font-size:15px">Your pick is used for <b>Private Rooms</b> and <b>Practice</b>. Public matches pick a random map.</div><div style="position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center"><button class="xb g big" onclick="menu()">Confirm</button></div>`,1000,560,1)}
+let CT='hat';
+function cosScreen(){scr(`<div class="hdr"><button class="xb d" onclick="menu()">← Back</button><div class="ttl">🎨 Customize</div><div class="pill" id="cbal"></div></div><div style="position:absolute;left:0;right:0;top:60px;bottom:0;display:grid;grid-template-columns:360px 1fr;gap:14px"><div class="xc cpv"><div id="cpv"></div></div><div class="xc" style="display:flex;flex-direction:column;gap:12px"><div id="cts" class="cts"></div><div id="cgr" class="cgr"></div></div></div>`,1000,560,1);cosR()}
+function cosR(){$('cbal').innerHTML='🪙 <b>'+M.tok.toLocaleString()+'</b>';const L=lvOf(M.xp);
+ $('cpv').innerHTML=chH(myLook(),230,1)+`<div class="lt" style="font-size:30px;margin-top:22px">${esc(AUTH.u)}</div><div style="opacity:.7">Level ${L.l}</div>`;
+ $('cts').innerHTML=Object.keys(CAT).map(k=>`<button class="tbx${k==CT?' on':''}" style="font:400 15px 'Lilita One'" onclick="CT='${k}';cosR()">${CAT[k][0]}</button>`).join('');
+ $('cgr').innerHTML=CAT[CT][1].map((it,i)=>{const own=!it[2]||M.own[CT+i],eq=M.eq[CT]==i,v=it[1],sw=CT=='sk'||CT=='ac'?`<div class="sw" style="background:${v||'conic-gradient(#ff2d7a,#ffd23f,#3dff7a,#29d3ff,#a45cff,#ff2d7a)'}"></div>`:`<div class="sw" style="border:0;font-size:26px">${v||(CT=='fc'?'🙂':'∅')}</div>`;return`<button class="it${eq?' on':''}" onclick="cosPick('${CT}',${i})">${sw}<small>${it[0]}</small>${eq?'<span class="eqd">✔</span>':own?'':'<span class="pr2">🪙 '+it[2]+'</span>'}</button>`}).join('')}
+function cosPick(k,i){const it=CAT[k][1][i];if(it[2]&&!M.own[k+i]){if(M.tok<it[2])return toast('Not enough tokens 🪙');M.tok-=it[2];M.own[k+i]=1;toast('Unlocked '+it[0]+' ✨',1200)}M.eq[k]=i;msave();cosR()}
+
+/* ---------- rooms ---------- */
+function abHTML(){return`<div class="hd2">YOUR ABILITY</div><div class="abrow2">${Object.keys(AB).map(k=>`<button class="abx${k===MYAB?' sel':''}" onclick="pickAb('${k}')"><span>${AB[k].i}</span><b>${AB[k].n}</b><small>${AB[k].d}</small></button>`).join('')}</div><div class="ks"><span>⚡ Shift · Dash (${DASH_CD}s)</span><span>${AB[MYAB].i} E · Ability (${AB_CD}s)</span><span>✊ Q · Grab</span></div>`}
+function lobbyUI(f){
+ if(S.pub)return pubUI(f);
+ const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)+(p.presence.rd||0)).join()+isHost+S.md+'/'+(S.sl|0);
+ if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
+ const nd=MINP[S.md|0],me=peers.find(p=>p.isMe)||{presence:{}},allR=peers.every(p=>p.presence.rd),nR=peers.filter(p=>p.presence.rd).length,
+ rb=`<button class="xb ${me.presence.rd?'g':'b'}" onclick="netSend({t:'ready',v:${me.presence.rd?0:1}})">${me.presence.rd?'✔ Ready (tap to undo)':'Ready up'}</button>`;
+ let btns;if(S.pr&&isHost)btns='<button class="xb g big" style="font-size:24px;padding:12px" onclick="netSend({t:\'start\'})">▶ Start with 4 bots</button>';
+ else if(isHost){const dis=peers.length<nd||!allR;btns=rb+`<button class="xb g" ${dis?'disabled':''} onclick="hostStart()">${peers.length<nd?'Need '+nd+' players ('+peers.length+'/'+nd+')':!allR?'Waiting for ready ('+nR+'/'+peers.length+')':peers.length<2?'▶ Solo practice':'▶ Start game'}</button>`}
+ else btns=rb+`<div class="stm">${allR?'Waiting for the host to start…':'Waiting for everyone ('+nR+'/'+peers.length+')'}</div>`;
+ const plH=peers.map(p=>`<div class="pc${p.isMe?' me3':''}">${chH(p.isMe?Object.assign(myLook(),{c:COLS[p.presence.ci||0]}):{c:COLS[p.presence.ci||0]},40)}<span>${esc(p.presence.nm||'Player')}${p.presence.host==1?' ★':''}</span><em class="${p.presence.rd?'ok':''}">${p.presence.rd?'✔':'…'}</em></div>`).join('');
+ const rtH=`<div class="mrow">${MODES2.map((m,i)=>`<button class="md${i==(S.md|0)?' on':''}" style="--c:${m[3]}" ${isHost?'onclick="netSend({t:\'mode\',m:'+i+'})"':'disabled'}><div class="mi">${m[0]}</div><b>${m[1]}</b></button>`).join('')}</div><div class="hd2" style="margin-top:12px">MAP${isHost?'':' · HOST PICKS'}</div><div class="mg2">${[0,1,2,3].map(i=>mapCard(i,S.sl|0,"netSend({t:'map',m:"+i+"})",!isHost)).join('')}</div><div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">${btns}</div>`;
+ if($('lob')&&S.lobCode===code){$('lpl').innerHTML=plH;$('lrt').innerHTML=rtH;thumbs();return}
+ S.lobCode=code;
+ scr(`<div id="lob" class="hdr"><button class="xb d" onclick="leaveRoom()">← Back</button><div class="ttl">${S.pr?'🎯 Practice':'🔒 Private Room'}</div></div><div style="position:absolute;left:0;right:0;top:60px;bottom:0;display:grid;grid-template-columns:206px minmax(0,1fr) 400px;gap:12px"><div class="xc" style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">${S.pr?`<div class="hd2">PRACTICE</div>${chH(myLook(),120,1)}<div class="lt" style="font-size:20px">${esc(name)}</div><div class="stm">Play solo against 4 bots.<br>Pick a mode and a map →</div>`:`<div class="hd2">ROOM CODE</div><div class="lt" style="font-size:44px;letter-spacing:6px;line-height:1">${esc(code)}</div><button class="xb d" style="font-size:14px;padding:5px 12px" onclick="copyCode('${esc(code)}')">⧉ Copy</button><div id="qrw" style="width:116px;height:116px"><div id="qr"></div></div><button class="xb b" style="font-size:16px;padding:8px 14px" onclick="invModal()">📨 Invite friends</button><div class="stm">Friends join with the code or by scanning the QR.</div>`}</div><div style="display:flex;flex-direction:column;gap:12px;min-height:0"><div class="xc" style="flex:1;min-height:0;display:flex;flex-direction:column"><div class="hd2">PLAYERS ${S.pr?'':'· '+peers.length+'/10'}</div><div id="lpl" class="pg">${plH}</div></div><div id="abw" class="xc">${abHTML()}</div></div><div id="lrt" class="xc" style="overflow-y:auto;touch-action:pan-y">${rtH}</div></div>`,1000,560,1);
+ const drawQR=()=>{const q=$('qr');if(!q||q.firstChild)return 1;if(!window.QRCode)return 0;try{const t=document.createElement('div');new QRCode(t,{text:BASE+'?room='+code,width:104,height:104});const c=t.querySelector('canvas');if(c){const im=new Image(104,104);im.src=c.toDataURL('image/png');im.style.cssText='display:block;width:104px;height:104px';q.appendChild(im);return 1}}catch(e){}return 0};
+ if(!S.pr&&!drawQR())setTimeout(()=>{if(!drawQR()){const w=$('qrw');w&&(w.style.display='none')}},1800)}
+function pubUI(f){
+ const ps=peers.slice(),n=ps.length,full=n>=PUB_SIZE,sig=ps.map(p=>p.peer+(p.presence.nm||'')+(p.presence.ci||0)).join()+S.md,live=!ov.classList.contains('off')&&$('pubw');
+ if(!f&&live&&S.psig===sig)return;S.psig=sig;
+ if(S.lastN!=null&&n>S.lastN)snd(660,.09,'square',.04,200);S.lastN=n;
+ let sl='';for(let i=0;i<PUB_SIZE;i++){const p=ps[i];sl+=p?`<div class="ms f">${chH(p.isMe?Object.assign(myLook(),{c:COLS[p.presence.ci||0]}):{c:COLS[p.presence.ci||0]},52)}<span>${esc(p.presence.nm||'Player')}${p.isMe?' (you)':''}</span></div>`:'<div class="ms e"></div>'}
+ const mo=MODES2[S.md|0],cnt=`<b>${n}</b><small>/${PUB_SIZE}</small>`,hd=`<div class="mi">${mo[0]}</div><span><b>${mo[1]}</b><small>${full?'Match found!':'Finding players…'}</small></span>`;
+ if(live&&!f){$('pmd').innerHTML=hd;$('pgrid').innerHTML=sl;$('prad').innerHTML=cnt;const c=$('pcd');if(c&&!full)c.textContent='Waiting for more players…';return}
+ scr(`<div id="pubw" style="position:absolute;inset:0;display:grid;grid-template-columns:300px 1fr;gap:14px"><div class="xc" style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;justify-content:center"><div class="logo" style="font-size:64px">TAG</div><button id="pmd" class="md on" style="--c:${mo[3]};pointer-events:none;width:auto">${hd}</button><div id="prad" class="rad">${cnt}</div><div id="pcd" class="lt" style="font-size:22px;min-height:28px">${full?'Starting…':'Waiting for more players…'}</div><div class="stm">Whoever holds the arrow when the timer hits 0 is out.</div><button class="xb d" style="margin-top:6px" onclick="leaveRoom()">✕ Cancel</button></div><div style="display:flex;flex-direction:column;gap:12px;justify-content:center"><div class="xc"><div class="hd2">PLAYERS</div><div id="pgrid" class="sgrid">${sl}</div></div><div id="abw" class="xc">${abHTML()}</div></div></div>`,960,520,1)}
+
+/* ---------- end screen (with dummy rewards) ---------- */
+function endScr(m,mine,w){
+ const L0=lvOf(M.xp),gx=mine?90:35,gt=mine?150:45;M.xp+=gx;M.tok+=gt;M.q.forEach(q=>{if(q.d)return;if(q.k=='play')q.p=Math.min(q.n,q.p+1);if(q.k=='win'&&mine)q.p=Math.min(q.n,q.p+1)});msave();
+ const L1=lvOf(M.xp),up=L1.l>L0.l,tt=m.wt?(m.wt==1?'❄ Freezers win!':'🏃 Runners win!'):w?esc(w)+(mine?', you win!':' wins!'):'Game over',
+ cf=mine?'<div class="cfw">'+Array.from({length:40},()=>`<i class="cf" style="left:${Math.random()*100}%;background:${['#ffd23f','#ff2d7a','#2b8cff','#3dff7a','#fff'][Math.random()*5|0]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*1.2}s"></i>`).join('')+'</div>':'';
+ scr(`${cf}<div class="xc res${mine?' win':''}"><div class="vk">${mine?'🏆 VICTORY':'GAME OVER'}</div>${!m.wt&&w?chH(mine?myLook():look(w),118,1):`<div style="font-size:70px;line-height:1">${m.wt==1?'❄':m.wt?'🏃':'🏁'}</div>`}<div class="vt">${tt}</div><div class="rwd"><div>⭐ +${gx} XP</div><div>🪙 +${gt}</div></div><div style="width:300px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Level ${L1.l}</span><span>${L1.x}/${L1.n} XP</span></div><div class="xp"><i id="rxp" style="width:${up?0:(L0.x/L0.n*100).toFixed(1)}%"></i></div>${up?'<div class="lt" style="color:#ffd23f;margin-top:6px;font-size:20px">⬆ LEVEL UP!</div>':''}</div><div style="display:flex;gap:10px;margin-top:6px">${S.pub?'<button class="xb g" onclick="playAgain()">Play again</button>':(isHost?'<button class="xb g" onclick="toLobby()">Back to lobby</button>':'<div class="stm" style="align-self:center">Waiting for the host…</div>')}<button class="xb d" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button></div></div>`,640,470,0);
+ setTimeout(()=>{const e=$('rxp');e&&(e.style.width=(L1.x/L1.n*100).toFixed(1)+'%')},350)}
+
 buildWorld();boot();requestAnimationFrame(frame);
 </script></body></html>
