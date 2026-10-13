@@ -449,7 +449,7 @@ function bcastRoom(r) {
     rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf, sl: r.sel, first: r.first,
     loser: r.loser, ln: r.ln, win: r.win, wn: r.wn, wt: r.wt | 0,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
-    pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0, rd: p.rdy ? 1 : 0 }))
+    pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0, rd: p.rdy ? 1 : 0, cs: p.cs || '' }))
   }));
 }
 
@@ -1191,6 +1191,8 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    if (m.t === 'cos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { p.cs = m.v; bcastRoom(r); } return; }
+    if (m.t === 'emo') { const k = m.k | 0, tn = Date.now(); if (k >= 0 && k < 8 && tn - (p.emoAt || 0) > 1500) { p.emoAt = tn; bcast(r, JSON.stringify({ t: 'emo', o: p.id, k })); } return; }
     /* ---- ability choice: in the lobby (spectators waiting for the next match may pick too) ---- */
     if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 
