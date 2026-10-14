@@ -1036,9 +1036,10 @@ wss.on('connection', (ws, req) => {
 
   let r = null, p = null, cnt = 0, winStart = Date.now();
   const pid = hex(4); let pt = null;     // party membership (before a room exists)
-  const pbc = P => { const act = [...P.mem.values()].filter(x => !x.inr); if (!act.length) return; const L = P.mem.get(P.lead); if (!L || L.inr) P.lead = act[0].id; const lst = act.map(x => ({ id: x.id, nm: x.nm, rd: x.rd })); for (const q of act) send(q.ws, JSON.stringify({ t: 'party', code: P.code, you: q.id, lead: P.lead, md: P.md, mem: lst })); };   // members still inside a match are hidden until they come back
+  const eff = P => { const L = P.mem.get(P.lead); if (L && !L.inr) return P.lead; const a = [...P.mem.values()].find(x => !x.inr); return a ? a.id : P.lead; };   // who can press start/mode right now (the real leader keeps the crown even while away in a match)
+  const pbc = P => { const act = [...P.mem.values()].filter(x => !x.inr); if (!act.length) return; if (!P.mem.has(P.lead)) P.lead = act[0].id; const ef = eff(P), lst = act.map(x => ({ id: x.id, nm: x.nm, rd: x.rd, cs: x.cs || '' })); for (const q of act) send(q.ws, JSON.stringify({ t: 'party', code: P.code, you: q.id, lead: P.lead, can: ef === q.id ? 1 : 0, md: P.md, mem: lst })); };   // members still inside a match are hidden until they come back
   let hp = null;   // the party I belong to while I'm inside a match (the party survives the match so friends stay together)
-  const pdrop = () => { const P = pt || hp; if (!P) return; pt = hp = null; P.mem.delete(pid); if (!P.mem.size) { P.kill = setTimeout(() => { if (!P.mem.size) parties.delete(P.code); }, 60000); return; } if (P.lead === pid) P.lead = ([...P.mem.values()].find(x => !x.inr) || P.mem.values().next().value).id; for (const q of P.mem.values()) q.rd = 0; pbc(P); };
+  const pdrop = () => { const P = pt || hp; if (!P) return; pt = hp = null; P.mem.delete(pid); if (!P.mem.size) { P.kill = setTimeout(() => { if (!P.mem.size) parties.delete(P.code); }, 60000); return; } if (P.lead === pid) { P.olead = ws.acct; clearTimeout(P.olt); P.olt = setTimeout(() => { P.olead = null; }, 30000); P.lead = ([...P.mem.values()].find(x => !x.inr) || P.mem.values().next().value).id; } for (const q of P.mem.values()) q.rd = 0; pbc(P); };
   const err = e => { send(ws, '{"t":"err","e":"' + e + '"}'); ws.close(); };
 
   const attach = (rr, pp) => {
@@ -1105,7 +1106,8 @@ wss.on('connection', (ws, req) => {
       return;
     }
     if (m.t === 'hb') { ws.pres = t; send(ws, '{"t":"hb"}'); return; }
-    if (m.t === 'leave' && r && p) { removePlayer(r, p, now()); p.ws = null; r = null; p = null; return; }   // deliberate exit: no grace period
+    if (m.t === 'leave' && r && p) { if (hp && r.pub && r.st === 'lobby' && hp.lead === pid) for (const q of hp.mem.values()) if (q.inr && q.id !== pid) send(q.ws, '{"t":"pret"}');   // leader cancels the search: the whole party goes back to the party screen
+      removePlayer(r, p, now()); p.ws = null; r = null; p = null; return; }   // deliberate exit: no grace period
 
     /* ---- joining ---- */
     if (!r) {
@@ -1127,16 +1129,19 @@ wss.on('connection', (ws, req) => {
         for (const q of P.mem.values()) q.rd = 0;                 // someone new arrived: everybody readies up again
         const nm = ws.acct.n;
         if (P.kill) { clearTimeout(P.kill); P.kill = 0; }
-        const LL = P.mem.get(P.lead); if (!LL || LL.inr) P.lead = pid;
-        P.mem.set(pid, { id: pid, ws, nm, rd: 0, inr: 0, go: rr => { hp = pt; pt = null; const me = P.mem.get(pid); if (me) me.inr = 1; addPlayer(rr, nm); } });
+        if (P.olead && P.olead === ws.acct) { P.lead = pid; P.olead = null; }   // the real leader coming back gets the crown back
+        if (!P.mem.has(P.lead)) P.lead = pid;                                   // everyone else never takes it
+        const cs = typeof m.cs === 'string' && /^[0-9,]{1,24}$/.test(m.cs) ? m.cs : '';
+        P.mem.set(pid, { id: pid, ws, nm, cs, rd: 0, inr: 0, go: rr => { hp = pt; pt = null; const me = P.mem.get(pid); if (me) me.inr = 1; addPlayer(rr, nm); } });
         pt = P; ws.joined = 1;
         return pbc(P);
       }
       if (pt) {
         const P = pt;
         if (m.t === 'prdy') { P.mem.get(pid).rd = m.v ? 1 : 0; return pbc(P); }
-        if (m.t === 'pmode' && P.lead === pid) { P.md = Math.max(0, Math.min(2, m.m | 0)); return pbc(P); }
-        if (m.t === 'pstart' && P.lead === pid) {
+        if (m.t === 'pcos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { P.mem.get(pid).cs = m.v; pbc(P); } return; }
+        if (m.t === 'pmode' && eff(P) === pid) { P.md = Math.max(0, Math.min(2, m.m | 0)); return pbc(P); }
+        if (m.t === 'pstart' && eff(P) === pid) {
           const mem = [...P.mem.values()].filter(q => !q.inr), n = mem.length;
           if (mem.some(q => !q.rd)) return;
           let best = null;
