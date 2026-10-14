@@ -502,7 +502,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(3)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(6), rnd(10), rnd(6), rnd(4), rnd(5)].join(','); b.emoNx = 0;   // bots wear a random look (skin, accent, hat, face, trail) and use emotes like players b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(3)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
@@ -911,6 +911,7 @@ function simRoom(r, t) {
     p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
     let b = p.bot ? botInput(r, p, t) : consume(p);
     advance(r, p, (cd || p.fz) ? 0 : b);
+    if (p.bot && r.st === 'play' && !cd) { if (!p.emoNx) p.emoNx = t + 2500 + rnd(5000); else if (t >= p.emoNx) { p.emoNx = t + 4000 + rnd(9000); bcast(r, JSON.stringify({ t: 'emo', o: p.id, k: rnd(8) })); } }   // random bot emote every 4-13 s
     if (p.hrs !== p.rs) { p.hx.fill(p.x); p.hy.fill(p.y); p.hrs = p.rs; }                 // position history (lag compensation)
     p.hi = (p.hi + 1) & 31; p.hx[p.hi] = p.x; p.hy[p.hi] = p.y;
   }
