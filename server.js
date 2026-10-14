@@ -911,7 +911,7 @@ function simRoom(r, t) {
     p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
     let b = p.bot ? botInput(r, p, t) : consume(p);
     advance(r, p, (cd || p.fz) ? 0 : b);
-    if (p.bot && r.st === 'play' && !cd) { if (!p.emoNx) p.emoNx = t + 2500 + rnd(5000); else if (t >= p.emoNx) { p.emoNx = t + 4000 + rnd(9000); bcast(r, JSON.stringify({ t: 'emo', o: p.id, k: rnd(8) })); } }   // random bot emote every 4-13 s
+    if (p.bot && r.st === 'play' && !cd) { if (!p.emoNx) p.emoNx = t + 25000 + rnd(35000); else if (t >= p.emoNx) { p.emoNx = t + 30000 + rnd(60000); if (Math.random() < .4) bcast(r, JSON.stringify({ t: 'emo', o: p.id, k: rnd(8) })); } }   // random bot emote every 4-13 s
     if (p.hrs !== p.rs) { p.hx.fill(p.x); p.hy.fill(p.y); p.hrs = p.rs; }                 // position history (lag compensation)
     p.hi = (p.hi + 1) & 31; p.hx[p.hi] = p.x; p.hy[p.hi] = p.y;
   }
