@@ -158,7 +158,7 @@ body.inm #mute,body.inm #leave{display:none!important}
 .mp{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
 .ic{vertical-align:-.2em;display:inline-block;flex:none}.ei{display:inline-flex;align-items:center}.md .mi .ei,.ico .ei,.tbx .ei{display:inline-flex}
 .ib{display:grid!important;place-items:center;color:#fff;padding:0!important}#emb{display:none!important}.pl #emb{display:grid!important}
-#emw{position:fixed;top:60px;right:116px;display:none;gap:6px;z-index:40;background:rgba(10,14,50,.78);padding:6px;border-radius:14px;border:1px solid rgba(255,255,255,.18)}#emw.on{display:flex}
+#emw{position:fixed;top:64px;right:10px;flex-direction:column;display:none;gap:6px;z-index:40;background:rgba(10,14,50,.78);padding:6px;border-radius:14px;border:1px solid rgba(255,255,255,.18)}#emw.on,.pl #emw{display:flex}.pl #emb{display:none!important}
 #emw button{width:46px;height:50px;border-radius:10px;border:0;background:rgba(255,255,255,.1);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;cursor:pointer}
 .ch .ho{top:-44%;font-size:calc(var(--s)*.78)}.ch .sh{top:34%;font-size:calc(var(--s)*.66)}.ch .hp{top:40%}.ch .ey.hr svg{display:block}
 .lkb{font-style:normal;font-size:12px;color:#ffd23f;font-family:'Lilita One'}
@@ -409,7 +409,7 @@ function onMsg(m,ws){
  if(!room||room.ws!==ws)return;room.rx=Date.now();
  switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'emo':onEmo(m);break;case 'fz':onFz(m);break;case 'pret':leaveRoom();break;case 'zap':S.zapAt=performance.now();S.zapCd=m.cd;break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
 function toLobbyView(){clearFx();S.mode='lobby';S.rn=0;S.gm=0;S.rs=-1;PEND.length=0;OUT.length=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent='';lobbyUI(1)}
-function playView(m,meP){S.rn=m.rn;S.gm=m.gm;S.mode='play';ovHide();ME.alive=!!meP&&meP.al!==0;document.body.classList.toggle('pl',ME.alive)}
+function playView(m,meP){try{emoBar()}catch(e){}S.rn=m.rn;S.gm=m.gm;S.mode='play';ovHide();ME.alive=!!meP&&meP.al!==0;document.body.classList.toggle('pl',ME.alive)}
 function applyRoom(m){
  if(m.md&&m.mp!==CURMP)setMap(m);
  const meP=m.pl.find(p=>p.id==myId);
@@ -1045,8 +1045,8 @@ function trailAll(dt){const f=p=>{const z=p.cz;if(!z||!z.tr||S.mode!='play'||!(M
 const EMI={};function emoImg(k){if(!EMI[k]){const i=new Image();i.src='data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">'+ICO['e_'+CAT.em[1][k][1]]+'</svg>');EMI[k]=i}return EMI[k]}
 function emoDraw(p){if(!(p.emoT>time))return;const im=emoImg(p.emo);if(!im.complete)return;const r=p.emoT-time,pop=Math.min(1,(2.2-r)*6+.4);cx.save();cx.globalAlpha=Math.min(1,r*3);cx.translate(0,-150);cx.scale(pop,pop);cx.fillStyle='#fff';cx.strokeStyle='#1b2a6b';cx.lineWidth=3;cx.beginPath();cx.arc(0,0,24,0,7);cx.fill();cx.stroke();cx.beginPath();cx.moveTo(-6,21);cx.lineTo(0,31);cx.lineTo(6,21);cx.fill();cx.drawImage(im,-19,-19,38,38);cx.restore()}
 function onEmo(m){const o=m.o==myId?ME:rem[m.o];if(o){o.emo=m.k|0;o.emoT=time+2.2}}
-function sendEmote(s){const k=M.em[s];if(k==null||S.mode!='play'||!ME.alive)return;netSend({t:'emo',k});const w=$('emw');w&&w.classList.remove('on')}
-function emoBar(){const w=$('emw');if(!w)return;w.innerHTML=M.em.map((k,s)=>`<button onclick="sendEmote(${s})">${ic('e_'+CAT.em[1][k][1],'30px')}<small>${s+1}</small></button>`).join('');w.classList.toggle('on')}
+function sendEmote(s){const k=M.em[s];if(k==null||S.mode!='play'||!ME.alive)return;netSend({t:'emo',k})}
+function emoBar(){const w=$('emw');if(!w)return;w.innerHTML=M.em.map((k,s)=>`<button onclick="sendEmote(${s})">${ic('e_'+CAT.em[1][k][1],'30px')}<small>${s+1}</small></button>`).join('')}
 addEventListener('keydown',e=>{if(typing(e))return;const k=['Digit1','Digit2','Digit3','Digit4'].indexOf(e.code);if(k>=0)sendEmote(k)});
 document.body.insertAdjacentHTML('beforeend','<button class="ib" id="emb" style="right:116px" onclick="emoBar()">'+ic('e_gg','26px')+'</button><div id="emw"></div>');
 

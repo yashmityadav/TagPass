@@ -502,7 +502,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(6), rnd(10), rnd(6), rnd(4), rnd(5)].join(','); b.emoNx = 0;   // bots wear a random look (skin, accent, hat, face, trail) and use emotes like players b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(3)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(6), rnd(10), rnd(6), rnd(4), rnd(5)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(3)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
