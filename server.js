@@ -120,8 +120,13 @@ function authReq(req, res) {
     try {
       let m; try { m = JSON.parse(b); } catch { return out(400, { e: 'bad' }); }
       if (!m || typeof m !== 'object') return out(400, { e: 'bad' });
-      const soc = m.m === 'soc', mp = soc ? socIp : authIp, n = (mp.get(ip) || 0) + 1; mp.set(ip, n);
+      const soc = m.m === 'soc' || m.m === 'lb', mp = soc ? socIp : authIp, n = (mp.get(ip) || 0) + 1; mp.set(ip, n);
       if (n > (soc ? 90 : 30)) return out(429, { e: 'rate' });
+      if (m.m === 'lb') {   // leaderboard by wins
+        const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' }); lbSeed(me);
+        const t = Math.max(0, Math.min(2, m.t | 0)), L = lbRows(t), i = L.findIndex(x => x[2] === me.k);
+        return out(200, { ok: 1, rows: L.slice(0, 50).map(x => [x[0], x[1]]), me: i < 0 ? null : { r: i + 1, w: L[i][1] } });
+      }
       if (m.m === 'soc') {   // friends: poll + add / accept / decline / remove / invite
         const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' });
         me.f = me.f || []; me.rq = me.rq || [];
@@ -152,7 +157,7 @@ function authReq(req, res) {
         const inv = (INV.get(me.k) || []).filter(x => Date.now() - x.t < 120000 && (parties.has(x.c) || rooms.has(x.c))).map(x => ({ n: x.n, c: x.c, r: x.r ? 1 : 0 }));
         return out(200, { ok: 1, f: fl, rq, inv });
       }
-      if (m.m === 'tk') { const a = await tokAcc(m.tk); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
+      if (m.m === 'tk') { const a = await tokAcc(m.tk); if (a) lbSeed(a); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
       const u = String(m.u || ''), pw = String(m.p || ''), k = u.toLowerCase();
       if (!/^[A-Za-z0-9_]{3,12}$/.test(u) || pw.length < 4 || pw.length > 64) return out(400, { e: 'bad' });
       const scr = salt => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, d) => e ? no(e) : ok(d)));
@@ -172,9 +177,22 @@ function authReq(req, res) {
     } catch (e) { console.error('auth error:', e.message); try { out(503, { e: 'busy' }); } catch {} }
   });
 }
+const LB = new Map(); let lbT = 0;   // real leaderboard: account key -> [name, wins, dayId, dayWins, weekId, weekWins] (saved in Redis under "lbd")
+const lbDay = () => Math.floor(Date.now() / 864e5), lbWeek = () => Math.floor((Date.now() / 864e5 + 3) / 7);
+db(['GET', 'lbd']).then(([v]) => { if (v) for (const [k, e] of JSON.parse(v)) if (!LB.has(k)) LB.set(k, e); }).catch(() => {});
+function lbSave() { if (lbT) return; lbT = setTimeout(async () => { lbT = 0; try { await db(['SET', 'lbd', JSON.stringify([...LB])]); } catch (e) { console.error('leaderboard save failed:', e.message); } }, 5000); }
+function lbSeed(a) { if (a.w > 0 && !LB.has(a.k)) { LB.set(a.k, [a.n, a.w, 0, 0, 0, 0]); lbSave(); } }
+function lbWin(a) {
+  const e = LB.get(a.k) || [a.n, 0, 0, 0, 0, 0], d = lbDay(), w = lbWeek();
+  e[0] = a.n; e[1] = a.w; if (e[2] !== d) { e[2] = d; e[3] = 0; } if (e[4] !== w) { e[4] = w; e[5] = 0; } e[3]++; e[5]++;
+  LB.set(a.k, e);
+  if (LB.size > 500) { let lo = null; for (const [k, v] of LB) if (!lo || v[1] < LB.get(lo)[1]) lo = k; LB.delete(lo); }
+  lbSave();
+}
+function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
 function rec(p, win) {   // one finished (or abandoned) match -> played +1, won/lost +1
   if (!p.rec || !p.acct) return; p.rec = 0;
-  const a = p.acct; a.p++; if (win) a.w++; else a.l++; accSave(a);
+  const a = p.acct; a.p++; if (win) { a.w++; lbWin(a); } else a.l++; accSave(a);
   sendP(p, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l }));
 }
 
@@ -447,7 +465,7 @@ function bcastRoom(r) {
   bcast(r, JSON.stringify({
     t: 'room', code: r.pub ? '' : r.key, pub: r.pub ? 1 : 0, st: r.st, host: r.hostId,
     rn: r.rn, gm: r.gm, mp: r.mp, md: r.st === 'lobby' ? 0 : MAPS[r.mp].raw, practice: r.practice ? 1 : 0, inf: r.inf, sl: r.sel, first: r.first,
-    loser: r.loser, ln: r.ln, win: r.win, wn: r.wn, wt: r.wt | 0,
+    res: r.st === 'over' ? r.res : undefined, loser: r.loser, ln: r.ln, win: r.win, wn: r.wn, wt: r.wt | 0,
     lc: r.lobbyGo ? Math.max(0, (r.lobbyGo - t) / 1000) : 0,
     pl: [...r.players.values()].filter(p => p.ws || p.bot || r.st === 'play' || r.st === 'between').map(p => ({ id: p.id, nm: p.nm, ci: p.ci, al: p.alive ? 1 : 0, rd: p.rdy ? 1 : 0, cs: p.cs || '' }))
   }));
@@ -598,7 +616,7 @@ function zoneSpots(r, n, right) {   // infection / freeze: one team per map edge
   }
 }
 function startRound(r, ids, t) {
-  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); clearFx(r); initCrates(r);
+  r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); for (const q of r.players.values()) q.outAt = 0; clearFx(r); initCrates(r);
   let pts = r.inf ? null : spots(r, ids.length);
   const first = ids[rnd(ids.length)]; r.first = first;
   const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
@@ -624,6 +642,7 @@ function finish(r, id, wt) {
   r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
   const W = new Set(); for (const q of r.players.values()) if (wt === 1 ? q.it : wt === 2 ? !q.it : q.id === id) W.add(q.id);   // freeze tag: the whole winning team (freezers or runners) gets the win
   for (const q of r.players.values()) { q.it = 0; if (r.inf === 1 && q.id === r.first && !W.has(q.id)) { q.rec = 0; continue; } rec(q, W.has(q.id)); }   // infection: the starting IT can't win by design, so it is not counted as a loss
+  r.res = r.ord.map(id => r.players.get(id)).filter(Boolean).map(q => ({ id: q.id, nm: q.nm, b: q.bot ? 1 : 0, w: W.has(q.id) ? 1 : 0, o: q.outAt || 0, tw: q.acct ? q.acct.w : 0 })).sort((a, b) => b.w - a.w || b.o - a.o).map(x => ({ id: x.id, nm: x.nm, b: x.b, w: x.w, tw: x.tw }));   // this match's standings (winners first, then whoever lasted longest)
   bcastRoom(r);
 }
 
@@ -642,7 +661,7 @@ function resumeClassic(r, t, al) {   // classic: keep positions, new random tag,
 }
 
 function expire(r, t, holder) {
-  r.loser = holder.id; r.ln = holder.nm; holder.alive = false; holder.it = 0;
+  r.loser = holder.id; r.ln = holder.nm; holder.alive = false; holder.it = 0; holder.outAt = now();
   r.st = 'between'; r.betweenEnd = t + BETWEEN_MS; clearFx(r);
   bcastRoom(r);
 }
