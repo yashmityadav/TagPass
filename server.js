@@ -111,12 +111,13 @@ async function accFlush() {
   try { await db(...l.map(a => ['SET', 'acc:' + a.k, JSON.stringify(a)])); }
   catch (e) { console.error('account save failed:', e.message); for (const a of l) dirty.add(a); if (!accT) accT = setTimeout(accFlush, 10000); }
 }
-const accOut = (a, tk) => ({ ok: 1, u: a.n, tk, st: { p: a.p, w: a.w, l: a.l } });
+const accOut = (a, tk) => ({ ok: 1, u: a.n, tk, st: { p: a.p, w: a.w, l: a.l }, pr: prog(a) });
+const msIp = new Map(); setInterval(() => msIp.clear(), 60000).unref();
 const LIVE = new WeakMap(), authIp = new Map(), socIp = new Map(), INV = new Map(); setInterval(() => { authIp.clear(); socIp.clear(); }, 60000).unref();
 function authReq(req, res) {
   const out = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(o)); };
   const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  let b = ''; req.on('data', d => { b += d; if (b.length > 1024) req.destroy(); });
+  let b = ''; req.on('data', d => { b += d; if (b.length > 2048) req.destroy(); });
   req.on('end', async () => {
     try {
       let m; try { m = JSON.parse(b); } catch { return out(400, { e: 'bad' }); }
@@ -157,6 +158,13 @@ function authReq(req, res) {
         for (const k of me.rq) { const f = await getAcc(k); if (f) rq.push(f.n); }
         const inv = (INV.get(me.k) || []).filter(x => Date.now() - x.t < 120000 && (parties.has(x.c) || rooms.has(x.c))).map(x => ({ n: x.n, c: x.c, r: x.r ? 1 : 0 }));
         return out(200, { ok: 1, f: fl, rq, inv });
+      }
+      if (m.m === 'pr') {   // every reward, purchase and claim is decided here, never by the browser
+        const n = (msIp.get(ip) || 0) + 1; msIp.set(ip, n); if (n > 90) return out(429, { e: 'rate' });
+        const a = await tokAcc(m.tk); if (!a) return out(401, { e: 'tk' });
+        const e = progAct(a, m); if (e) return out(200, { ok: 0, e });
+        if (m.a !== 'get') accSave(a);
+        return out(200, { ok: 1, pr: prog(a) });
       }
       if (m.m === 'tk') { const a = await tokAcc(m.tk); if (a) lbSeed(a); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
       const u = String(m.u || ''), pw = String(m.p || ''), k = u.toLowerCase();
@@ -206,10 +214,72 @@ function lbWin(a) {
   lbSave();
 }
 function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
-function rec(p, win) {   // one finished (or abandoned) match -> played +1, won/lost +1
+/* ---- server-authoritative progress: tokens, gems, xp, cosmetics, quests, stats ---- */
+const PRICE = { sk: [0, 0, 200, 200, 350, 800], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150], hat: [0, 0, 250, 300, 350, 900], fc: [0, 150, 200, 0], tr: [0, 250, 400, 300, 700], em: [0, 0, 0, 0, 150, 150, 250, 100] };
+const ABP = { fake: 0, smoke: 300, trap: 500 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [50, 75, 100, 150, 200, 300, 500];
+const needXp = l => 100 + (l - 1) * 40;
+function lvlOf(x) { let l = 1; while (x >= needXp(l)) { x -= needXp(l); l++; } return l; }
+const LRW = n => n == 4 ? { k: 'hat', i: 3 } : n == 8 ? { k: 'tr', i: 1 } : n == 12 ? { k: 'sk', i: 5 } : n == 16 ? { k: 'hat', i: 5 } : n % 5 == 0 ? { g: n % 10 == 0 ? 40 : 15 } : { t: 40 + n * 20 };
+const dayKey = t => new Date(t).toISOString().slice(0, 10);
+function prog(a) {
+  if (!a.pr) a.pr = { tok: 0, gem: 0, xp: 0, streak: 0, last: '', own: {}, lr: {}, em: [0, 1, 2, 3], eq: { sk: 0, ac: 0, hat: 0, fc: 0, tr: 0 }, ws: 0, bws: 0,
+    q: [{ k: 'play', t: 'Play 3 matches', p: 0, n: 3, r: 90, x: 60 }, { k: 'win', t: 'Win a match', p: 0, n: 1, r: 150, x: 100 }, { k: 'tag', t: 'Tag 10 players', p: 0, n: 10, r: 120, x: 80 }, { k: 'play', t: 'Play 1 match with a friend', p: 0, n: 1, r: 60, x: 40 }],
+    sx: { tg: 0, tt: 0, sv: 0, sn: 0, pt: 0, md: [0, 0, 0], rc: [] } };
+  return a.pr;
+}
+function csClean(a, v) {   // a player can only show cosmetics they own
+  const X = prog(a), p = String(v || '').split(',').map(Number);
+  return EQK.map((k, j) => { let i = p[j] | 0; if (i < 0 || i >= PRICE[k].length || (PRICE[k][i] && !X.own[k + i])) i = 0; return i; }).join(',');
+}
+function progAct(a, m) {
+  const X = prog(a), act = String(m.a);
+  if (act === 'get') return '';
+  if (act === 'buy') {
+    let key, price;
+    if (m.k === 'ab') { if (typeof m.i !== 'string' || !Object.hasOwn(ABP, m.i)) return 'bad'; key = 'ab_' + m.i; price = ABP[m.i]; }
+    else { const L = PRICE[m.k]; if (!L || !Number.isInteger(m.i) || m.i < 0 || m.i >= L.length) return 'bad'; key = m.k + m.i; price = L[m.i]; }
+    if (X.own[key] || !price) return '';
+    if (X.tok < price) return 'funds';
+    X.tok -= price; X.own[key] = 1; return '';
+  }
+  if (act === 'eq') {
+    const L = PRICE[m.k]; if (!L || !Number.isInteger(m.i) || m.i < 0 || m.i >= L.length) return 'bad';
+    if (L[m.i] && !X.own[m.k + m.i]) return 'locked';
+    if (m.k === 'em') { const s = m.s | 0; if (s < 0 || s > 3) return 'bad'; const j = X.em.indexOf(m.i); if (j >= 0) X.em[j] = X.em[s]; X.em[s] = m.i; }
+    else X.eq[m.k] = m.i;
+    return '';
+  }
+  if (act === 'daily') {
+    const today = dayKey(Date.now()); if (X.last === today) return 'done';
+    const cont = X.last === dayKey(Date.now() - 864e5), i = cont ? X.streak % 7 : 0;
+    X.streak = cont ? X.streak + 1 : 1; X.last = today; X.tok += DAILY[i]; if (i === 6) X.gem += 25; return '';
+  }
+  if (act === 'lr') {
+    const n = m.n; if (!Number.isInteger(n) || n < 1 || n > 30) return 'bad';
+    if (X.lr[n]) return 'done'; if (lvlOf(X.xp) < n) return 'locked';
+    const r = LRW(n); X.lr[n] = 1; if (r.t) X.tok += r.t; if (r.g) X.gem += r.g; if (r.k) X.own[r.k + r.i] = 1; return '';
+  }
+  if (act === 'qc') {
+    const q = Number.isInteger(m.i) ? X.q[m.i] : null; if (!q || q.d || q.p < q.n) return 'bad';
+    q.d = 1; X.tok += q.r; X.xp += q.x; return '';
+  }
+  return 'bad';
+}
+function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1, won/lost +1, plus the rewards
   if (!p.rec || !p.acct) return; p.rec = 0;
-  const a = p.acct; a.p++; if (win) { a.w++; lbWin(a); } else a.l++; accSave(a);
+  const a = p.acct; a.p++; if (win) { a.w++; lbWin(a); } else a.l++;
+  const X = prog(a); let g = null;
+  if (win) { X.ws++; if (X.ws > X.bws) X.bws = X.ws; } else X.ws = 0;
+  if (fin) {   // rewards only for matches played to the end, never for quitting
+    const gx = win ? 90 : 35, gt = win ? 150 : 45, du = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv = win || !p.outAt ? du : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000), S = X.sx;
+    X.xp += gx; X.tok += gt; g = { x: gx, t: gt };
+    for (const q of X.q) { if (q.d) continue; if (q.k === 'play') q.p = Math.min(q.n, q.p + 1); else if (q.k === 'win' && win) q.p = Math.min(q.n, q.p + 1); else if (q.k === 'tag') q.p = Math.min(q.n, q.p + (p.tg | 0)); }
+    S.tg += p.tg | 0; S.tt += p.tt | 0; S.pt += du; S.sv += sv; S.sn++; S.md[p.mdi | 0] = (S.md[p.mdi | 0] | 0) + 1; S.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du)]); S.rc.length = Math.min(S.rc.length, 10);
+    if (p.bonus) { X.tok += p.bonus; g.bk = 1; p.bonus = 0; }
+  }
+  accSave(a);
   sendP(p, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l }));
+  sendP(p, JSON.stringify({ t: 'pr', pr: X, g }));
 }
 
 const server = http.createServer((req, res) => {
@@ -649,6 +719,7 @@ function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
   r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.gone = {}; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
+  for (const q of r.players.values()) { q.mt0 = now(); q.tg = q.tt = 0; q.bk = null; q.bonus = 0; q.mdi = r.inf | 0; q.mpi = r.mp | 0; }
   for (const q of r.players.values()) q.rec = (r.pub && !r.practice && q.acct && ids.includes(q.id)) ? 1 : 0;   // only public lobbies (incl. party joins) count; private rooms and solo practice never do
   startRound(r, ids, t);
 }
@@ -657,7 +728,8 @@ function finish(r, id, wt) {
   const p = id && r.players.get(id);
   r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
   const W = new Set(); for (const q of r.players.values()) if (wt === 1 ? q.it : wt === 2 ? !q.it : q.id === id) W.add(q.id);   // freeze tag: the whole winning team (freezers or runners) gets the win
-  for (const q of r.players.values()) { q.it = 0; if (r.inf === 1 && q.id === r.first && !W.has(q.id)) { q.rec = 0; continue; } rec(q, W.has(q.id)); }   // infection: the starting IT can't win by design, so it is not counted as a loss
+  for (const q of r.players.values()) if (q.bk != null && id && String(q.bk) === String(id) && q.id !== id && q.rec) q.bonus = 100;   // spectator who backed the winner
+  for (const q of r.players.values()) { q.it = 0; if (r.inf === 1 && q.id === r.first && !W.has(q.id)) { q.rec = 0; continue; } rec(q, W.has(q.id), 1); }   // infection: the starting IT can't win by design, so it is not counted as a loss
   r.res = r.ord.map(id => r.players.get(id) || (r.gone && r.gone[id])).filter(Boolean).map(q => ({ id: q.id, nm: q.nm, b: q.bot ? 1 : 0, w: W.has(q.id) ? 1 : 0, o: q.outAt || 0, tw: q.acct ? q.acct.w : 0 })).sort((a, b) => b.w - a.w || b.o - a.o).map(x => ({ id: x.id, nm: x.nm, b: x.b, w: x.w, tw: x.tw }));   // this match's standings (winners first, then whoever lasted longest)
   bcastRoom(r);
 }
@@ -977,7 +1049,7 @@ function simRoom(r, t) {
       if (!q.alive || q.it || q === holder) continue;
       if (!tagHit(holder, q)) continue;                                   // real overlap only, never from a distance
       if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
-      holder.it = 0; q.it = 1;
+      holder.it = 0; q.it = 1; holder.tg = (holder.tg | 0) + 1; q.tt = (q.tt | 0) + 1;
       if (holder.gt === q.id) ungrab(r, holder, GRAB_CD); else if (q.gt === holder.id) ungrab(r, q, GRAB_CD);   // a tag ends the grip between the two
       r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 350 };
       bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id }));
@@ -1168,7 +1240,7 @@ wss.on('connection', (ws, req) => {
         if (P.kill) { clearTimeout(P.kill); P.kill = 0; }
         if (P.olead && P.olead === ws.acct) { P.lead = pid; P.olead = null; }   // the real leader coming back gets the crown back
         if (!P.mem.has(P.lead)) P.lead = pid;                                   // everyone else never takes it
-        const cs = typeof m.cs === 'string' && /^[0-9,]{1,24}$/.test(m.cs) ? m.cs : '';
+        const cs = typeof m.cs === 'string' && /^[0-9,]{1,24}$/.test(m.cs) ? csClean(ws.acct, m.cs) : '';
         P.mem.set(pid, { id: pid, ws, nm, cs, rd: 0, inr: 0, go: rr => { hp = pt; pt = null; const me = P.mem.get(pid); if (me) me.inr = 1; addPlayer(rr, nm); } });
         pt = P; ws.joined = 1;
         return pbc(P);
@@ -1176,7 +1248,7 @@ wss.on('connection', (ws, req) => {
       if (pt) {
         const P = pt;
         if (m.t === 'prdy') { P.mem.get(pid).rd = m.v ? 1 : 0; return pbc(P); }
-        if (m.t === 'pcos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { P.mem.get(pid).cs = m.v; pbc(P); } return; }
+        if (m.t === 'pcos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { P.mem.get(pid).cs = csClean(ws.acct, m.v); pbc(P); } return; }
         if (m.t === 'pmode' && eff(P) === pid) { P.md = Math.max(0, Math.min(2, m.m | 0)); return pbc(P); }
         if (m.t === 'pstart' && eff(P) === pid) {
           const mem = [...P.mem.values()].filter(q => !q.inr), n = mem.length;
@@ -1233,12 +1305,13 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
-    if (m.t === 'cos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { p.cs = m.v; bcastRoom(r); } return; }
-    if (m.t === 'emo') { const k = m.k | 0, tn = Date.now(); if (k >= 0 && k < 8 && tn - (p.emoAt || 0) > 1500) { p.emoAt = tn; bcast(r, JSON.stringify({ t: 'emo', o: p.id, k })); } return; }
+    if (m.t === 'cos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { p.cs = csClean(ws.acct, m.v); bcastRoom(r); } return; }
+    if (m.t === 'bk') { if (!p.alive && r.st !== 'lobby') p.bk = m.k == null ? null : String(m.k).slice(0, 24); return; }
+    if (m.t === 'emo') { const k = m.k | 0, tn = Date.now(); if (k >= 0 && k < 8 && prog(ws.acct).em.includes(k) && tn - (p.emoAt || 0) > 1500) { p.emoAt = tn; bcast(r, JSON.stringify({ t: 'emo', o: p.id, k })); } return; }
     /* ---- ghost zap: an eliminated player calls a lightning strike anywhere (same strike as the random ones, server-side cooldown) ---- */
     if (m.t === 'zap') { const tn = now(), zx = +m.x, zy = +m.y; if (r.st === 'play' && !p.alive && tn >= r.cdEnd && tn - (p.zapAt || -1e9) > ZAP_CD * 1000 && r.lt.length < 6 && isFinite(zx) && isFinite(zy)) { p.zapAt = tn; r.lt.push({ id: ++r.fxn, x: ri(Math.max(LX + LT_R, Math.min(RX - LT_R, zx))), y: ri(Math.max(120, Math.min(WH - 40, zy))), age: 0, hit: 0 }); sendP(p, '{"t":"zap","cd":' + ZAP_CD + '}'); } return; }
     /* ---- ability choice: in the lobby (spectators waiting for the next match may pick too) ---- */
-    if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
+    if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (ABP[m.k] === 0 || prog(ws.acct).own['ab_' + m.k]) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 
     /* ---- room controls ---- */
     if (m.t === 'ready' && r.st === 'lobby' && !r.pub) { p.rdy = m.v ? 1 : 0; return bcastRoom(r); }
