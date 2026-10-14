@@ -179,7 +179,22 @@ function authReq(req, res) {
 }
 const LB = new Map(); let lbT = 0;   // real leaderboard: account key -> [name, wins, dayId, dayWins, weekId, weekWins] (saved in Redis under "lbd")
 const lbDay = () => Math.floor(Date.now() / 864e5), lbWeek = () => Math.floor((Date.now() / 864e5 + 3) / 7);
-db(['GET', 'lbd']).then(([v]) => { if (v) for (const [k, e] of JSON.parse(v)) if (!LB.has(k)) LB.set(k, e); }).catch(() => {});
+async function lbRebuild() {   // at startup: pull every account that has wins into the leaderboard, so nobody has to log in first
+  try {
+    let keys = [];
+    if (!UP_URL) keys = [...MEM.keys()].filter(k => k.startsWith('acc:'));
+    else { let c = '0'; do { const [r] = await db(['SCAN', c, 'MATCH', 'acc:*', 'COUNT', '500']); c = String(r[0]); keys.push(...r[1]); } while (c !== '0' && keys.length < 20000); }
+    for (let i = 0; i < keys.length; i += 100) {
+      for (const v of await db(...keys.slice(i, i + 100).map(k => ['GET', k]))) {
+        if (!v) continue; const a = JSON.parse(v), c = ACC.get(a.k) || a;
+        if (c.w > 0) { const e = LB.get(a.k); if (e) { e[0] = c.n; e[1] = c.w; } else LB.set(a.k, [c.n, c.w, 0, 0, 0, 0]); }
+      }
+    }
+    while (LB.size > 500) { let lo = null; for (const [k, v] of LB) if (!lo || v[1] < LB.get(lo)[1]) lo = k; LB.delete(lo); }
+    lbSave();
+  } catch (e) { console.error('leaderboard rebuild failed:', e.message); }
+}
+db(['GET', 'lbd']).then(([v]) => { if (v) for (const [k, e] of JSON.parse(v)) if (!LB.has(k)) LB.set(k, e); }).catch(() => {}).then(lbRebuild);
 function lbSave() { if (lbT) return; lbT = setTimeout(async () => { lbT = 0; try { await db(['SET', 'lbd', JSON.stringify([...LB])]); } catch (e) { console.error('leaderboard save failed:', e.message); } }, 5000); }
 function lbSeed(a) { if (a.w > 0 && !LB.has(a.k)) { LB.set(a.k, [a.n, a.w, 0, 0, 0, 0]); lbSave(); } }
 function lbWin(a) {
