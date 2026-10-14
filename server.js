@@ -55,6 +55,7 @@ const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hol
 const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
 const HELD_K = 0.5, CARRY_K = 0.8;                   // speed multiplier of the player who is held / of the player who is carrying
 const ABIL = new Set(['fake', 'smoke', 'trap']);
+const ZAP_CD = 7;                                    // ghost lightning: eliminated players can call a strike every ZAP_CD s
 /* ---- lightning: random warning circle, strike after LT_WARN s, launches everyone inside (no damage) ---- */
 const LT_R = 110, LT_WARN = 1, LT_FLASH = .35, LT_MIN = 3, LT_MAX = 6, LT_VY = 1500, LT_VX = 620;
 
@@ -647,7 +648,7 @@ function startRound(r, ids, t) {
 function startMatch(r, t) {
   const ids = [...r.players.values()].filter(p => p.ws || p.bot).map(p => p.id).slice(0, roomMax(r));   // only players who are actually connected
   if (!ids.length) return;
-  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
+  r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.gone = {}; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
   for (const q of r.players.values()) q.rec = (r.pub && !r.practice && q.acct && ids.includes(q.id)) ? 1 : 0;   // only public lobbies (incl. party joins) count; private rooms and solo practice never do
   startRound(r, ids, t);
 }
@@ -657,7 +658,7 @@ function finish(r, id, wt) {
   r.st = 'over'; r.win = id || null; r.wn = p ? p.nm : null; r.wt = wt || 0; r.lobbyGo = 0; clearFx(r);
   const W = new Set(); for (const q of r.players.values()) if (wt === 1 ? q.it : wt === 2 ? !q.it : q.id === id) W.add(q.id);   // freeze tag: the whole winning team (freezers or runners) gets the win
   for (const q of r.players.values()) { q.it = 0; if (r.inf === 1 && q.id === r.first && !W.has(q.id)) { q.rec = 0; continue; } rec(q, W.has(q.id)); }   // infection: the starting IT can't win by design, so it is not counted as a loss
-  r.res = r.ord.map(id => r.players.get(id)).filter(Boolean).map(q => ({ id: q.id, nm: q.nm, b: q.bot ? 1 : 0, w: W.has(q.id) ? 1 : 0, o: q.outAt || 0, tw: q.acct ? q.acct.w : 0 })).sort((a, b) => b.w - a.w || b.o - a.o).map(x => ({ id: x.id, nm: x.nm, b: x.b, w: x.w, tw: x.tw }));   // this match's standings (winners first, then whoever lasted longest)
+  r.res = r.ord.map(id => r.players.get(id) || (r.gone && r.gone[id])).filter(Boolean).map(q => ({ id: q.id, nm: q.nm, b: q.bot ? 1 : 0, w: W.has(q.id) ? 1 : 0, o: q.outAt || 0, tw: q.acct ? q.acct.w : 0 })).sort((a, b) => b.w - a.w || b.o - a.o).map(x => ({ id: x.id, nm: x.nm, b: x.b, w: x.w, tw: x.tw }));   // this match's standings (winners first, then whoever lasted longest)
   bcastRoom(r);
 }
 
@@ -684,6 +685,7 @@ function expire(r, t, holder) {
 function removePlayer(r, p, t) {
   if (r.players.get(p.id) !== p) return;
   if (r.st !== 'lobby' && r.st !== 'over') rec(p, 0);   // leaving a running match = a loss
+  if (r.st !== 'lobby' && r.st !== 'over' && r.ord.includes(p.id)) { p.outAt = p.outAt || now(); (r.gone || (r.gone = {}))[p.id] = p; }   // someone who leaves mid-match (even dead) still appears in the final results
   r.players.delete(p.id);
   if (![...r.players.values()].some(q => !q.bot)) { rooms.delete(r.key); return; }   // only bots left -> close the room
   if (r.hostId === p.id) {                                                          // oldest CONNECTED player becomes the host
@@ -1232,6 +1234,8 @@ wss.on('connection', (ws, req) => {
 
     if (m.t === 'cos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { p.cs = m.v; bcastRoom(r); } return; }
     if (m.t === 'emo') { const k = m.k | 0, tn = Date.now(); if (k >= 0 && k < 8 && tn - (p.emoAt || 0) > 1500) { p.emoAt = tn; bcast(r, JSON.stringify({ t: 'emo', o: p.id, k })); } return; }
+    /* ---- ghost zap: an eliminated player calls a lightning strike anywhere (same strike as the random ones, server-side cooldown) ---- */
+    if (m.t === 'zap') { const tn = now(), zx = +m.x, zy = +m.y; if (r.st === 'play' && !p.alive && tn >= r.cdEnd && tn - (p.zapAt || -1e9) > ZAP_CD * 1000 && r.lt.length < 6 && isFinite(zx) && isFinite(zy)) { p.zapAt = tn; r.lt.push({ id: ++r.fxn, x: ri(Math.max(LX + LT_R, Math.min(RX - LT_R, zx))), y: ri(Math.max(120, Math.min(WH - 40, zy))), age: 0, hit: 0 }); sendP(p, '{"t":"zap","cd":' + ZAP_CD + '}'); } return; }
     /* ---- ability choice: in the lobby (spectators waiting for the next match may pick too) ---- */
     if (m.t === 'ab') { if (typeof m.k === 'string' && ABIL.has(m.k) && (r.st === 'lobby' || !p.alive)) p.ab = m.k; return; }
 

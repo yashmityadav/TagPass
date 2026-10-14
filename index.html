@@ -60,7 +60,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 @keyframes drift{to{transform:translate(46px,46px)}}@keyframes wt{50%{opacity:.25}}@keyframes pop2{from{opacity:0;transform:scale(.85)}}@keyframes bob{50%{transform:translateY(-6px)}}@keyframes flt{50%{transform:translateY(-18px) rotate(4deg)}}@keyframes glw{50%{box-shadow:0 0 18px rgba(255,210,63,.6)}}@keyframes rp{from{transform:scale(.4);opacity:.9}to{transform:scale(1.3);opacity:0}}@keyframes fin{from{opacity:0}}@keyframes pop{from{opacity:0;transform:scale(calc(var(--k)*.85))}}@keyframes trl{from{opacity:1;transform:translate(0,0)}to{opacity:0;transform:translate(calc(var(--s)*-.5),calc(var(--s)*-.2)) scale(.5)}}
 body.inm #mute,body.inm #leave{display:none!important}
 #toast{z-index:150}#ft{font-family:'Nunito',sans-serif;font-weight:800;background:#151a52}
-#board{background:rgba(10,14,50,.45);padding:8px 10px;border-radius:14px}#board:empty{display:none}
+#gh{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);display:none;flex-direction:column;align-items:center;gap:8px;z-index:20;pointer-events:none;text-shadow:0 2px 0 #1b2a6b}#gh .gt{background:rgba(10,14,50,.65);padding:6px 16px;border-radius:99px;font-size:17px;text-align:center}#gh .gb{display:flex;gap:10px;pointer-events:auto}body.gst #board{pointer-events:auto}body.gst .chip{cursor:pointer}.chip.pk{outline:2px solid #ffd23f;border-radius:8px}#board{background:rgba(10,14,50,.45);padding:8px 10px;border-radius:14px}#board:empty{display:none}
 .ib{background:rgba(10,14,50,.5)!important;border:1px solid rgba(255,255,255,.18)!important}
 #lobw{position:relative;flex:none;transform-origin:center;text-align:left;font-size:16px;color:#fff}
 .lt{font-family:'Lilita One',Impact,sans-serif;font-weight:400}
@@ -170,7 +170,7 @@ body.inm #mute,body.inm #leave{display:none!important}
 .bdg{display:flex;gap:8px;justify-content:center}.bdg div{display:flex;flex-direction:column;align-items:center;gap:3px;width:104px;padding:8px 4px;border-radius:12px;background:rgba(255,255,255,.04);opacity:.45;color:#fff}.bdg div.on{opacity:1;background:rgba(255,210,63,.14);border:1px solid rgba(255,210,63,.4)}.bdg small{font-size:11px}
 </style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
-<div id="timer"></div><div id="board"></div><div id="toast"></div>
+<div id="timer"></div><div id="board"></div><div id="gh"><div class="gt" id="ght"></div><div class="gb" id="ghb"></div></div><div id="toast"></div>
 <button class="ib" id="mute" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">🔊</button>
 <button class="ib" id="leave" onclick="leaveRoom()" style="right:64px;display:none">✕</button>
 <div id="tc"><button data-k="l" style="left:30px">◀</button><button data-k="r" style="left:120px">▶</button><button data-k="j" style="right:30px;width:92px;height:92px">▲</button></div>
@@ -234,7 +234,7 @@ ME.alive=true;ME.ci=0;
 let cam={x:800,y:418,z:.6};
 const AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* AR: the glide of the arrow between heads */
 /* ovShow/ovHide: see UI layer */
-function elimBanner(me,n){const e=document.createElement('div');e.className='elim'+(me?' me':'');e.innerHTML=me?'<i>💀</i><div>You\'re out<small>Spectating until the next game</small></div>':'<i>💀</i><div><b style="font-weight:400">'+esc(n||'Someone')+'</b> is out</div>';document.body.appendChild(e);setTimeout(()=>e.remove(),2700)}
+function elimBanner(me,n){const e=document.createElement('div');e.className='elim'+(me?' me':'');e.innerHTML=me?'<i>💀</i><div>You\'re out<small>👻 Ghost mode: tap the arena to zap!</small></div>':'<i>💀</i><div><b style="font-weight:400">'+esc(n||'Someone')+'</b> is out</div>';document.body.appendChild(e);setTimeout(()=>e.remove(),2700)}
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
 let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped)?'flex':'none'}
@@ -295,7 +295,18 @@ function setMode(i){const st=PT&&PT.st;if(st){if(!pCan(st))return;st.md=i;pSend(
 function menu(msg){if(!AUTH)return loginScreen(msg);name=AUTH.u;if(!PT)warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';ft.style.display='none';HM=msg||'';homeRender();socPoll('');autoParty()}
 async function enter(host){if(S.joining)return;if(PT)dropParty();S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
-function playAgain(){const md=(S.md|0);S.pm=md;try{if(PT&&PT.st&&PT.st.lead===PT.st.you)pSend({t:'pmode',m:md})}catch(e){}leaveRoom();enterPublic(md)}
+function playAgain(){const y=window.PARTY_AT,md=(S.md|0);if(y&&y.n>1&&!y.lead)return toast('Only the party leader can do that',2400);S.pm=md;if(y&&y.n>1){leaveRoom('Back with your party. Pick the mode and start!');return}leaveRoom();enterPublic(md)}
+function leaveParty(){LASTP='';window.PARTY_AT=null;leaveRoom('You left the party.')}
+/* ---------- ghost mode: eliminated players zap lightning, back a winner, and can play again / leave ---------- */
+const ZAPCD=7;function isGhost(){return S.mode=='play'&&room&&!ME.alive}
+function ghostUI(){const g=isGhost(),gh=$('gh');document.body.classList.toggle('gst',!!g);if(!g){gh.style.display='none';gh.dataset.s='';return}
+ gh.style.display='flex';const cdl=Math.max(0,(S.zapCd||ZAPCD)-(performance.now()-(S.zapAt||-1e9))/1000),bq=S.bk&&rem[S.bk]?rem[S.bk].nm:'';
+ $('ght').textContent='👻 Ghost · '+(cdl>0?'⚡ recharging '+Math.ceil(cdl)+'s':'⚡ TAP THE ARENA to call lightning')+(bq?' · 🎯 backing '+bq+' (+100 🪙 if they win)':' · tap a name to back the winner');
+ const n=(window.PARTY_AT||{}).n|0,sg=S.pub+'|'+(n>1?1:0);if(gh.dataset.s===sg)return;gh.dataset.s=sg;
+ $('ghb').innerHTML=(S.pub?'<button class="xb g" onclick="playAgain()">Play again</button>':'')+(S.pub&&n>1?'<button class="xb d" onclick="leaveParty()">Leave party</button>':'')+'<button class="xb d" onclick="leaveRoom()">Leave</button>'}
+setInterval(ghostUI,250);
+cv.addEventListener('pointerdown',e=>{if(!isGhost()||S.st!='play'||(S.zapAt&&performance.now()-S.zapAt<(S.zapCd||ZAPCD)*1000))return;const x=(e.clientX-W/2)/cam.z+cam.x,y=(e.clientY-H/2)/cam.z+cam.y;S.zapAt=performance.now();netSend({t:'zap',x:Math.round(x),y:Math.round(y)});try{burst(x,y,14,'#fff27a',300);snd(700,.1,'triangle',.05,-200)}catch(er){}});
+$('board').addEventListener('click',e=>{const c=e.target.closest('.chip[data-p]');if(!c||!isGhost()||c.dataset.p==myId)return;S.bk=S.bk==c.dataset.p?null:c.dataset.p;lastBoard='';board();ghostUI()});
 /* open a socket and send the first message (quick / create / join / resume); resolves on the server's "hello". Later messages go to onMsg. */
 /* pre-warm: open the socket while the player is still typing their name, so pressing Play skips the TCP/TLS handshake (and wakes a sleeping server early) */
 let WARM=null,WARM_URL='';
@@ -316,7 +327,7 @@ function openWS(url,first,wait){return new Promise((resolve,reject)=>{
  ws.onerror=()=>{if(!done)fail('connect')};
  ws.onclose=()=>{if(!done)fail('closed');else onClose(ws)};
  if(pre)ws.onopen()})}
-async function enter0(kind){
+async function enter0(kind){window.PARTY_AT=null;
  const nmEl=$('nm'),nm=((nmEl?nmEl.value:name)||'').trim().slice(0,12)||'Player';name=nm;try{localStorage.setItem('tagname',nm)}catch(e){}
  let jc='';
  if(kind=='join'){jc=(CJ||($('cd')?$('cd').value:'')).trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);if(jc.length<3)return $('msg').textContent='Enter a room code first.'}
@@ -357,7 +368,7 @@ function partyGo(kind,ca){
   if(m.t=='party'){P.st=m;LASTP=m.code;return partyUI()}
   if(m.t=='err'){if(P.auto&&(m.e=='nf'||m.e=='full')){LASTP='';PT=null;try{ws.close()}catch(x){}S.apAt=0;return autoParty()}LASTP=''}
   if(m.t=='err')return partyEnd(m.e=='full'?'Party is full (3 max).':m.e=='nf'?'Party not found. Check the code.':m.e=='bad'?'Invalid party code.':m.e=='busy'?'Servers are busy. Try again in a minute.':'Could not join the party.');
-  if(m.t=='hello'){P.joined=1;if(PT===P)PT=null;return finishJoin({ws,hello:m},u)}
+  if(m.t=='hello'){window.PARTY_AT=P.st?{n:P.st.mem.length,lead:P.st.lead===P.st.you}:null;P.joined=1;if(PT===P)PT=null;return finishJoin({ws,hello:m},u)}
   if(P.joined)onMsg(m,ws)};
  ws.onclose=()=>{if(P.joined)onClose(ws);else if(PT===P)partyEnd('Party connection lost.')};
  if(ws.readyState==1)go()}
@@ -377,7 +388,7 @@ setInterval(()=>{if(room&&!room.left&&room.ws&&room.ws.readyState==1&&Date.now()
 addEventListener('pagehide',e=>{if(e.persisted)return;try{if(room){room.left=1;netSend({t:'leave'});room.ws.close()}}catch(x){}});
 /* coming back to a tab (phones often kill sockets in the background): reconnect at once instead of waiting for a watchdog */
 document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
-function leaveRoom(msg){if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
+function leaveRoom(msg){S.bk=null;if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
 addEventListener('resize',()=>setTimeout(fitLobby,60));
 
 /* ---------- public lobby ---------- */
@@ -396,7 +407,7 @@ function toLobby(){netSend({t:'lobby'})}
 function newRem(){return{x:0,y:0,vx:0,vy:0,face:1,g:0,sq:1,it:0,alive:false,st:0,nm:'Player',ci:0,snaps:[],off:null,dly:70,si:33,lt:0,late:0,rt:null,has:0}}
 function onMsg(m,ws){
  if(!room||room.ws!==ws)return;room.rx=Date.now();
- switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'emo':onEmo(m);break;case 'fz':onFz(m);break;case 'pret':leaveRoom();break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
+ switch(m.t){case 'room':S.rm=m;applyRoom(m);break;case 's':onSnap(m);break;case 'tag':onTag(m);break;case 'abu':onAbu(m);break;case 'grab':onGrab(m);break;case 'emo':onEmo(m);break;case 'fz':onFz(m);break;case 'pret':leaveRoom();break;case 'zap':S.zapAt=performance.now();S.zapCd=m.cd;break;case 'kick':leaveRoom(m.e=='idle'?'Removed from the lobby for inactivity. Press Play to search again.':'Something went wrong on the server. Please try again.');break}}
 function toLobbyView(){clearFx();S.mode='lobby';S.rn=0;S.gm=0;S.rs=-1;PEND.length=0;OUT.length=0;ME.alive=true;ME.it=0;document.body.classList.remove('pl');$('timer').textContent='';lobbyUI(1)}
 function playView(m,meP){S.rn=m.rn;S.gm=m.gm;S.mode='play';ovHide();ME.alive=!!meP&&meP.al!==0;document.body.classList.toggle('pl',ME.alive)}
 function applyRoom(m){
@@ -421,7 +432,7 @@ function applyRoom(m){
    if(m.loser==myId){ME.alive=false;ME.it=0;document.body.classList.remove('pl')}}
  }else if(m.st=='over'){
   if(S.ov!==m.gm+':'+m.rn){S.ov=m.gm+':'+m.rn;S.mode='over';document.body.classList.remove('pl');
-   const mine=m.win==myId,w=mine?name:(m.wn||'');jingle(mine);
+   const mine=m.win==myId,w=mine?name:(m.wn||'');jingle(mine);if(S.bk&&m.win&&m.win==S.bk&&!mine){M.tok+=100;msave();setTimeout(()=>toast('🎯 Your pick won! +100 🪙',2800),900)}S.bk=null;
    endScr(m,mine,w)}
  }else if(m.st=='lobby'&&S.mode!='lobby'&&S.mode!='menu')toLobbyView();
  if(S.mode=='lobby')lobbyUI();
@@ -509,7 +520,7 @@ function stepRemote(r,now,dt){
 function board(){
  const b=$('board');if(S.mode!='play'&&S.mode!='over'){if(lastBoard){b.innerHTML='';lastBoard=''}return}
  const h=peers.map(p=>{const q=p.isMe?ME:rem[p.peer]||{alive:true,it:0};const nm=p.isMe?name:q.nm||'Player';const c=(p.isMe?ME.ci:q.ci)||0;
-  return`<div class="chip${q.alive===false?' out':''}" style="font-size:16px"><span class="dot" style="background:${COLS[c]}"></span>${esc(nm)}${q.it&&q.alive!==false?' ▼':''}</div>`}).join('');
+  return`<div class="chip${q.alive===false?' out':''}${S.bk==p.peer?' pk':''}" data-p="${p.peer}" style="font-size:16px"><span class="dot" style="background:${COLS[c]}"></span>${esc(nm)}${q.it&&q.alive!==false?' ▼':''}${S.bk==p.peer?' 🎯':''}</div>`}).join('');
  if(h!==lastBoard){lastBoard=h;b.innerHTML=h}}
 /* ---------- abilities ---------- */
 const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5 s'},smoke:{n:'Smoke',i:'💨',d:'Throw a smoke cloud that hides everyone inside it for 5 s'},trap:{n:'Trap',i:'🕸️',d:'Sticky goo on the floor that slows anyone standing on it for 5 s'}};
@@ -938,7 +949,7 @@ function endScr(m,mine,w){
  const L0=lvOf(M.xp),gx=mine?90:35,gt=mine?150:45;M.xp+=gx;M.tok+=gt;M.q.forEach(q=>{if(q.d)return;if(q.k=='play')q.p=Math.min(q.n,q.p+1);if(q.k=='win'&&mine)q.p=Math.min(q.n,q.p+1)});msave();
  const L1=lvOf(M.xp),up=L1.l>L0.l,tt=m.wt?(m.wt==1?'❄ Freezers win!':'🏃 Runners win!'):w?esc(w)+(mine?', you win!':' wins!'):'Game over',
  cf=mine?'<div class="cfw">'+Array.from({length:40},()=>`<i class="cf" style="left:${Math.random()*100}%;background:${['#ffd23f','#ff2d7a','#2b8cff','#3dff7a','#fff'][Math.random()*5|0]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*1.2}s"></i>`).join('')+'</div>':'';
- scr(`${cf}<div class="xc res${mine?' win':''}" style="right:335px"><div class="vk">${mine?'🏆 VICTORY':'GAME OVER'}</div>${!m.wt&&w?chH(mine?myLook():look(w),118,1):`<div style="font-size:70px;line-height:1">${m.wt==1?'❄':m.wt?'🏃':'🏁'}</div>`}<div class="vt">${tt}</div><div class="rwd"><div>⭐ +${gx} XP</div><div>🪙 +${gt}</div></div><div style="width:300px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Level ${L1.l}</span><span>${L1.x}/${L1.n} XP</span></div><div class="xp"><i id="rxp" style="width:${up?0:(L0.x/L0.n*100).toFixed(1)}%"></i></div>${up?'<div class="lt" style="color:#ffd23f;margin-top:6px;font-size:20px">⬆ LEVEL UP!</div>':''}</div><div style="display:flex;gap:10px;margin-top:6px">${S.pub?'<button class="xb g" onclick="playAgain()">Play again</button>':(isHost?'<button class="xb g" onclick="toLobby()">Back to lobby</button>':'<div class="stm" style="align-self:center">Waiting for the host…</div>')}<button class="xb d" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button></div></div><div class="xc" style="position:absolute;top:0;bottom:0;right:0;width:325px;padding:14px;display:flex;flex-direction:column;gap:6px;overflow:auto"><div class="lt" style="font-size:22px;text-align:center">🏁 Match Results</div>${stH(m)}</div>`,975,470,0);
+ scr(`${cf}<div class="xc res${mine?' win':''}" style="right:335px"><div class="vk">${mine?'🏆 VICTORY':'GAME OVER'}</div>${!m.wt&&w?chH(mine?myLook():look(w),118,1):`<div style="font-size:70px;line-height:1">${m.wt==1?'❄':m.wt?'🏃':'🏁'}</div>`}<div class="vt">${tt}</div><div class="rwd"><div>⭐ +${gx} XP</div><div>🪙 +${gt}</div></div><div style="width:300px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Level ${L1.l}</span><span>${L1.x}/${L1.n} XP</span></div><div class="xp"><i id="rxp" style="width:${up?0:(L0.x/L0.n*100).toFixed(1)}%"></i></div>${up?'<div class="lt" style="color:#ffd23f;margin-top:6px;font-size:20px">⬆ LEVEL UP!</div>':''}</div><div style="display:flex;gap:10px;margin-top:6px">${S.pub?'<button class="xb g" onclick="playAgain()">Play again</button>':(isHost?'<button class="xb g" onclick="toLobby()">Back to lobby</button>':'<div class="stm" style="align-self:center">Waiting for the host…</div>')}<button class="xb d" onclick="leaveRoom()">${S.pub?'Menu':'Leave'}</button>${S.pub&&(window.PARTY_AT||{}).n>1?'<button class="xb d" onclick="leaveParty()">Leave party</button>':''}</div></div><div class="xc" style="position:absolute;top:0;bottom:0;right:0;width:325px;padding:14px;display:flex;flex-direction:column;gap:6px;overflow:auto"><div class="lt" style="font-size:22px;text-align:center">🏁 Match Results</div>${stH(m)}</div>`,975,470,0);
  setTimeout(()=>{const e=$('rxp');e&&(e.style.width=(L1.x/L1.n*100).toFixed(1)+'%')},350)}
 
 /* ===================== v2: icons, cosmetics in game, emotes, profile, rewards ===================== */
