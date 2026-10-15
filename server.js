@@ -220,13 +220,21 @@ const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400
 const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, blink: 350, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [50, 75, 100, 150, 200, 300, 500];
 const needXp = l => 100 + (l - 1) * 40;
 function lvlOf(x) { let l = 1; while (x >= needXp(l)) { x -= needXp(l); l++; } return l; }
-const LRW = n => n == 4 ? { k: 'hat', i: 3 } : n == 8 ? { k: 'tr', i: 1 } : n == 12 ? { k: 'sk', i: 5 } : n == 16 ? { k: 'hat', i: 5 } : n % 5 == 0 ? { g: n % 10 == 0 ? 40 : 15 } : { t: 40 + n * 20 };
+const LRW = n => n == 4 ? { k: 'hat', i: 3 } : n == 8 ? { k: 'tr', i: 1 } : n == 12 ? { k: 'sk', i: 5 } : n == 16 ? { k: 'hat', i: 5 } : n % 5 == 0 ? { g: n % 10 == 0 ? 40 : 15 } : { t: Math.min(40 + n * 20, 1500) };
 const dayKey = t => new Date(t).toISOString().slice(0, 10);
 function prog(a) {
   if (!a.pr) a.pr = { tok: 0, gem: 0, xp: 0, streak: 0, last: '', own: {}, lr: {}, em: [0, 1, 2, 3], eq: { sk: 0, ac: 0, hat: 0, fc: 0, tr: 0 }, ws: 0, bws: 0,
-    q: [{ k: 'play', t: 'Play 3 matches', p: 0, n: 3, r: 90, x: 60 }, { k: 'win', t: 'Win a match', p: 0, n: 1, r: 150, x: 100 }, { k: 'tag', t: 'Tag 10 players', p: 0, n: 10, r: 120, x: 80 }, { k: 'play', t: 'Play 1 match with a friend', p: 0, n: 1, r: 60, x: 40 }],
+    q: [], qd: '',
     sx: { tg: 0, tt: 0, sv: 0, sn: 0, pt: 0, md: [0, 0, 0], rc: [] } };
+  const td = dayKey(Date.now()); if (a.pr.qd !== td) { a.pr.qd = td; a.pr.q = genQ(a.k, td, lvlOf(a.pr.xp || 0)); }   // a fresh set of quests every UTC day, forever (yesterday's unclaimed ones expire)
   return a.pr;
+}
+function genQ(k, day, L) {   // deterministic per account + day, so reloading / reconnecting can never re-roll them
+  let s = 2166136261; for (const c of k + day) s = Math.imul(s ^ c.charCodeAt(0), 16777619) >>> 0;
+  const R = (lo, hi) => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return lo + (s >>> 8) % (hi - lo + 1); }, sc = 1 + Math.min(L, 60) / 60;
+  const mk = (k, t, n, u) => { const r = Math.round(n * u * sc / 5) * 5; return { k, t, p: 0, n, r, x: Math.round(r * .6) }; };
+  const a = R(2, 5), b = R(1, 2), c = R(8, 16), d = R(4, 10) * 30;
+  return [mk('play', 'Play ' + a + ' matches', a, 30), mk('win', 'Win ' + b + (b > 1 ? ' matches' : ' match'), b, 150), mk('tag', 'Tag ' + c + ' players', c, 12), mk('sv', 'Survive ' + d + ' seconds in matches', d, .5)];
 }
 function csClean(a, v) {   // a player can only show cosmetics they own
   const X = prog(a), p = String(v || '').split(',').map(Number);
@@ -253,10 +261,10 @@ function progAct(a, m) {
   if (act === 'daily') {
     const today = dayKey(Date.now()); if (X.last === today) return 'done';
     const cont = X.last === dayKey(Date.now() - 864e5), i = cont ? X.streak % 7 : 0;
-    X.streak = cont ? X.streak + 1 : 1; X.last = today; X.tok += DAILY[i]; if (i === 6) X.gem += 25; return '';
+    X.streak = cont ? X.streak + 1 : 1; X.last = today; const w = Math.min(Math.floor((X.streak - 1) / 7), 10); X.tok += DAILY[i] + w * 25; if (i === 6) X.gem += 25 + w * 5; return '';
   }
   if (act === 'lr') {
-    const n = m.n; if (!Number.isInteger(n) || n < 1 || n > 30) return 'bad';
+    const n = m.n; if (!Number.isInteger(n) || n < 1 || n > 500) return 'bad';
     if (X.lr[n]) return 'done'; if (lvlOf(X.xp) < n) return 'locked';
     const r = LRW(n); X.lr[n] = 1; if (r.t) X.tok += r.t; if (r.g) X.gem += r.g; if (r.k) X.own[r.k + r.i] = 1; return '';
   }
@@ -274,7 +282,7 @@ function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1,
   if (fin) {   // rewards only for matches played to the end, never for quitting
     const gx = win ? 90 : 35, gt = win ? 150 : 45, du = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv = win || !p.outAt ? du : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000), S = X.sx;
     X.xp += gx; X.tok += gt; g = { x: gx, t: gt };
-    for (const q of X.q) { if (q.d) continue; if (q.k === 'play') q.p = Math.min(q.n, q.p + 1); else if (q.k === 'win' && win) q.p = Math.min(q.n, q.p + 1); else if (q.k === 'tag') q.p = Math.min(q.n, q.p + (p.tg | 0)); }
+    if (du >= 20) for (const q of X.q) { if (q.d) continue; const v = q.k === 'play' ? 1 : q.k === 'win' ? (win ? 1 : 0) : q.k === 'tag' ? Math.min(p.tg | 0, 8) : q.k === 'sv' ? Math.round(Math.min(sv, du)) : 0; q.p = Math.min(q.n, q.p + v); }   // only server-counted, finished public matches (>= 20 s) count; tags capped per match
     S.tg += p.tg | 0; S.tt += p.tt | 0; S.pt += du; S.sv += sv; S.sn++; S.md[p.mdi | 0] = (S.md[p.mdi | 0] | 0) + 1; S.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du)]); S.rc.length = Math.min(S.rc.length, 10);
     if (p.bonus) { X.tok += p.bonus; g.bk = 1; p.bonus = 0; }
   }
@@ -573,7 +581,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(ABIL.size)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .93 + Math.random() * .07; b.ab = [...ABIL][rnd(ABIL.size)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
@@ -582,7 +590,7 @@ function addBots(r, cnt) {
    Runners flee while avoiding walls / crowds, idle runners wander between platforms, the holder chases; everyone uses dash, grab and their ability. ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk-- <= 0) { p.btk = (lagEma > 6 ? 18 : 12) + rnd(6); botPlan(r, p); p.k = 0; }
+  if (p.btk-- <= 0) { p.btk = (lagEma > 6 ? 16 : 10) + rnd(3); botPlan(r, p); p.k = 0; }
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0) | (pl.a && k === 1 ? 32 : 0) | (k < pl.g ? 64 : 0);
@@ -591,15 +599,38 @@ function botWp() {   // a random spot on a random platform, away from the map ed
   const P = SOL.filter(q => q.w >= 90 && q.x + q.w > LX + 100 && q.x < RX - 100);
   if (!P.length) return [WW / 2, 300];
   const q = P[rnd(P.length)];
-  return [Math.max(LX + 120, Math.min(RX - 120, q.x + 30 + Math.random() * Math.max(1, q.w - 60))), q.y - PH - 2];
+  return [Math.max(LX + 120, Math.min(RX - 120, q.x + 30 + Math.random() * Math.max(1, q.w - 60))), q.y - PH - 2, SOL.indexOf(q)];
+}
+const NAV = {};
+function pfOf(s) { if (!s.g) return -1; for (let i = 0; i < SOL.length; i++) if (onQ(SOL[i], s)) return i; return -1; }
+function navBuild() {   // which platform reaches which (real physics: walking off, jumps, dashes, pads) -> hop counts between every pair of platforms
+  const n = SOL.length, E = [], D = [], B = newPlayer('n', 0), sx0 = SX; SX = SOL;
+  for (let i = 0; i < n; i++) { E.push([]); D.push(new Array(n).fill(99)); D[i][i] = 0; }
+  const run = (i, x, d, v0, J, ds, pad) => {
+    const s = Object.assign({}, B); s.x = x; s.y = SOL[i].y - PH; s.g = 1; s.vx = v0; let air = 0;
+    for (let k = 0; k < 150; k++) {
+      step(s, { l: d < 0, r: d > 0, j: k < J, d: 0, s: ds && !k }, DT);
+      if (s.y > WH + 40) return;
+      if (!s.g) air = 1; else if (air) { const l = pfOf(s); if (l >= 0 && l !== i && !E[i].some(e => e.j === l)) E[i].push({ j: l, x, y: SOL[i].y - PH, pad }); return; }
+    }
+  };
+  for (const mid of [0, 1]) for (let i = 0; i < n; i++) {
+    const q = SOL[i], L = q.x + 2, R = Math.max(L, q.x + q.w - PW - 2), M = (L + R) / 2;
+    for (const J of [0, 4, 8, 14, 24]) for (const ds of [0, 1]) { if (mid) { run(i, M, -1, 0, J, ds); run(i, M, 1, 0, J, ds); } else { run(i, L, -1, -300, J, ds); run(i, R, 1, 300, J, ds); } }
+  }
+  for (const pd of PADS) { const i = SOL.findIndex(q => Math.abs(q.y - pd.y) < 3 && pd.x + 4 >= q.x && pd.x < q.x + q.w); if (i >= 0) for (const d of [-1, 0, 1]) run(i, pd.x + 4, d, 0, 0, 0, 1); }
+  for (let i = 0; i < n; i++) for (const e of E[i]) D[i][e.j] = 1;
+  for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (D[i][k] + D[k][j] < D[i][j]) D[i][j] = D[i][k] + D[k][j];
+  SX = sx0; return { E, D };
 }
 function botPlan(r, p) {
-  let near = null, nd = 1e9, rescue = null, rd = 1e9, thr = null, td = 1e9; const oth = [];
+  const NV = NAV[CURMAP] || (NAV[CURMAP] = navBuild()), pf = q => { if (q.g) { const f = pfOf(q); if (f >= 0) q.lp = f; } return q.lp >= 0 ? q.lp : -1; };   // platform someone stands on (or stood on last)
+  const cur = pf(p); let near = null, nd = 1e9, ns = 1e9, rescue = null, rd = 1e9, thr = null, td = 1e9; const oth = [];
   for (const q of r.players.values()) {
     if (q === p || !q.alive) continue;
-    const d = Math.hypot(q.x - p.x, (q.y - p.y) * 1.2);
+    const d = Math.hypot(q.x - p.x, (q.y - p.y) * 1.2), qp = pf(q), sc = d + (cur >= 0 && qp >= 0 ? Math.min(NV.D[cur][qp], 8) * 260 : 0);   // the chaser picks the runner who is closest by PATH, not just in a straight line
     if (!q.it && !q.fz) oth.push(q);
-    if (p.it) { if (!q.it && !q.fz && d < nd) { nd = d; near = q; } }
+    if (p.it) { if (!q.it && !q.fz && sc < ns) { ns = sc; nd = d; near = q; } }
     else if (q.it) { if (d < td) { td = d; thr = q; } }
     else if (r.inf === 2 && q.fz && d < rd) { rd = d; rescue = q; }
   }
@@ -610,54 +641,60 @@ function botPlan(r, p) {
   else if (rescue && td > 320) { tg = rescue; mode = 0; }
   else if (thr && td < (p.fl ? 700 : 520)) { tg = thr; mode = 1; }   // hysteresis: no flee/wander flip-flop
   p.fl = mode === 1;
-  if (mode < 2 && Math.hypot(p.x - p.sx, p.y - p.sy) < 6 && ++p.stk > 5 && (mode === 0 || td > 250)) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 12, s: 0, a: 0, g: 0 }; p.btk = 14; return; }   // stuck under a ledge: shake loose
-  if (Math.hypot(p.x - p.sx, p.y - p.sy) >= 6) p.stk = 0;
+  const mv = Math.hypot(p.x - p.sx, p.y - p.sy);
+  if (mode < 2 && mv < 6 && ++p.stk > 3 && (mode === 0 || td > 250)) { p.stk = 0; p.sx = p.x; p.sy = p.y; p.pl = { d: rnd(3) - 1, j: 22, s: p.dcd <= 0 ? 1 : 0, a: 0, g: 0 }; p.btk = 12; return; }   // wedged (crates, ledge, trap): break loose with a full jump + dash
+  if (mv >= 6) p.stk = 0;
   p.sx = p.x; p.sy = p.y;
-  let tx, ty;
+  let tx, ty, tp = -1;
   if (mode === 2) {
     const reached = p.wp && Math.hypot(p.x - p.wp[0], p.y - p.wp[1]) < 50;
     if (!p.wp || reached || --p.wpT <= 0) {
       if (reached && Math.random() < .3) { p.wp = null; p.pl = NP; return; }   // a short human pause
-      p.wp = botWp(); p.wpT = 12 + rnd(12);
+      p.wp = botWp(); p.wpT = 30 + rnd(20);
     }
-    tx = p.wp[0]; ty = p.wp[1];
-  } else {
-    if (p.tid !== tg.id || --p.tc <= 0) { p.tid = tg.id; p.tc = 2; p.tx = tg.x + (Math.random() - .5) * 140; p.ty = tg.y + (Math.random() - .5) * 60; }   // human-like reaction: stale, slightly off view of the target
-    tx = p.tx; ty = p.ty;
-  }
-  const js = p.g || p.coy > 0 ? (lagEma > 6 ? [0, 12] : [0, 6, 12]) : [0, 12], canD = p.dcd <= 0 && p.dash <= 0 && mode < 2, all = [];
+    tx = p.wp[0]; ty = p.wp[1]; tp = p.wp[2];
+  } else { tx = tg.x + tg.vx * .25 + (Math.random() - .5) * 24; ty = tg.y + tg.vy * .08; tp = mode === 0 ? pf(tg) : -1; }   // aim slightly ahead of a moving target
+  let rx = tx, ry = ty, rpad = 0;   // where to head right now: the launch spot of the next hop towards the target's platform
+  if (mode !== 1 && cur >= 0 && tp >= 0 && cur !== tp && NV.D[cur][tp] < 99) { let bs = 1e9; for (const e of NV.E[cur]) { const h = NV.D[e.j][tp]; if (h >= NV.D[cur][tp]) continue; const sc = h * 1000 + Math.abs(p.x - e.x); if (sc < bs) { bs = sc; rx = e.x; ry = e.y; rpad = e.pad ? 1 : 0; } } }
+  const thp = mode === 1 ? pf(thr) : -1;
+  const js = p.g || p.coy > 0 ? (lagEma > 6 ? [0, 22] : [0, 8, 22]) : [0, 12], canD = p.dcd <= 0 && p.dash <= 0 && (mode < 2 || p.dcd <= 0 && Math.random() < .3), all = [];
   for (let d = -1; d <= 1; d++) for (const j of js) for (let ds = 0; ds <= (canD ? 1 : 0); ds++) {
-    const s = Object.assign({}, p); let c = 0, dead = false, mn = 1e9;
-    for (let k = 0; k < 30; k++) {
-      step(s, { l: d < 0, r: d > 0, j: k < j, d: 0, s: ds && !k }, DT);
+    const s = Object.assign({}, p); let c = 0, dead = false, mn = 1e9, lau = 0;
+    for (let k = 0; k < 36; k++) {
+      step(s, { l: d < 0, r: d > 0, j: k < j, d: 0, s: ds && !k }, DT); if (s.vy < -1000) lau = 1;   // launched by a pad
       if (s.y > WH - 30 || s.x < LX - 30 || s.x > RX + 30) { dead = true; break; }
-      if (k % 5 === 4) {
-        const dd = Math.hypot(s.x - tx, (s.y - ty) * 1.2); if (dd < mn) mn = dd;
-        if (mode === 1) { c -= Math.min(dd, 600); const e = Math.min(s.x - LX, RX - PW - s.x); if (e < 170) c += (170 - e) * 1.6; }   // flee, but never into a wall / corner
+      if (k % 6 === 5) {
+        const dd = Math.hypot(s.x - rx, (s.y - ry) * 1.2); if (dd < mn) mn = dd;
+        if (mode === 1) { c -= Math.min(Math.hypot(s.x - thr.x, (s.y - thr.y) * 1.2), 600); const e = Math.min(s.x - LX, RX - PW - s.x); if (e < 170) c += (170 - e) * 1.6; }   // flee, but never into a wall / corner
         else c += mode === 0 ? dd : dd * .6;
         if (mode) for (const o of oth) { const od = Math.hypot(o.x - s.x, o.y - s.y); if (od < 130) c += (130 - od) * (mode === 2 ? 2 : .8); }   // keep spread out
+        for (const t of r.tr) if (t.o !== p.id && Math.abs(s.x + PW / 2 - t.x) < 34 && Math.abs(s.y + PH - t.y) < 30) c += 2500;   // never walk into a trap
       }
     }
     if (dead) continue;
-    if (mode === 0 && mn < 40) c -= 300; else if (mode === 1 && s.g) c -= 40; else if (mode === 2 && mn < 50) c -= 100;
-    if (j) c += mode === 2 ? 60 : 35;                                                // no pointless hopping: a jump must pay for itself
-    if (ds) c += mode === 1 && td < 220 ? 10 : 35;
+    let ln = pfOf(s), fl = 0;   // let the plan finish falling (same direction held) and see which platform it lands on
+    if (ln < 0 && !s.g) { const z = Object.assign({}, s); for (let k = 0; k < 40 && !z.g; k++) step(z, { l: d < 0, r: d > 0, j: 0, d: 0, s: 0 }, DT); if (z.y > WH - 30 || z.x < LX - 30 || z.x > RX + 30) continue; ln = pfOf(z); fl = z.g ? 0 : 1; }   // fl: still in the air (e.g. bouncing on a pad) = never a good end
+    if (mode === 1) { if (thp >= 0 && ln >= 0) c -= Math.min(NV.D[thp][ln], 4) * 1200; }
+    else if (tp >= 0) c += (ln >= 0 ? Math.min(NV.D[ln][tp], 6) : (cur >= 0 ? Math.min(NV.D[cur][tp], 6) : 3) + (fl ? (lau && rpad ? -.5 : 1.5) : .5)) * 3000;   // a pad launch is only good when the route says so
+    if (mode === 0 && mn < 40) c -= 600; else if (mode === 1 && s.g) c -= 40; else if (mode === 2 && mn < 50) c -= 100;
+    if (j) c += mode === 2 ? 60 : 20;                                                // no pointless hopping: a jump must pay for itself
+    if (ds) c += mode === 1 ? (td < 220 ? 10 : 60) : mode === 0 ? (nd < 320 ? 0 : 40) : 60;
     if (!d && mode === 0) c += 8;
     if (p.pl && p.pl.d === d) c -= 25;                              // keep going the same way (smooth, human)
     all.push({ d, j, s: ds, c: c + Math.random() });
   }
   if (!all.length) { p.pl = NP; return; }
   all.sort((a, b) => a.c - b.c);
-  const bp = Math.random() < (1 - p.sk) * .45 ? Object.assign({}, all[rnd(Math.min(3, all.length))], { j: all[0].j }) : all[0];   // a slip may change direction, never adds random jumps   // sometimes a human-like slip
-  const pl = { d: bp.d, j: bp.j, s: bp.s, a: 0, g: 0 }, D = p.it ? nd : td;
-  if (r.st === 'play' && p.acd <= 0 && D < 1e8 && Math.random() < .55) {   // ability: fake / smoke / trap
-    if (p.ab === 'fake') pl.a = D < (p.it ? 220 : 320) ? 1 : 0;
-    else if (p.ab === 'smoke') pl.a = p.it ? (D < 200 ? 1 : 0) : (D < 360 && D > 90 ? 1 : 0);
-    else if (p.ab === 'trap') pl.a = p.g && (p.it ? D < 260 : D > 140 && D < 480) ? 1 : 0;
-    else pl.a = D < (p.it ? 280 : 230) ? 1 : 0;
+  const bp = Math.random() < (1 - p.sk) * .3 ? Object.assign({}, all[rnd(Math.min(3, all.length))], { j: all[0].j }) : all[0];   // a rare human-like slip
+  const pl = { d: bp.d, j: bp.j, s: bp.s, a: 0, g: 0 }, DD = p.it ? nd : td;
+  if (r.st === 'play' && p.acd <= 0 && DD < 1e8 && Math.random() < .55) {   // ability: fake / smoke / trap
+    if (p.ab === 'fake') pl.a = DD < (p.it ? 220 : 320) ? 1 : 0;
+    else if (p.ab === 'smoke') pl.a = p.it ? (DD < 200 ? 1 : 0) : (DD < 360 && DD > 90 ? 1 : 0);
+    else if (p.ab === 'trap') pl.a = p.g && (p.it ? DD < 260 : DD > 140 && DD < 480) ? 1 : 0;
+    else pl.a = DD < (p.it ? 280 : 230) ? 1 : 0;
   }
   if (p.gs > 0 && (p.gt || p.gk)) pl.g = 14;                       // keep holding what we grabbed
-  else if (p.it && nd < 80 && p.gcd <= 0 && Math.random() < .7) pl.g = 14;   // grab a runner who is within reach
+  else if (p.it && nd < 70 && p.gcd <= 0 && Math.random() < .9) pl.g = 14;   // grab a runner who is within reach
   p.pl = pl;
 }
 
@@ -915,7 +952,7 @@ function ungrab(r, p, cd) {
   p.gt = ''; p.gs = 0; p.gl = 0; p.gcd = cd;
 }
 
-const inSolid = p => { for (const s of SX) if (p.x < s.x + s.w && p.x + PW > s.x && p.y < s.y + s.h && p.y + PH > s.y) return true; return false; };
+const inSolid = p => { for (const s of SX) if (p.x < s.x + s.w && p.x + PW > s.x && p.y < s.y + s.h && p.y + PH > s.y) return true; const mx = p.x + PW / 2; for (const q of SL) { if (mx < q.x || mx > q.x + q.w) continue; const s = q.y + (mx - q.x) / q.w * q.dy; if (p.y + PH > s + 6 && p.y < s + q.hv) return true; } return false; };
 
 // the nearest player inside p's reach that nobody is holding yet
 function grabTarget(r, p) {
@@ -930,13 +967,16 @@ function grabTarget(r, p) {
 }
 
 // Drag q by (mx,my) but never into a wall / floor: try the full move, then x only, then y only.
-function dragBy(q, mx, my) {
-  const ox = q.x, oy = q.y;
-  q.x = Math.max(LX, Math.min(RX - PW, ox + mx)); q.y = oy + my;
-  if (!inSolid(q)) return;
-  q.y = oy; if (!inSolid(q)) return;
-  q.x = ox; q.y = oy + my; if (!inSolid(q)) return;
-  q.x = ox; q.y = oy;
+function dragBy(q, mx, my) {   // moves in 3 px sub-steps and stops at the first wall: a long drag can never tunnel through a platform
+  const n = Math.max(1, Math.ceil(Math.max(Math.abs(mx), Math.abs(my)) / 3)), sx = mx / n, sy = my / n;
+  for (let i = 0; i < n; i++) {
+    const ox = q.x, oy = q.y;
+    q.x = Math.max(LX, Math.min(RX - PW, ox + sx)); q.y = oy + sy;
+    if (!inSolid(q)) continue;
+    q.y = oy; if (!inSolid(q)) continue;
+    q.x = ox; q.y = oy + sy; if (!inSolid(q)) continue;
+    q.x = ox; q.y = oy; break;
+  }
 }
 
 // Runs once per tick while a round is live (after everybody moved).
