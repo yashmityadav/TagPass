@@ -167,6 +167,14 @@ function authReq(req, res) {
         if (m.a !== 'get') accSave(a);
         return out(200, { ok: 1, pr: prog(a) });
       }
+      if (m.m === 'shop') {   // start a real-money checkout
+        const a = await tokAcc(m.tk); if (!a) return out(401, { e: 'tk' });
+        const r = await shopReq(a, m); return r.o ? out(200, { ok: 1, o: r.o, a: r.a, k: r.k, n: r.n }) : out(200, { ok: 0, e: r.e });
+      }
+      if (m.m === 'shopv') {   // the popup finished: verify the signature, credit, return the fresh balance
+        const a = await tokAcc(m.tk); if (!a) return out(401, { e: 'tk' });
+        return (await rzpVerify(a, m)) ? out(200, { ok: 1, pr: prog(a) }) : out(200, { ok: 0, e: 'pay' });
+      }
       if (m.m === 'tk') { const a = await tokAcc(m.tk); if (a) lbSeed(a); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
       const u = String(m.u || ''), pw = String(m.p || ''), k = u.toLowerCase();
       if (!/^[A-Za-z0-9_]{3,12}$/.test(u) || pw.length < 4 || pw.length > 64) return out(400, { e: 'bad' });
@@ -217,14 +225,14 @@ function lbWin(a) {
 function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
 /* ---- server-authoritative progress: tokens, gems, xp, cosmetics, quests, stats ---- */
 const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, ...[100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
-const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, blink: 350, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [50, 75, 100, 150, 200, 300, 500];
+const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, blink: 350, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [10, 15, 20, 25, 30, 40, 50];
 /* ---- economy: every token price x PM; top-tier items cost gems instead (gem price = old token price / GD) ---- */
 const PM = 3, GD = 20, GEM_MIN = { sk: 1800, ac: 700, hat: 900, fc: 1000, tr: 1700, em: 800 }, GEM_AB = new Set(['swap', 'clones', 'zap']), GEMI = {}, ABG = {};
 for (const k in PRICE) { const L = PRICE[k]; GEMI[k] = L.map(p => !!p && p >= GEM_MIN[k]); PRICE[k] = L.map((p, i) => !p ? 0 : GEMI[k][i] ? Math.max(25, Math.round(p / GD / 5) * 5) : p * PM); }
 for (const k in ABP) { if (!ABP[k]) continue; if (GEM_AB.has(k)) { ABG[k] = 1; ABP[k] = Math.max(25, Math.round(ABP[k] / GD / 5) * 5); } else ABP[k] *= PM; }
 const needXp = l => 100 + (l - 1) * 40;
 function lvlOf(x) { let l = 1; while (x >= needXp(l)) { x -= needXp(l); l++; } return l; }
-const LRW = n => n == 4 ? { k: 'hat', i: 3 } : n == 8 ? { k: 'tr', i: 1 } : n == 12 ? { k: 'sk', i: 5 } : n == 16 ? { k: 'hat', i: 5 } : n % 5 == 0 ? { g: n % 10 == 0 ? 40 : 15 } : { t: Math.min(40 + n * 20, 1500) };
+const LRW = n => n == 4 ? { k: 'hat', i: 6 } : n == 8 ? { k: 'tr', i: 5 } : n == 12 ? { k: 'sk', i: 6 } : n == 16 ? { k: 'hat', i: 8 } : n % 5 == 0 ? { g: n % 10 == 0 ? 10 : 5 } : { t: Math.min(10 + n * 2, 50) };
 const dayKey = t => new Date(t).toISOString().slice(0, 10);
 function prog(a) {
   if (!a.pr) a.pr = { tok: 0, gem: 0, xp: 0, streak: 0, last: '', own: {}, lr: {}, em: [0, 1, 2, 3], eq: { sk: 0, ac: 0, hat: 0, fc: 0, tr: 0 }, ws: 0, bws: 0,
@@ -266,7 +274,7 @@ function progAct(a, m) {
   if (act === 'daily') {
     const today = dayKey(Date.now()); if (X.last === today) return 'done';
     const cont = X.last === dayKey(Date.now() - 864e5), i = cont ? X.streak % 7 : 0;
-    X.streak = cont ? X.streak + 1 : 1; X.last = today; const w = Math.min(Math.floor((X.streak - 1) / 7), 10); X.tok += DAILY[i] + w * 25; if (i === 6) X.gem += 25 + w * 5; return '';
+    X.streak = cont ? X.streak + 1 : 1; X.last = today; const w = Math.min(Math.floor((X.streak - 1) / 7), 10); X.tok += DAILY[i]; if (i === 6) X.gem += 10; return '';
   }
   if (act === 'lr') {
     const n = m.n; if (!Number.isInteger(n) || n < 1 || n > 500) return 'bad';
@@ -300,6 +308,54 @@ function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1,
   sendP(p, JSON.stringify({ t: 'pr', pr: X, g }));
 }
 
+/* ---- real-money store (Razorpay). env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET. Amounts are decided HERE, never by the browser. ---- */
+const RZP_ID = process.env.RAZORPAY_KEY_ID || '', RZP_SEC = process.env.RAZORPAY_KEY_SECRET || '', RZP_WH = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+const RZP_AUTH = 'Basic ' + Buffer.from(RZP_ID + ':' + RZP_SEC).toString('base64');
+const PACKS = {   // c = price in paise (INR x 100). Amounts are fixed here; the browser only ever sends a pack id
+  t1: { n: '2,000 Tokens', c: 34900, t: 2000 }, t2: { n: '6,000 Tokens', c: 84900, t: 6000 }, t3: { n: '15,000 Tokens', c: 169900, t: 15000 }, t4: { n: '40,000 Tokens', c: 399900, t: 40000 },
+  g1: { n: '50 Gems', c: 34900, g: 50 }, g2: { n: '130 Gems', c: 84900, g: 130 }, g3: { n: '280 Gems', c: 169900, g: 280 }, g4: { n: '600 Gems', c: 349900, g: 600 } };
+function payDay(a) { if (!a.pay || typeof a.pay !== 'object') a.pay = { ids: [] }; if (!Array.isArray(a.pay.ids)) a.pay.ids = []; return a.pay; }   // ids = paid order ids, so nothing can pay out twice
+const hmacHex = (k, d) => crypto.createHmac('sha256', k).update(d).digest('hex');
+const sameHex = (x, y) => typeof x === 'string' && x.length === y.length && /^[0-9a-f]+$/.test(x) && crypto.timingSafeEqual(Buffer.from(x), Buffer.from(y));
+async function shopReq(a, m) {   // creates a Razorpay order -> { o: orderId, a: paise, k: keyId, n: name } or { e }
+  const pk = typeof m.pk === 'string' && Object.hasOwn(PACKS, m.pk) ? PACKS[m.pk] : null; if (!pk) return { e: 'bad' };
+  if (!RZP_ID || !RZP_SEC) return { e: 'off' };
+  try {
+    const r = await fetch('https://api.razorpay.com/v1/orders', { method: 'POST', headers: { Authorization: RZP_AUTH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: pk.c, currency: 'INR', receipt: 't' + Date.now().toString(36), notes: { acct: a.k, pack: m.pk } }) });
+    const d = await r.json(); return r.ok && d.id ? { o: d.id, a: pk.c, k: RZP_ID, n: pk.n } : { e: 'pay' };
+  } catch { return { e: 'pay' }; }
+}
+async function rzpSettle(id, who) {   // asks Razorpay itself whether the order is paid, then credits it exactly once
+  if (typeof id !== 'string' || !/^order_[A-Za-z0-9]+$/.test(id)) return false;
+  const r = await fetch('https://api.razorpay.com/v1/orders/' + id, { headers: { Authorization: RZP_AUTH } }); if (!r.ok) return false;
+  const o = await r.json(), pk = o.notes && Object.hasOwn(PACKS, o.notes.pack) ? PACKS[o.notes.pack] : null, a = pk ? await getAcc(String(o.notes.acct || '')) : null;
+  if (!pk || !a || (who && who !== a) || o.status !== 'paid' || o.amount !== pk.c || o.currency !== 'INR') return false;
+  const P = payDay(a);
+  if (!P.ids.includes(o.id)) { const X = prog(a); X.tok += pk.t || 0; X.gem += pk.g || 0; P.ids.push(o.id); if (P.ids.length > 100) P.ids.shift(); accSave(a); console.log('purchase', a.k, o.notes.pack); }
+  return true;
+}
+async function rzpVerify(a, m) {   // the checkout popup hands the browser a signature; only Razorpay's secret can make a valid one
+  if (!RZP_SEC || typeof m.o !== 'string' || typeof m.p !== 'string' || typeof m.s !== 'string' || m.o.length > 60 || m.p.length > 60) return false;
+  if (!sameHex(m.s, hmacHex(RZP_SEC, m.o + '|' + m.p))) return false;
+  return rzpSettle(m.o, a);
+}
+function rzpHook(req, res) {   // Razorpay -> server backup (e.g. the player closed the tab right after paying)
+  const ch = []; let len = 0;
+  req.on('data', d => { len += d.length; if (len > 65536) req.destroy(); else ch.push(d); });
+  req.on('end', async () => {
+    try {
+      if (!RZP_WH) { res.writeHead(503); return res.end(); }
+      const raw = Buffer.concat(ch).toString('utf8');
+      if (!sameHex(String(req.headers['x-razorpay-signature'] || ''), hmacHex(RZP_WH, raw))) { res.writeHead(400); return res.end(); }
+      const ev = JSON.parse(raw), pl = ev && ev.payload || {};
+      const id = ev.event === 'order.paid' ? pl.order && pl.order.entity && pl.order.entity.id : ev.event === 'payment.captured' ? pl.payment && pl.payment.entity && pl.payment.entity.order_id : null;
+      if (id) await rzpSettle(id, null);
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}');
+    } catch (e) { console.error('razorpay hook', e.message); res.writeHead(500); res.end(); }
+  });
+}
+
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
 
@@ -314,6 +370,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ online: wss.clients.size, waiting, wm }));
   }
+  if (url === '/razorpay' && req.method === 'POST') return rzpHook(req, res);
   if (url === '/auth') {
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' }); return res.end(); }
     if (req.method === 'POST') return authReq(req, res);
@@ -331,7 +388,7 @@ const server = http.createServer((req, res) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     'X-Frame-Options': 'DENY',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'"
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://checkout.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.razorpay.com; media-src 'self' data: blob:; connect-src 'self' ws: wss: https://api.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com; frame-ancestors 'none'"
   };
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
 
