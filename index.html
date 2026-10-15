@@ -176,7 +176,7 @@ body.inm #mute,body.inm #leave{display:none!important}
 <button class="ib" id="mute" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">🔊</button>
 <button class="ib" id="leave" onclick="leaveRoom()" style="right:64px;display:none">✕</button>
 <div id="tc"><button data-k="l" style="left:calc(env(safe-area-inset-left,0px) + 16px)">◀</button><button data-k="r" style="left:calc(env(safe-area-inset-left,0px) + 106px)">▶</button><button data-k="j" style="right:calc(env(safe-area-inset-right,0px) + 28px);width:92px;height:92px">▲</button></div>
-<div id="hud"><button id="hd" data-k="s"><span class="ic">⚡</span><span class="kh">Shift</span><span class="cdn"></span></button><button id="ha" data-k="a"><span class="ic">👥</span><span class="kh">E</span><span class="cdn"></span></button><button id="hg" data-k="g"><span class="ic">✊</span><span class="kh">Q</span><span class="cdn"></span></button></div>
+<div id="hud"><button id="hd" data-k="s"><span class="ic">⚡</span><span class="kh">Shift</span><span class="cdn"></span></button><button id="ha" data-k="a"><span class="ic">✴</span><span class="kh">E</span><span class="cdn"></span></button><button id="hg" data-k="g"><span class="ic">✊</span><span class="kh">Q</span><span class="cdn"></span></button></div>
 <div id="ov"></div>
 <div id="rot"><div style="font-size:64px">⟳</div>Rotate your phone to landscape to play</div><div id="fsp"><div style="font-size:64px">⛶</div>Tap anywhere once to go to full screen</div>
 <script>
@@ -533,7 +533,7 @@ function slowLv(){return(ME.lv||0)-(performance.now()-(ME.lvAt||0))/1000>0?1:0}
 function slowAt(p){if(!p.g||!FX.t.length)return 0;for(const t of FX.t){if(t[4]==myId&&TRAP_T-t[3]<TRAP_IMM)continue;if(p.x+PW>t[1]-TRAP_W/2&&p.x<t[1]+TRAP_W/2&&Math.abs(p.y+PH-t[2])<36)return 1}return 0}
 function inSmoke(p){for(const c of FX.s)if(Math.hypot(p.x+PW/2-c[1],p.y+PH/2-c[2])<SMOKE_R*.8)return 1;return 0}
 function hudUpd(){const dc=Math.max(0,ME.dcd||0),ac=Math.max(0,(ME.ac||0)-(performance.now()-(ME.acAt||0))/1000),gc=Math.max(0,(ME.gc||0)-(performance.now()-(ME.gcAt||0))/1000),sig=Math.ceil(dc)+'|'+Math.ceil(ac)+'|'+Math.ceil(gc)+'|'+(ME.gs||0)+'|'+MYAB;if(sig===lastHud)return;lastHud=sig;
- const set=(b,c)=>{b.classList.toggle('cool',c>0);b.querySelector('.cdn').textContent=c>0?Math.ceil(c):''};set($('hd'),dc);set($('ha'),ac);set($('hg'),gc);$('hg').classList.toggle('act',!!ME.gs);$('ha').querySelector('.ic').textContent=AB[MYAB].i}
+ const set=(b,c)=>{b.classList.toggle('cool',c>0);b.querySelector('.cdn').textContent=c>0?Math.ceil(c):''};set($('hd'),dc);set($('ha'),ac);set($('hg'),gc);$('hg').classList.toggle('act',!!ME.gs);$('ha').querySelector('.ic').textContent='✴'}
 function onAbu(m){const o=m.o==myId?ME:rem[m.o];if(!o)return;
  if(m.k=='fake'){burst(o.x+15,o.y+17,16,'#ffffff',260);snd(520,.15,'triangle',.05,300)}
  else if(m.k=='smoke')snd(260,.18,'sawtooth',.04,-120);
@@ -986,7 +986,8 @@ swords:'<path d="M4 4l10 10M20 4L10 14M3 21l4-4M21 21l-4-4M14 14l3 3M10 14l-3 3"
 map:'<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" fill="currentColor"/><path d="M9 4v14M15 6v14" stroke="#151a52" stroke-width="1.4"/>',
 copy:'<rect x="8" y="8" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" fill="none" stroke="currentColor" stroke-width="2"/>',
 bolt:'<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="#ffd23f"/>',
-grab:'<rect x="5" y="9" width="14" height="11" rx="4" fill="currentColor"/><path d="M8 9V6.5a1.8 1.8 0 013.6 0V9M12 9V5.5a1.8 1.8 0 013.6 0V9" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+grab:'<g fill="currentColor"><rect x="6.5" y="6" width="3" height="9" rx="1.5"/><rect x="10" y="3" width="3" height="10" rx="1.5"/><rect x="13.5" y="4" width="3" height="10" rx="1.5"/><rect x="17" y="7" width="3" height="8" rx="1.5"/><path d="M6.5 13h13.5v2c0 4-2.5 7-7 7-3.2 0-5-1.4-6.4-3.8L3 14.5a1.6 1.6 0 012.6-1.8l.9 1z"/></g>',
+abil:'<path d="M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6L12 22.5l-2.6-7.9L1.5 12l7.9-2.6z" fill="currentColor"/><circle cx="19.5" cy="4.5" r="2" fill="currentColor"/>',
 smoke:'<path d="M7 18a4 4 0 010-8 5 5 0 019.5-1A4.5 4.5 0 0117 18z" fill="currentColor"/>',
 web:'<path d="M12 2v20M3 7l18 10M3 17L21 7" stroke="currentColor" stroke-width="1.6"/><path d="M12 6l4 3v6l-4 3-4-3V9z" fill="none" stroke="currentColor" stroke-width="1.6"/>',
 flag:'<path d="M5 3v18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M5 4h13l-3 4 3 4H5z" fill="currentColor"/>',
@@ -1014,7 +1015,7 @@ e_cry:B+EY+'<path d="M8.5 12v6" stroke="#4fc3ff" stroke-width="2.4" stroke-linec
 e_cool:B+'<path d="M3.5 8.5h17v3c0 2.5-1.6 3.5-3.4 3.5S14 13.6 13.5 11.5h-3c-.5 2.1-1.8 3.5-3.6 3.5S3.5 14 3.5 11.5z" fill="#0a0a14"/><path d="M8 18q4 2.5 8 0" '+SK+'/>',
 e_zzz:B+'<path d="M6 11h4M14 11h4" '+SK+'/><path d="M16 4h4l-4 4h4" fill="none" stroke="#5a3a00" stroke-width="1.5"/><circle cx="12" cy="17" r="1.8" fill="#5a3a00"/>'};
 const ic=(n,s)=>ICO[n]?`<svg class="ic" viewBox="0 0 24 24" width="${s||'1.15em'}" height="${s||'1.15em'}">${ICO[n]}</svg>`:'';
-const EMJ={'🪙':'coin','💎':'gem','🔥':'flame','🎁':'gift','❓':'help','🔊':'snd','🔇':'mute','⎋':'out','👥':'users','🔔':'bell','📜':'quest','🏆':'cup','🎮':'pad','💀':'skull','🎨':'palette','🔒':'lock','🎯':'target','📨':'mail','⭐':'star','🏃':'arrow','🦠':'virus','❄':'snow','🥔':'bomb','⚔':'swords','🗺':'map','⧉':'copy','⚡':'bolt','✊':'grab','💨':'smoke','🕸':'web','👋':'users','🤝':'users','🏁':'flag','🌑':'moon','✕':'x','✖':'x','✔':'chk','＋':'plus','📊':'chart'};
+const EMJ={'🪙':'coin','💎':'gem','🔥':'flame','🎁':'gift','❓':'help','🔊':'snd','🔇':'mute','⎋':'out','👥':'users','🔔':'bell','📜':'quest','🏆':'cup','🎮':'pad','💀':'skull','🎨':'palette','🔒':'lock','🎯':'target','📨':'mail','⭐':'star','🏃':'arrow','🦠':'virus','❄':'snow','🥔':'bomb','⚔':'swords','🗺':'map','⧉':'copy','⚡':'bolt','✊':'grab','✴':'abil','💨':'smoke','🕸':'web','👋':'users','🤝':'users','🏁':'flag','🌑':'moon','✕':'x','✖':'x','✔':'chk','＋':'plus','📊':'chart'};
 const EMT=new RegExp(Object.keys(EMJ).join('|')),EMR=new RegExp('('+Object.keys(EMJ).join('|')+')\uFE0F?','g');
 function emj(n){if(n.nodeType==3){if(!EMT.test(n.data))return;const t=n.data,f=document.createDocumentFragment();let i=0,m;EMR.lastIndex=0;while((m=EMR.exec(t))){if(m.index>i)f.append(t.slice(i,m.index));const s=document.createElement('span');s.className='ei';s.innerHTML=ic(EMJ[m[1]]);f.append(s);i=m.index+m[0].length}if(i<t.length)f.append(t.slice(i));n.replaceWith(f)}else if(n.nodeType==1&&!(n instanceof SVGElement)&&!/^(SCRIPT|STYLE|CANVAS|INPUT|TEXTAREA)$/.test(n.tagName))[...n.childNodes].forEach(emj)}
 new MutationObserver(ms=>{for(const m of ms)m.addedNodes.forEach(emj)}).observe(document.body,{childList:true,subtree:true});
@@ -1175,7 +1176,7 @@ function rewardsModal(){const L=lvOf(M.xp);let h='';for(let n=1;n<=30;n++){const
 /* player profile / analytics (dummy numbers are stable per username) */
 function sxg(){return M.sx=Object.assign({tg:0,tt:0,sv:0,sn:0,pt:0,md:[0,0,0],rc:[]},M.sx||{})}
 function sd(n,s){let h=0;for(const c of AUTH.u+s)h=(h*31+c.charCodeAt(0))>>>0;return h%n}
-let PFT=0;function openProfile(){if(Date.now()-PFT<500)return;PFT=Date.now();profileModal()}
+let PFT=0;function openProfile(){if(Date.now()-PFT<500)return;PFT=Date.now();try{profileModal()}catch(e){toast('Profile error: '+(e&&e.message),4500)}}
 /* tap on the profile block: judged by finger position, so it still works if something overlaps it or the bar re-renders mid-tap */
 document.addEventListener('pointerup',e=>{if($('mod')||ov.classList.contains('off')||!AUTH)return;const m=document.querySelector('.tp .me');if(!m)return;const b=m.getBoundingClientRect();if(e.clientX>=b.left&&e.clientX<=b.right&&e.clientY>=b.top&&e.clientY<=b.bottom)openProfile()});
 function profileModal(){if(!AUTH||!AUTH.st)return toast('Profile is still loading…');const st=AUTH.st,L=lvOf(M.xp),p=st.p,w=st.w,h=hc(AUTH.u),wr=p?Math.round(w/p*100):0,
@@ -1184,7 +1185,7 @@ function profileModal(){if(!AUTH||!AUTH.st)return toast('Profile is still loadin
  S1=[['target',tags,'Tags made'],['skull',X.tt,'Times tagged'],['cup',wr+'%','Win rate'],['flame',M.bws|0,'Best win streak'],['bolt',surv,'Avg survival'],['pad',p,'Matches'],['star',M.xp.toLocaleString(),'Total XP'],['users',ptx,'Play time']],
  mt=X.md.reduce((a,b)=>a+b,0),md=MODES2.map((m,i)=>[m[1],m[3],mt?Math.round(X.md[i]/mt*100):0]),
  c=0,tr=X.rc.slice().reverse().map((r,i)=>{c+=r[0];return c/(i+1)*100}),pts=tr.length>1?tr.map((v,i)=>(i*268/(tr.length-1)+6).toFixed(1)+','+(70-v*.62).toFixed(1)).join(' '):'',
- rec=X.rc.slice(0,5).map(r=>[r[0],MODES2[r[1]][1],(MAPN[1+r[2]]||MAPN[0])[0],r[3]+'s']),
+ rec=X.rc.slice(0,5).map(r=>[r[0],(MODES2[r[1]]||MODES2[0])[1],(MAPN[1+r[2]]||MAPN[0])[0],r[3]+'s']),
  eq=['sk','hat','fc','tr'].map(k=>CAT[k][0]+': '+CAT[k][1][M.eq[k]][0]).join(' · ');
  modal(`<div class="xc" style="padding:20px;display:flex;flex-direction:column;gap:12px"><div style="display:grid;grid-template-columns:210px 1fr;gap:14px"><div class="st1" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px"><div style="height:30px"></div>${chH(myLook(),104,1)}<div class="lt" style="font-size:24px">${esc(AUTH.u)}</div><div class="pill" style="height:28px;font-size:14px;color:${tier[1]}">${tier[0]} · Lv ${L.l}</div><div class="xp" style="width:150px"><i style="width:${(L.x/L.n*100).toFixed(1)}%"></i></div><small style="opacity:.65">${L.x}/${L.n} XP</small><small style="opacity:.55;font-size:10px;text-align:center">${eq}</small></div><div class="stt">${S1.map(s=>`<div class="st1">${ic(s[0],'22px')}<b>${s[1]}</b><small>${s[2]}</small></div>`).join('')}</div></div>
  <div style="display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px"><div class="st1" style="text-align:left"><div class="hd2">MODE BREAKDOWN</div>${md.map(m=>`<div style="font-size:12px;margin:6px 0 3px">${m[0]} · ${m[2]}%</div><div class="bar"><i style="width:${m[2]}%;background:${m[1]}"></i></div>`).join('')}</div>
