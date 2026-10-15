@@ -275,16 +275,16 @@ function progAct(a, m) {
   return 'bad';
 }
 function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1, won/lost +1, plus the rewards
-  if (!p.rec || !p.acct) return; p.rec = 0;
-  const a = p.acct; a.p++; if (win) { a.w++; lbWin(a); } else a.l++;
+  if (!p.rec || !p.acct) return; const so = p.rec === 2; p.rec = 0;   // so: private match = stats only, no tokens / xp / quests / leaderboard
+  const a = p.acct; a.p++; if (win) { a.w++; if (!so) lbWin(a); } else a.l++;
   const X = prog(a); let g = null;
   if (win) { X.ws++; if (X.ws > X.bws) X.bws = X.ws; } else X.ws = 0;
   if (fin) {   // rewards only for matches played to the end, never for quitting
     const gx = win ? 90 : 35, gt = win ? 150 : 45, du = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv = win || !p.outAt ? du : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000), S = X.sx;
-    X.xp += gx; X.tok += gt; g = { x: gx, t: gt };
-    if (du >= 20) for (const q of X.q) { if (q.d) continue; const v = q.k === 'play' ? 1 : q.k === 'win' ? (win ? 1 : 0) : q.k === 'tag' ? Math.min(p.tg | 0, 8) : q.k === 'sv' ? Math.round(Math.min(sv, du)) : 0; q.p = Math.min(q.n, q.p + v); }   // only server-counted, finished public matches (>= 20 s) count; tags capped per match
+    if (!so) { X.xp += gx; X.tok += gt; g = { x: gx, t: gt }; }
+    if (!so && du >= 20) for (const q of X.q) { if (q.d) continue; const v = q.k === 'play' ? 1 : q.k === 'win' ? (win ? 1 : 0) : q.k === 'tag' ? Math.min(p.tg | 0, 8) : q.k === 'sv' ? Math.round(Math.min(sv, du)) : 0; q.p = Math.min(q.n, q.p + v); }   // only server-counted, finished public matches (>= 20 s) count; tags capped per match
     S.tg += p.tg | 0; S.tt += p.tt | 0; S.pt += du; S.sv += sv; S.sn++; S.md[p.mdi | 0] = (S.md[p.mdi | 0] | 0) + 1; S.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du)]); S.rc.length = Math.min(S.rc.length, 10);
-    if (p.bonus) { X.tok += p.bonus; g.bk = 1; p.bonus = 0; }
+    if (p.bonus && !so) { X.tok += p.bonus; g.bk = 1; p.bonus = 0; }
   }
   accSave(a);
   sendP(p, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l }));
@@ -759,7 +759,7 @@ function startMatch(r, t) {
   if (!ids.length) return;
   r.gm = 1 + rnd(999999999); r.mp = !r.pub && r.sel > 0 ? r.sel - 1 : rnd(MAPS.length); r.rn = 0; for (const q of r.players.values()) q.rdy = 0; r.practice = ids.length === 1; r.gone = {}; r.win = r.wn = null; r.lobbyGo = 0; r.botNext = 0;
   for (const q of r.players.values()) { q.mt0 = now(); q.tg = q.tt = 0; q.bk = null; q.bonus = 0; q.mdi = r.inf | 0; q.mpi = r.mp | 0; }
-  for (const q of r.players.values()) q.rec = (r.pub && !r.practice && q.acct && ids.includes(q.id)) ? 1 : 0;   // only public lobbies (incl. party joins) count; private rooms and solo practice never do
+  for (const q of r.players.values()) q.rec = (q.acct && !r.practice && !r.prac && ids.includes(q.id)) ? (r.pub ? 1 : (ids.filter(i => { const z = r.players.get(i); return z && !z.bot; }).length >= 2 ? 2 : 0)) : 0;   // only public lobbies (incl. party joins) count; private rooms and solo practice never do
   startRound(r, ids, t);
 }
 
