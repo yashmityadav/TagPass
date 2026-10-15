@@ -37,7 +37,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #hud .ic{font-size:26px;line-height:1}#hud .kh{font-size:11px;opacity:.85}
 #hud .cdn{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:26px;background:rgba(27,42,107,.6);-webkit-text-stroke:2px #1b2a6b;paint-order:stroke fill}
 #hud button.cool .cdn{display:flex}
-.t #hud{--R:112px;--S:70px;left:auto;right:calc(env(safe-area-inset-right,0px) + 122px);transform:none;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);width:0;height:0;gap:0}   /* the jump button's centre: 76px from the right, 96px above the bottom */
+.t #hud{--R:112px;--S:70px;left:auto;right:calc(env(safe-area-inset-right,0px) + 90px);transform:none;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);width:0;height:0;gap:0}   /* the jump button's centre: 76px from the right, 96px above the bottom */
 .t.pl #hud{display:block}
 .t #hud button{position:absolute;width:var(--S);height:var(--S);border-radius:50%;left:calc(var(--R)*var(--ux) - var(--S)/2);top:calc(var(--R)*var(--uy)*(-1) - var(--S)/2)}   /* each button sits on a circle of radius R around the jump button */
 .t #ha{--ux:-1;--uy:0}.t #hd{--ux:-.7071;--uy:.7071}.t #hg{--ux:0;--uy:1}   /* quarter circle: 180° (left), 135°, 90° (straight up) */
@@ -55,6 +55,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 :root{--k:1;--line:rgba(255,255,255,.13);--cy:#29d3ff}
 #ov{font-family:'Nunito','Lilita One',system-ui,sans-serif;font-weight:800;gap:0;padding:0;overflow:hidden;text-align:left}
 #ov:not(.bg){background:rgba(8,10,34,.74)}
+@media (pointer:coarse){#ov{padding:calc(env(safe-area-inset-top,0px) + 6px) calc(env(safe-area-inset-right,0px) + 26px) calc(env(safe-area-inset-bottom,0px) + 6px) calc(env(safe-area-inset-left,0px) + 26px)!important}}
+.cgr *,.pn *,.il *{touch-action:pan-y}.cts *,.rwt *{touch-action:pan-x}
 #ov.bg{background:radial-gradient(900px 520px at 12% 8%,rgba(80,60,230,.55),transparent 60%),radial-gradient(800px 500px at 92% 95%,rgba(255,45,122,.38),transparent 60%),linear-gradient(160deg,#0a1030,#151a52 55%,#23126b)}
 #ov.bg::before{content:'';position:fixed;inset:-60px;z-index:-1;background-image:radial-gradient(rgba(255,255,255,.09) 2px,transparent 2.6px);background-size:46px 46px;animation:drift 24s linear infinite;pointer-events:none}
 @keyframes drift{to{transform:translate(46px,46px)}}@keyframes wt{50%{opacity:.25}}@keyframes pop2{from{opacity:0;transform:scale(.85)}}@keyframes bob{50%{transform:translateY(-6px)}}@keyframes flt{50%{transform:translateY(-18px) rotate(4deg)}}@keyframes glw{50%{box-shadow:0 0 18px rgba(255,210,63,.6)}}@keyframes rp{from{transform:scale(.4);opacity:.9}to{transform:scale(1.3);opacity:0}}@keyframes fin{from{opacity:0}}@keyframes pop{from{opacity:0;transform:scale(calc(var(--k)*.85))}}@keyframes trl{from{opacity:1;transform:translate(0,0)}to{opacity:0;transform:translate(calc(var(--s)*-.5),calc(var(--s)*-.2)) scale(.5)}}
@@ -158,7 +160,7 @@ body.inm #mute,body.inm #leave{display:none!important}
 .mp{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
 .ic{vertical-align:-.2em;display:inline-block;flex:none}.ei{display:inline-flex;align-items:center}.md .mi .ei,.ico .ei,.tbx .ei{display:inline-flex}
 .ib{display:grid!important;place-items:center;color:#fff;padding:0!important}#emb{display:none!important}.pl #emb{display:grid!important}
-#emw{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);right:176px;flex-direction:row;display:none;gap:6px;z-index:40;background:rgba(10,14,50,.78);padding:6px;border-radius:14px;border:1px solid rgba(255,255,255,.18)}#emw.on,.pl #emw{display:flex}.pl #emb{display:none!important}
+#emw{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);right:116px;flex-direction:row;display:none;gap:6px;z-index:40;background:rgba(10,14,50,.78);padding:6px;border-radius:14px;border:1px solid rgba(255,255,255,.18)}#emw.on,.pl #emw{display:flex}.pl #emb{display:none!important}
 #emw button{width:46px;height:50px;border-radius:10px;border:0;background:rgba(255,255,255,.1);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;cursor:pointer}
 .ch .ho{top:-44%;font-size:calc(var(--s)*.78)}.ch .sh{top:34%;font-size:calc(var(--s)*.66)}.ch .hp{top:40%}.ch .ey.hr svg{display:block}
 .lkb{font-style:normal;font-size:12px;color:#ffd23f;font-family:'Lilita One'}
@@ -173,7 +175,7 @@ body.inm #mute,body.inm #leave{display:none!important}
 <div id="timer"></div><div id="board"></div><div id="gh"><div class="gt" id="ght"></div><div class="gb" id="ghb"></div></div><div id="toast"></div>
 <button class="ib" id="mute" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">🔊</button>
 <button class="ib" id="leave" onclick="leaveRoom()" style="right:64px;display:none">✕</button>
-<div id="tc"><button data-k="l" style="left:calc(env(safe-area-inset-left,0px) + 76px)">◀</button><button data-k="r" style="left:calc(env(safe-area-inset-left,0px) + 166px)">▶</button><button data-k="j" style="right:calc(env(safe-area-inset-right,0px) + 76px);width:92px;height:92px">▲</button></div>
+<div id="tc"><button data-k="l" style="left:calc(env(safe-area-inset-left,0px) + 44px)">◀</button><button data-k="r" style="left:calc(env(safe-area-inset-left,0px) + 134px)">▶</button><button data-k="j" style="right:calc(env(safe-area-inset-right,0px) + 44px);width:92px;height:92px">▲</button></div>
 <div id="hud"><button id="hd" data-k="s"><span class="ic">⚡</span><span class="kh">Shift</span><span class="cdn"></span></button><button id="ha" data-k="a"><span class="ic">👥</span><span class="kh">E</span><span class="cdn"></span></button><button id="hg" data-k="g"><span class="ic">✊</span><span class="kh">Q</span><span class="cdn"></span></button></div>
 <div id="ov"></div>
 <div id="rot"><div style="font-size:64px">⟳</div>Rotate your phone to landscape to play</div><div id="fsp"><div style="font-size:64px">⛶</div>Tap anywhere once to go to full screen</div>
@@ -863,7 +865,7 @@ function lvOf(x){let l=1;while(x>=need(l)){x-=need(l);l++}return{l,x,n:need(l)}}
 /* overlay + scaling: every screen is a fixed-size stage scaled to fit any device */
 function ovShow(h,full){const im=$('im');im&&im.remove();mclose();ov.innerHTML=h;ov.classList.remove('off','fit');ov.classList.toggle('bg',!!full);document.body.classList.toggle('inm',!!full);ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)}
 function ovHide(){ov.classList.add('off');document.body.classList.remove('inm');const im=$('im');im&&im.remove();mclose()}
-function fitLobby(){const w=$('lobw');if(!w)return;const dw=+w.dataset.w,dh=+w.dataset.h,aw=innerWidth-10,k=Math.min(aw/dw,(innerHeight-10)/dh,1.7);let W=dw;if(k*dw<aw)W=Math.min(aw/k,dw*1.7);w.style.width=Math.round(W)+'px';w.style.transform='scale('+k.toFixed(3)+')';document.documentElement.style.setProperty('--k',Math.min(k,1.3).toFixed(3))}
+function fitLobby(){const w=$('lobw');if(!w)return;const dw=+w.dataset.w,dh=+w.dataset.h,cs=getComputedStyle(ov),aw=ov.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-10,ah=ov.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-10,k=Math.min(aw/dw,ah/dh,1.7);let W=dw;if(k*dw<aw)W=Math.min(aw/k,dw*1.7);w.style.width=Math.round(W)+'px';w.style.transform='scale('+k.toFixed(3)+')';document.documentElement.style.setProperty('--k',Math.min(k,1.3).toFixed(3))}
 function scr(inner,w,h,full){ovShow('<div id="lobw" data-w="'+w+'" data-h="'+h+'" style="width:'+w+'px;height:'+h+'px">'+inner+'</div>',full);ov.classList.add('fit');fitLobby();requestAnimationFrame(fitLobby);thumbs()}
 function modal(h,w){const o=$('mod'),re=!!o,sc=o?(o.querySelector('.rwt')||{}).scrollTop||0:0;mclose();const m=document.createElement('div');m.id='mod';if(re)m.style.animation='none';m.innerHTML='<div class="mbx" style="width:'+(w||560)+'px'+(re?';animation:none':'')+'">'+h+'</div>';m.addEventListener('click',e=>{if(e.target===m)mclose()});document.body.appendChild(m);const b=m.firstChild,k=Math.min(+getComputedStyle(document.documentElement).getPropertyValue('--k')||1,(innerHeight-14)/b.offsetHeight,(innerWidth-14)/b.offsetWidth);b.style.transform='scale('+k.toFixed(3)+')';const rw=m.querySelector('.rwt');if(rw&&sc)rw.scrollTop=sc}
 function gx(){const e=window.event&&window.event.target,r=e&&e.getBoundingClientRect?e.getBoundingClientRect():null;return{o:[M.tok,M.gem],r}}
