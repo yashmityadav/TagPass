@@ -54,7 +54,8 @@ const GRAB_MAX = 6, GRAB_MIN = 0.25;               // longest hold (s) / shortes
 const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hold / after a miss
 const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
 const HELD_K = 0.5, CARRY_K = 0.8;                   // speed multiplier of the player who is held / of the player who is carrying
-const ABIL = new Set(['fake', 'smoke', 'trap']);
+const ABIL = new Set(['fake', 'smoke', 'trap', 'spring', 'rocket', 'blink', 'uppercut', 'recharge', 'shock', 'magnet', 'shield', 'swap', 'clones', 'zap']);
+const ABCD = { fake: 30, smoke: 30, trap: 30, spring: 20, rocket: 20, blink: 18, uppercut: 20, recharge: 25, shock: 30, magnet: 30, shield: 30, swap: 30, clones: 30, zap: 35 };   // per-ability cooldown (s); anything not listed uses AB_CD
 const ZAP_CD = 7;                                    // ghost lightning: eliminated players can call a strike every ZAP_CD s
 /* ---- lightning: random warning circle, strike after LT_WARN s, launches everyone inside (no damage) ---- */
 const LT_R = 110, LT_WARN = 1, LT_FLASH = .35, LT_MIN = 3, LT_MAX = 6, LT_VY = 1500, LT_VX = 620;
@@ -215,8 +216,8 @@ function lbWin(a) {
 }
 function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
 /* ---- server-authoritative progress: tokens, gems, xp, cosmetics, quests, stats ---- */
-const PRICE = { sk: [0, 0, 200, 200, 350, 800], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150], hat: [0, 0, 250, 300, 350, 900], fc: [0, 150, 200, 0], tr: [0, 250, 400, 300, 700], em: [0, 0, 0, 0, 150, 150, 250, 100] };
-const ABP = { fake: 0, smoke: 300, trap: 500 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [50, 75, 100, 150, 200, 300, 500];
+const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, [100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
+const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, blink: 350, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [50, 75, 100, 150, 200, 300, 500];
 const needXp = l => 100 + (l - 1) * 40;
 function lvlOf(x) { let l = 1; while (x >= needXp(l)) { x -= needXp(l); l++; } return l; }
 const LRW = n => n == 4 ? { k: 'hat', i: 3 } : n == 8 ? { k: 'tr', i: 1 } : n == 12 ? { k: 'sk', i: 5 } : n == 16 ? { k: 'hat', i: 5 } : n % 5 == 0 ? { g: n % 10 == 0 ? 40 : 15 } : { t: 40 + n * 20 };
@@ -572,7 +573,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(6), rnd(10), rnd(6), rnd(4), rnd(5)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(3)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .6 + Math.random() * .4; b.ab = [...ABIL][rnd(ABIL.size)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
@@ -653,6 +654,7 @@ function botPlan(r, p) {
     if (p.ab === 'fake') pl.a = D < (p.it ? 220 : 320) ? 1 : 0;
     else if (p.ab === 'smoke') pl.a = p.it ? (D < 200 ? 1 : 0) : (D < 360 && D > 90 ? 1 : 0);
     else if (p.ab === 'trap') pl.a = p.g && (p.it ? D < 260 : D > 140 && D < 480) ? 1 : 0;
+    else pl.a = D < (p.it ? 280 : 230) ? 1 : 0;
   }
   if (p.gs > 0 && (p.gt || p.gk)) pl.g = 14;                       // keep holding what we grabbed
   else if (p.it && nd < 80 && p.gcd <= 0 && Math.random() < .7) pl.g = 14;   // grab a runner who is within reach
@@ -662,7 +664,7 @@ function botPlan(r, p) {
 function spawn(p, k, t, sp) {
   p.x = sp[0] + k * 42; p.y = sp[1]; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
   p.rs++; p.q.length = 0; p.lastCmd = t; p.lastB = 0; p.starve = 0; p.debt = 0;
-  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.lv = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0;   // every round starts with dash + ability + grab ready
+  p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.lv = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0; p.shd = 0;   // every round starts with dash + ability + grab ready
 }
 
 function aliveIds(r) {
@@ -799,19 +801,59 @@ function inTrap(r, p) {
 }
 
 // The chosen ability was pressed (rising edge). The server owns the cooldown, so it can't be skipped.
+function nearOthers(r, p, rad) {   // other living, unfrozen players within rad px, nearest first
+  const o = [];
+  for (const q of r.players.values()) { if (q === p || !q.alive || q.fz) continue; const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < rad) o.push([d, q]); }
+  return o.sort((a, b) => a[0] - b[0]);
+}
+function shove(q, vx, vy) { if (q.hb || q.gt || q.gk) return; q.vx = vx; q.vy = vy; q.g = 0; q.coy = q.buf = 0; q.cut = 1; q.dash = 0; q.zip = -1; q.bst = PAD_BST; q.rs++; }
 function useAbility(r, p) {
   if (r.st !== 'play' || p.acd > 0) return;
   const k = p.ab;
-  if (k === 'fake') {
-    r.dec.push({ id: 'd' + (++r.fxn), o: p.id, life: FAKE_T, x: p.x, y: p.y, vx: p.vx, vy: p.vy, g: p.g, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: p.face,
-      it: p.it, dir: p.face, stuck: 0, ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, bst: 0, pcd: 0, bv: 0 });
+  if (k === 'fake' || k === 'clones') {
+    for (const dr of k === 'fake' ? [p.face] : [-1, 1]) r.dec.push({ id: 'd' + (++r.fxn), o: p.id, life: FAKE_T, x: p.x, y: p.y, vx: p.vx, vy: p.vy, g: p.g, coy: 0, buf: 0, pj: false, cut: 0, drop: 0, face: p.face,
+      it: p.it, dir: dr, stuck: 0, ps: false, dash: 0, dd: 1, dcd: 0, slow: 0, bst: 0, pcd: 0, bv: 0 });
   } else if (k === 'smoke') {
     r.pj.push({ x: p.x + PW / 2, y: p.y + 8, vx: p.face * 520 + p.vx * .4, vy: -420, t: 0 });
   } else if (k === 'trap') {
     if (!p.g) return;                                                               // a trap needs floor under your feet (no cooldown is spent)
     r.tr.push({ id: ++r.fxn, x: Math.round(p.x + PW / 2), y: Math.round(p.y + PH), o: p.id, life: TRAP_T });
+  } else if (k === 'spring') {
+    if (p.hb) return;
+    p.vy = -1150; p.g = 0; p.coy = p.buf = 0; p.cut = 1; p.dash = 0; p.zip = -1; p.rs++;
+  } else if (k === 'rocket') {
+    if (p.hb) return;
+    p.vx = p.face * 1250; p.dash = 0; p.zip = -1; p.bst = PAD_BST; p.rs++;
+  } else if (k === 'blink') {
+    if (p.hb || p.gt || p.gk || p.zip >= 0) return;
+    let nx = p.x;
+    for (let i = 1; i <= 15; i++) {
+      const tx = p.x + p.face * 20 * i;
+      if (tx < LX || tx + PW > RX || SOL.some(q => tx < q.x + q.w && tx + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y)) break;
+      nx = tx;
+    }
+    if (nx === p.x) return;
+    p.x = nx; p.rs++;
+  } else if (k === 'uppercut') {
+    const o = nearOthers(r, p, 170); if (!o.length) return;
+    shove(o[0][1], o[0][1].vx * .3, -1250);
+  } else if (k === 'recharge') {
+    p.dcd = 0; p.gcd = 0;
+  } else if (k === 'shock' || k === 'magnet') {
+    const o = nearOthers(r, p, 300); if (!o.length) return;
+    for (const [, q] of o) { const dir = (Math.sign(q.x - p.x) || 1) * (k === 'shock' ? 1 : -1); shove(q, dir * (k === 'shock' ? 950 : 800), k === 'shock' ? -520 : -300); }
+  } else if (k === 'shield') {
+    if (p.it) return;                                                               // an IT with a shield would be pointless
+    p.shd = 3;
+  } else if (k === 'swap') {
+    const o = nearOthers(r, p, 700); if (!o.length || p.hb || p.gt || p.gk || p.zip >= 0) return;
+    const q = o[0][1]; if (q.hb || q.gt || q.gk || q.zip >= 0) return;
+    const x = p.x, y = p.y; p.x = q.x; p.y = q.y; q.x = x; q.y = y; p.g = q.g = 0; p.rs++; q.rs++;
+  } else if (k === 'zap') {
+    const o = nearOthers(r, p, 900); if (!o.length) return;
+    const q = o[0][1]; r.lt.push({ id: ++r.fxn, x: Math.round(q.x + PW / 2), y: Math.round(q.y + PH / 2), age: 0, hit: 0 });
   } else return;
-  p.acd = AB_CD;
+  p.acd = ABCD[k] || AB_CD;
   bcast(r, JSON.stringify({ t: 'abu', o: p.id, k }));
 }
 
@@ -979,11 +1021,11 @@ function simRoom(r, t) {
   const cd = r.st === 'play' && t < r.cdEnd;
   for (const p of r.players.values()) {
     if (!p.alive) continue;
-    if (p.acd > 0) p.acd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
+    if (p.acd > 0) p.acd -= DT; if (p.shd > 0) p.shd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
     p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
     let b = p.bot ? botInput(r, p, t) : consume(p);
     advance(r, p, (cd || p.fz) ? 0 : b);
-    if (p.bot && r.st === 'play' && !cd) { if (!p.emoNx) p.emoNx = t + 25000 + rnd(35000); else if (t >= p.emoNx) { p.emoNx = t + 30000 + rnd(60000); if (Math.random() < .4) bcast(r, JSON.stringify({ t: 'emo', o: p.id, k: rnd(8) })); } }   // random bot emote every 4-13 s
+    if (p.bot && r.st === 'play' && !cd) { if (!p.emoNx) p.emoNx = t + 25000 + rnd(35000); else if (t >= p.emoNx) { p.emoNx = t + 30000 + rnd(60000); if (Math.random() < .4) bcast(r, JSON.stringify({ t: 'emo', o: p.id, k: rnd(30) })); } }   // random bot emote every 4-13 s
     if (p.hrs !== p.rs) { p.hx.fill(p.x); p.hy.fill(p.y); p.hrs = p.rs; }                 // position history (lag compensation)
     p.hi = (p.hi + 1) & 31; p.hx[p.hi] = p.x; p.hy[p.hi] = p.y;
   }
@@ -1007,7 +1049,7 @@ function simRoom(r, t) {
     for (const q of run) if (q.fimm > 0) q.fimm -= DT;
     if (t >= r.tagFrom) for (const q of run) {
       if (q.fz) { for (const h of run) if (h !== q && !h.fz && tagHit(h, q)) { q.fz = 0; q.fimm = 1.2; bcast(r, JSON.stringify({ t: 'fz', a: q.id, f: 0 })); break; } }
-      else if (q.fimm <= 0) {
+      else if (q.fimm <= 0 && !(q.shd > 0)) {
         const f = its.find(h => tagHit(h, q));
         if (!f) continue;
         q.fz = 1; q.vx = 0; q.dash = 0; q.zip = -1; r.lastInf = f.id;
@@ -1025,7 +1067,7 @@ function simRoom(r, t) {
   if (r.inf === 1) {   // INFECTION: every infected player spreads it by touch; the last healthy player wins
     const al = aliveIds(r).map(id => r.players.get(id));
     if (!al.some(p => p.it) && al.length) al[rnd(al.length)].it = 1;
-    if (t >= r.tagFrom) for (const q of al) if (!q.it) for (const h of al) if (h.it && tagHit(h, q)) { q.it = 1; r.lastInf = q.id; break; }
+    if (t >= r.tagFrom) for (const q of al) if (!q.it && !(q.shd > 0)) for (const h of al) if (h.it && tagHit(h, q)) { q.it = 1; r.lastInf = q.id; break; }
     const hl = al.filter(p => !p.it);
     if (!r.practice && al.length > 1) { if (hl.length <= 1) finish(r, hl.length ? hl[0].id : null); }   // only a still-healthy survivor can win; if nobody is left healthy (e.g. the last one quit) nobody gets a win
     return;
@@ -1046,7 +1088,7 @@ function simRoom(r, t) {
   }
   if (t >= r.tagFrom) {
     for (const q of r.players.values()) {
-      if (!q.alive || q.it || q === holder) continue;
+      if (!q.alive || q.it || q === holder || q.shd > 0) continue;
       if (!tagHit(holder, q)) continue;                                   // real overlap only, never from a distance
       if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
       holder.it = 0; q.it = 1; holder.tg = (holder.tg | 0) + 1; q.tt = (q.tt | 0) + 1;
@@ -1307,7 +1349,7 @@ wss.on('connection', (ws, req) => {
 
     if (m.t === 'cos') { if (typeof m.v === 'string' && /^[0-9,]{1,24}$/.test(m.v)) { p.cs = csClean(ws.acct, m.v); bcastRoom(r); } return; }
     if (m.t === 'bk') { if (!p.alive && r.st !== 'lobby') p.bk = m.k == null ? null : String(m.k).slice(0, 24); return; }
-    if (m.t === 'emo') { const k = m.k | 0, tn = Date.now(); if (k >= 0 && k < 8 && prog(ws.acct).em.includes(k) && tn - (p.emoAt || 0) > 1500) { p.emoAt = tn; bcast(r, JSON.stringify({ t: 'emo', o: p.id, k })); } return; }
+    if (m.t === 'emo') { const k = m.k | 0, tn = Date.now(); if (k >= 0 && k < 30 && prog(ws.acct).em.includes(k) && tn - (p.emoAt || 0) > 1500) { p.emoAt = tn; bcast(r, JSON.stringify({ t: 'emo', o: p.id, k })); } return; }
     /* ---- ghost zap: an eliminated player calls a lightning strike anywhere (same strike as the random ones, server-side cooldown) ---- */
     if (m.t === 'zap') { const tn = now(), zx = +m.x, zy = +m.y; if (r.st === 'play' && !p.alive && tn >= r.cdEnd && tn - (p.zapAt || -1e9) > ZAP_CD * 1000 && r.lt.length < 6 && isFinite(zx) && isFinite(zy)) { p.zapAt = tn; r.lt.push({ id: ++r.fxn, x: ri(Math.max(LX + LT_R, Math.min(RX - LT_R, zx))), y: ri(Math.max(120, Math.min(WH - 40, zy))), age: 0, hit: 0 }); sendP(p, '{"t":"zap","cd":' + ZAP_CD + '}'); } return; }
     /* ---- ability choice: in the lobby (spectators waiting for the next match may pick too) ---- */
