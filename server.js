@@ -274,16 +274,20 @@ function progAct(a, m) {
   }
   return 'bad';
 }
+function sxOf(X) { const S = X.sx || (X.sx = {}); S.tg |= 0; S.tt |= 0; S.sv = +S.sv || 0; S.sn |= 0; S.pt = +S.pt || 0; if (!Array.isArray(S.md)) S.md = [0, 0, 0]; if (!Array.isArray(S.rc)) S.rc = []; return S; }
 function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1, won/lost +1, plus the rewards
   if (!p.rec || !p.acct) return; const so = p.rec === 2; p.rec = 0;   // so: private match = stats only, no tokens / xp / quests / leaderboard
   const a = p.acct; a.p++; if (win) { a.w++; if (!so) lbWin(a); } else a.l++;
   const X = prog(a); let g = null;
+  {   // profile analytics are recorded for every counted match, including ones the player quit
+    const du0 = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv0 = win || !p.outAt ? du0 : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000), S0 = sxOf(X);
+    S0.tg += p.tg | 0; S0.tt += p.tt | 0; S0.pt += du0; S0.sv += Math.min(sv0, du0); S0.sn++; S0.md[p.mdi | 0] = (S0.md[p.mdi | 0] | 0) + 1; S0.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du0)]); S0.rc.length = Math.min(S0.rc.length, 10);
+  }
   if (win) { X.ws++; if (X.ws > X.bws) X.bws = X.ws; } else X.ws = 0;
   if (fin) {   // rewards only for matches played to the end, never for quitting
-    const gx = win ? 90 : 35, gt = win ? 150 : 45, du = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv = win || !p.outAt ? du : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000), S = X.sx;
+    const gx = win ? 90 : 35, gt = win ? 150 : 45, du = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv = win || !p.outAt ? du : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000);
     if (!so) { X.xp += gx; X.tok += gt; g = { x: gx, t: gt }; }
     if (!so && du >= 20) for (const q of X.q) { if (q.d) continue; const v = q.k === 'play' ? 1 : q.k === 'win' ? (win ? 1 : 0) : q.k === 'tag' ? Math.min(p.tg | 0, 8) : q.k === 'sv' ? Math.round(Math.min(sv, du)) : 0; q.p = Math.min(q.n, q.p + v); }   // only server-counted, finished public matches (>= 20 s) count; tags capped per match
-    S.tg += p.tg | 0; S.tt += p.tt | 0; S.pt += du; S.sv += sv; S.sn++; S.md[p.mdi | 0] = (S.md[p.mdi | 0] | 0) + 1; S.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du)]); S.rc.length = Math.min(S.rc.length, 10);
     if (p.bonus && !so) { X.tok += p.bonus; g.bk = 1; p.bonus = 0; }
   }
   accSave(a);

@@ -858,7 +858,7 @@ const mapCard=(i,sel,oc,ro)=>`<button class="mp${i==sel?' on':''}${ro?' ro':''}"
 /* dummy progression data (stored locally; wire to the server later) */
 const dk=d=>d.toISOString().slice(0,10),DAY=864e5,need=l=>100+(l-1)*40;
 const MDEF=()=>({tok:0,gem:0,xp:0,streak:0,last:dk(new Date(Date.now()-DAY)),own:{},lr:{},em:[0,1,2,3],eq:{sk:0,ac:0,hat:0,fc:0,tr:0},q:[{k:'play',t:'Play 3 matches',p:0,n:3,r:90,x:60},{k:'win',t:'Win a match',p:0,n:1,r:150,x:100},{k:'tag',t:'Tag 10 players',p:0,n:10,r:120,x:80},{k:'play',t:'Play 1 match with a friend',p:0,n:1,r:60,x:40}]});let M=MDEF(),MLOADED=0;try{localStorage.removeItem('tagmeta')}catch(e){}
-function loadMeta(ms){M=Object.assign(MDEF(),ms&&typeof ms=='object'?ms:{});MLOADED=1;pfLive()}
+function loadMeta(ms){M=Object.assign(MDEF(),ms&&typeof ms=='object'?ms:{});MLOADED=1;pfLive();if(S.mode=='menu'&&!INSUB&&AUTH&&!$('mod')&&!document.querySelector('input:focus'))try{homeRender()}catch(e){}}
 const msave=()=>{};
 async function act(a,x){try{const d=await(await post(Object.assign({m:'pr',tk:AUTH&&AUTH.tk,a},x||{}))).json();if(d.ok){loadMeta(d.pr);return d}toast(d.e=='funds'?'Not enough tokens':'Could not complete that')}catch(e){toast('Connection problem')}return null}
 function lvOf(x){let l=1;while(x>=need(l)){x-=need(l);l++}return{l,x,n:need(l)}}
@@ -1181,7 +1181,7 @@ let PFT=0;function openProfile(){if(Date.now()-PFT<500)return;PFT=Date.now();try
 /* tap on the profile block: judged by finger position, so it still works if something overlaps it or the bar re-renders mid-tap */
 document.addEventListener('pointerup',e=>{if($('mod')||ov.classList.contains('off')||!AUTH)return;const m=document.querySelector('.tp .me');if(!m)return;const b=m.getBoundingClientRect();if(e.clientX>=b.left&&e.clientX<=b.right&&e.clientY>=b.top&&e.clientY<=b.bottom)openProfile()});
 var PFO=0;function profileModal(){const r=profileModal0();PFO=1;return r}
-function pfLive(){if(PFO&&$('mod'))setTimeout(profileModal,0)}
+var PFD=0;function pfLive(){if(PFO&&$('mod')){clearTimeout(PFD);PFD=setTimeout(()=>{if(PFO&&$('mod'))try{profileModal()}catch(e){}},60)}}
 function profileModal0(){if(!AUTH||!AUTH.st)return toast('Profile is still loading…');const st=AUTH.st,L=lvOf(M.xp),p=st.p,w=st.w,h=hc(AUTH.u),wr=p?Math.round(w/p*100):0,
  tier=L.l<5?['Bronze','#cd7f32']:L.l<10?['Silver','#c0c8d8']:L.l<20?['Gold','#ffd23f']:L.l<30?['Platinum','#7be0ff']:['Diamond','#b69cff'],
  X=sxg(),tags=X.tg,surv=X.sn?Math.round(X.sv/X.sn)+'s':'—',ptx=X.pt<3600?Math.round(X.pt/60)+'m':(X.pt/3600).toFixed(1)+'h',
