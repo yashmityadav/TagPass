@@ -656,7 +656,7 @@ function addBots(r, cnt) {
    Runners flee while avoiding walls / crowds, idle runners wander between platforms, the holder chases; everyone uses dash, grab and their ability. ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk-- <= 0) { p.btk = (lagEma > 6 ? 16 : 10) + rnd(3); botPlan(r, p); p.k = 0; }
+  if (p.btk > 0) p.btk--; else if (r.pb > 0) { r.pb--; p.btk = (lagEma > 6 ? 16 : 10) + rnd(3); botPlan(r, p); p.k = 0; }
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0) | (pl.a && k === 1 ? 32 : 0) | (k < pl.g ? 64 : 0);
@@ -1115,6 +1115,7 @@ function simRoom(r, t) {
   if (CURMAP !== r.mp) setMap(r.mp);
   SX = r.cr.length ? SOL.concat(r.cr) : SOL;
   const cd = r.st === 'play' && t < r.cdEnd;
+  r.pb = 2;   // at most 2 bot plans per tick
   for (const p of r.players.values()) {
     if (!p.alive) continue;
     if (p.acd > 0) p.acd -= DT; if (p.shd > 0) p.shd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
@@ -1255,7 +1256,7 @@ function loopBody() {
   const lag = Math.max(0, t - nextTick);
   lagEma += (lag - lagEma) * 0.05;
   if (!FIXED_SNAP) {
-    if (snapEvery === SNAP_BASE && lagEma > 6) { snapEvery = SNAP_BASE + 1; calmSince = 0; console.log('high load: snapshots at 20/s'); }
+    if (snapEvery === SNAP_BASE && lagEma > 10) { snapEvery = SNAP_BASE + 1; calmSince = 0; console.log('high load: snapshots at 20/s'); }
     else if (snapEvery > SNAP_BASE) { if (lagEma < 1.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 20000) { snapEvery = SNAP_BASE; calmSince = 0; console.log('load normal: snapshots at 30/s'); } } else calmSince = 0; }
   }
   let due = 0; for (let nt = nextTick; nt <= t && due < 5; nt += TICK_MS) due++;
@@ -1265,6 +1266,8 @@ function loopBody() {
 // one wake-up per tick (60/s) instead of 250/s, aimed at the exact tick time: less CPU on a shared free-tier core and steadier snapshot timing
 function loop() { try { loopBody(); } catch (e) { console.error('tick loop error:', e); } setTimeout(loop, Math.max(1, nextTick - now())); }
 setTimeout(loop, 1);
+
+try { for (let i = 0; i < MAPS.length; i++) { setMap(i); NAV[i] = navBuild(); } setMap(0); } catch (e) { console.error('nav prebuild failed:', e.message); }   // no lag spike on the first match
 
 /* ---------------- connections ---------------- */
 const perIp = new Map();
@@ -1281,7 +1284,7 @@ wss.on('connection', (ws, req) => {
   perIp.set(ip, n);
 
   ws.lastSeen = ws.born = Date.now();
-  setTimeout(() => { if (!ws.acct) try { ws.close(); } catch {} }, 15000);   // never logged in -> dropped
+  const lt = setTimeout(() => { if (!ws.acct) try { ws.close(); } catch {} }, 15000); ws.on('close', () => clearTimeout(lt));   // never logged in -> dropped
   ws.on('pong', () => { const n = Date.now(); ws.lastSeen = n; if (ws.pingAt) { const m = n - ws.pingAt; ws.rtt = ws.rtt ? ws.rtt * .7 + m * .3 : m; } });
 
   let r = null, p = null, cnt = 0, winStart = Date.now();
