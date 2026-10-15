@@ -216,8 +216,12 @@ function lbWin(a) {
 }
 function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
 /* ---- server-authoritative progress: tokens, gems, xp, cosmetics, quests, stats ---- */
-const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, [100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
+const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, ...[100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
 const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, blink: 350, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [50, 75, 100, 150, 200, 300, 500];
+/* ---- economy: every token price x PM; top-tier items cost gems instead (gem price = old token price / GD) ---- */
+const PM = 3, GD = 20, GEM_MIN = { sk: 1800, ac: 700, hat: 900, fc: 1000, tr: 1700, em: 800 }, GEM_AB = new Set(['swap', 'clones', 'zap']), GEMI = {}, ABG = {};
+for (const k in PRICE) { const L = PRICE[k]; GEMI[k] = L.map(p => !!p && p >= GEM_MIN[k]); PRICE[k] = L.map((p, i) => !p ? 0 : GEMI[k][i] ? Math.max(25, Math.round(p / GD / 5) * 5) : p * PM); }
+for (const k in ABP) { if (!ABP[k]) continue; if (GEM_AB.has(k)) { ABG[k] = 1; ABP[k] = Math.max(25, Math.round(ABP[k] / GD / 5) * 5); } else ABP[k] *= PM; }
 const needXp = l => 100 + (l - 1) * 40;
 function lvlOf(x) { let l = 1; while (x >= needXp(l)) { x -= needXp(l); l++; } return l; }
 const LRW = n => n == 4 ? { k: 'hat', i: 3 } : n == 8 ? { k: 'tr', i: 1 } : n == 12 ? { k: 'sk', i: 5 } : n == 16 ? { k: 'hat', i: 5 } : n % 5 == 0 ? { g: n % 10 == 0 ? 40 : 15 } : { t: Math.min(40 + n * 20, 1500) };
@@ -244,12 +248,13 @@ function progAct(a, m) {
   const X = prog(a), act = String(m.a);
   if (act === 'get') return '';
   if (act === 'buy') {
-    let key, price;
-    if (m.k === 'ab') { if (typeof m.i !== 'string' || !Object.hasOwn(ABP, m.i)) return 'bad'; key = 'ab_' + m.i; price = ABP[m.i]; }
-    else { const L = PRICE[m.k]; if (!L || !Number.isInteger(m.i) || m.i < 0 || m.i >= L.length) return 'bad'; key = m.k + m.i; price = L[m.i]; }
+    let key, price, gem = false;
+    if (m.k === 'ab') { if (typeof m.i !== 'string' || !Object.hasOwn(ABP, m.i)) return 'bad'; key = 'ab_' + m.i; price = ABP[m.i]; gem = !!ABG[m.i]; }
+    else { const L = PRICE[m.k]; if (!L || !Number.isInteger(m.i) || m.i < 0 || m.i >= L.length) return 'bad'; key = m.k + m.i; price = L[m.i]; gem = !!GEMI[m.k][m.i]; }
     if (X.own[key] || !price) return '';
-    if (X.tok < price) return 'funds';
-    X.tok -= price; X.own[key] = 1; return '';
+    if (gem) { if (X.gem < price) return 'gems'; X.gem -= price; }
+    else { if (X.tok < price) return 'funds'; X.tok -= price; }
+    X.own[key] = 1; return '';
   }
   if (act === 'eq') {
     const L = PRICE[m.k]; if (!L || !Number.isInteger(m.i) || m.i < 0 || m.i >= L.length) return 'bad';
