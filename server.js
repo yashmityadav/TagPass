@@ -54,8 +54,8 @@ const GRAB_MAX = 6, GRAB_MIN = 0.25;               // longest hold (s) / shortes
 const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hold / after a miss
 const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
 const HELD_K = 0.5, CARRY_K = 0.8;                   // speed multiplier of the player who is held / of the player who is carrying
-const ABIL = new Set(['fake', 'smoke', 'trap', 'spring', 'rocket', 'blink', 'uppercut', 'recharge', 'shock', 'magnet', 'shield', 'swap', 'clones', 'zap']);
-const ABCD = { fake: 30, smoke: 30, trap: 30, spring: 20, rocket: 20, blink: 18, uppercut: 20, recharge: 25, shock: 30, magnet: 30, shield: 30, swap: 30, clones: 30, zap: 35 };   // per-ability cooldown (s); anything not listed uses AB_CD
+const ABIL = new Set(['fake', 'smoke', 'trap', 'spring', 'rocket', 'uppercut', 'recharge', 'shock', 'magnet', 'shield', 'swap', 'clones', 'zap']);
+const ABCD = { fake: 30, smoke: 30, trap: 30, spring: 20, rocket: 20, uppercut: 20, recharge: 25, shock: 30, magnet: 30, shield: 30, swap: 30, clones: 30, zap: 35 };   // per-ability cooldown (s); anything not listed uses AB_CD
 const ZAP_CD = 7;                                    // ghost lightning: eliminated players can call a strike every ZAP_CD s
 /* ---- lightning: random warning circle, strike after LT_WARN s, launches everyone inside (no damage) ---- */
 const LT_R = 110, LT_WARN = 1, LT_FLASH = .35, LT_MIN = 3, LT_MAX = 6, LT_VY = 1500, LT_VX = 620;
@@ -225,7 +225,7 @@ function lbWin(a) {
 function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
 /* ---- server-authoritative progress: tokens, gems, xp, cosmetics, quests, stats ---- */
 const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, ...[100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
-const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, blink: 350, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [10, 15, 20, 25, 30, 40, 50];
+const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [10, 15, 20, 25, 30, 40, 50];
 /* ---- economy: every token price x PM; top-tier items cost gems instead (gem price = old token price / GD) ---- */
 const PM = 3, GD = 20, GEM_MIN = { sk: 1800, ac: 700, hat: 900, fc: 1000, tr: 1700, em: 800 }, GEM_AB = new Set(['swap', 'clones', 'zap']), GEMI = {}, ABG = {};
 for (const k in PRICE) { const L = PRICE[k]; GEMI[k] = L.map(p => !!p && p >= GEM_MIN[k]); PRICE[k] = L.map((p, i) => !p ? 0 : GEMI[k][i] ? Math.max(25, Math.round(p / GD / 5) * 5) : p * PM); }
@@ -927,16 +927,6 @@ function useAbility(r, p) {
   } else if (k === 'rocket') {
     if (p.hb) return;
     p.vx = p.face * 1250; p.dash = 0; p.zip = -1; p.bst = PAD_BST; p.rs++;
-  } else if (k === 'blink') {
-    if (p.hb || p.gt || p.gk || p.zip >= 0) return;
-    let nx = p.x;
-    for (let i = 1; i <= 15; i++) {
-      const tx = p.x + p.face * 20 * i;
-      if (tx < LX || tx + PW > RX || SOL.some(q => tx < q.x + q.w && tx + PW > q.x && p.y < q.y + q.h && p.y + PH > q.y)) break;
-      nx = tx;
-    }
-    if (nx === p.x) return;
-    p.x = nx; p.rs++;
   } else if (k === 'uppercut') {
     const o = nearOthers(r, p, 170); if (!o.length) return;
     shove(o[0][1], o[0][1].vx * .3, -1250);
@@ -1258,7 +1248,7 @@ function tickAll(t, tt, last) {
   if (doSnap) snapDue = false;
 }
 let lagEma = 0, calmSince = 0;
-setInterval(() => {
+function loopBody() {
   const t = now();
   // Overload guard: if ticks keep running late (a busy / tiny shared CPU), halve the snapshot rate so the game logic stays on time
   // and every player keeps the same fair, steady 60 Hz simulation. It returns to 60 snapshots/s by itself when the load drops.
@@ -1271,7 +1261,10 @@ setInterval(() => {
   let due = 0; for (let nt = nextTick; nt <= t && due < 5; nt += TICK_MS) due++;
   for (let i = 0; i < due; i++) { tickAll(t, nextTick, i === due - 1); nextTick += TICK_MS; }   // fixed 60 Hz, catches up after a hiccup
   if (nextTick < t - 100) nextTick = t;
-}, 4);
+}
+// one wake-up per tick (60/s) instead of 250/s, aimed at the exact tick time: less CPU on a shared free-tier core and steadier snapshot timing
+function loop() { try { loopBody(); } catch (e) { console.error('tick loop error:', e); } setTimeout(loop, Math.max(1, nextTick - now())); }
+setTimeout(loop, 1);
 
 /* ---------------- connections ---------------- */
 const perIp = new Map();

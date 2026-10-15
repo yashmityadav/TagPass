@@ -230,7 +230,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const COLS=['#2b8cff','#ff4a3d','#ffd23f','#a45cff','#2ee6a6','#ff8a3d','#ff6fd8','#29d3ff','#b6e03a','#ffffff'],BASE=location.origin+location.pathname;
 function mk(id,x,y){return{pl:GI,id,x,y,vx:0,vy:0,g:0,coy:0,buf:0,pj:0,cut:0,drop:0,face:1,sq:1,it:0,ps:false,dash:0,dd:1,dcd:0,slow:0,bst:0,pcd:0,bv:0,zip:-1,zd:1,zs:0,zcd:0,ac:0,acAt:0,gt:0,gk:0,hb:0,gs:0,gc:0,gcAt:0}}
 let emaDt=.016,lastQ=0,room=null,myId='',code='',name='',isHost=false,peers=[],rem={},parts=[],shake=0,time=0,tleft=100,cd=0,cdS=9,mi=0,mus=0,toastT,lastBoard='';
-const PHYS_HZ=60,SEND_S=0,INTERP_MIN=40,INTERP_MAX=160,EXTRAP_MS=120,PUB_SIZE=10;   /* PUB_SIZE: players needed before a public match starts */
+const PHYS_HZ=60,SEND_S=0,INTERP_MIN=64,INTERP_MAX=160,EXTRAP_MS=120,PUB_SIZE=10;   /* PUB_SIZE: players needed before a public match starts */
 const S={mode:'menu',gm:0,rn:0,rs:-1,st:'lobby',bt:null,ov:null,rm:null,practice:false,tl:null,tlAt:0,cdl:0,cdAt:0,lc:0,lcAt:0},ME=mk(0,700,500),NEUT={},PEND=[],OUT=[],VO={x:0,y:0};let seq=0;
 ME.alive=true;ME.ci=0;
 let cam={x:800,y:418,z:.6};
@@ -525,7 +525,7 @@ function board(){
   return`<div class="chip${q.alive===false?' out':''}${S.bk==p.peer?' pk':''}" data-p="${p.peer}" style="font-size:16px"><span class="dot" style="background:${COLS[c]}"></span>${esc(nm)}${q.it&&q.alive!==false?' ▼':''}${S.bk==p.peer?' 🎯':''}</div>`}).join('');
  if(h!==lastBoard){lastBoard=h;b.innerHTML=h}}
 /* ---------- abilities ---------- */
-const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5 s',col:'#ffffff',snd:520,cd:30},smoke:{n:'Smoke',i:'💨',d:'Throw a smoke cloud that hides everyone inside it for 5 s',col:'#cfd6e4',snd:260,cd:30},trap:{n:'Trap',i:'🕸️',d:'Sticky goo on the floor that slows anyone standing on it for 5 s',col:'#b06bff',snd:180,cd:30},spring:{n:'Super Jump',i:'🦘',d:'Launch yourself twice as high as a normal jump',col:'#7dff3a',snd:700,cd:20},rocket:{n:'Rocket Dash',i:'🚀',d:'Blast forward at crazy speed and fly over gaps',col:'#ff7a1a',snd:300,cd:20},blink:{n:'Blink',i:'✨',d:'Teleport about 300 px forward (stops at walls)',col:'#d27bff',snd:900,cd:18},uppercut:{n:'Uppercut',i:'👊',d:'Punch the nearest player up into the air',col:'#ff4d4d',snd:200,cd:20},recharge:{n:'Recharge',i:'🔋',d:'Instantly refills your Dash and Grab',col:'#3dff7a',snd:800,cd:25},shock:{n:'Shockwave',i:'💥',d:'Blasts everyone nearby away from you',col:'#ffd23f',snd:150,cd:30},magnet:{n:'Magnet',i:'🧲',d:'Pulls everyone nearby toward you',col:'#29d3ff',snd:350,cd:30},shield:{n:'Shield',i:'🛡️',d:'Nobody can tag or infect you for 3 s (runners)',col:'#7ee8ff',snd:600,cd:30},swap:{n:'Swap',i:'🔀',d:'Switch places with the nearest player',col:'#ff6fd8',snd:500,cd:30},clones:{n:'Clones',i:'👯',d:'Two decoys run off in opposite directions',col:'#ffffff',snd:450,cd:30},zap:{n:'Zap',i:'⚡',d:'Calls lightning down on the nearest player',col:'#fff36b',snd:1000,cd:35}};
+const AB={fake:{n:'Fake',i:'👥',d:'Drops a decoy of you that runs around for 5 s',col:'#ffffff',snd:520,cd:30},smoke:{n:'Smoke',i:'💨',d:'Throw a smoke cloud that hides everyone inside it for 5 s',col:'#cfd6e4',snd:260,cd:30},trap:{n:'Trap',i:'🕸️',d:'Sticky goo on the floor that slows anyone standing on it for 5 s',col:'#b06bff',snd:180,cd:30},spring:{n:'Super Jump',i:'🦘',d:'Launch yourself twice as high as a normal jump',col:'#7dff3a',snd:700,cd:20},rocket:{n:'Rocket Dash',i:'🚀',d:'Blast forward at crazy speed and fly over gaps',col:'#ff7a1a',snd:300,cd:20},uppercut:{n:'Uppercut',i:'👊',d:'Punch the nearest player up into the air',col:'#ff4d4d',snd:200,cd:20},recharge:{n:'Recharge',i:'🔋',d:'Instantly refills your Dash and Grab',col:'#3dff7a',snd:800,cd:25},shock:{n:'Shockwave',i:'💥',d:'Blasts everyone nearby away from you',col:'#ffd23f',snd:150,cd:30},magnet:{n:'Magnet',i:'🧲',d:'Pulls everyone nearby toward you',col:'#29d3ff',snd:350,cd:30},shield:{n:'Shield',i:'🛡️',d:'Nobody can tag or infect you for 3 s (runners)',col:'#7ee8ff',snd:600,cd:30},swap:{n:'Swap',i:'🔀',d:'Switch places with the nearest player',col:'#ff6fd8',snd:500,cd:30},clones:{n:'Clones',i:'👯',d:'Two decoys run off in opposite directions',col:'#ffffff',snd:450,cd:30},zap:{n:'Zap',i:'⚡',d:'Calls lightning down on the nearest player',col:'#fff36b',snd:1000,cd:35}};
 const FX={j:[],s:[],t:[],g:[],r:[],l:[]},DEC={},LZ={},LT_R=110,LT_WARN=1,LT_FLASH=.35;let MYAB='fake',lastHud='';
 function clearFx(){CRS.length=0;SX=SOL;FX.j=[];FX.s=[];FX.t=[];FX.g=[];FX.r=[];FX.l=[];for(const k in LZ)delete LZ[k];for(const k in DEC)delete DEC[k];lastHud=''}
 /* standing in a trap? (same rule as the server, so my prediction matches) */
@@ -704,7 +704,7 @@ let last=performance.now(),acc=0,bt2=0,lastTimerText='',netAcc=0;
 document.addEventListener('visibilitychange',()=>{last=performance.now();acc=0});
 function frame(n){
  requestAnimationFrame(frame);
- let dt=Math.min(.05,(n-last)/1000);last=n;time+=dt;
+ const rawDt=(n-last)/1000;let dt=Math.min(.05,rawDt);const rdt=Math.min(.25,Math.max(dt,rawDt));last=n;time+=dt;
  emaDt=emaDt*.95+dt*.05;if(emaDt>.021&&time-lastQ>2.5&&QF>.5){QF=Math.max(.5,QF-.15);lastQ=time;rs()}
  if(S.mode=='play'){acc+=dt;let ns=0;while(acc>=1/PHYS_HZ&&ns++<6){upd(1/PHYS_HZ);acc-=1/PHYS_HZ}if(acc>1/PHYS_HZ)acc=0;
   cd=cdLeft();const bn=cd>.4?Math.ceil((cd-.4)/.6):0;if(S.st=='play'&&bn!==cdS){snd(bn>0?520:880,.12,'square',.05);cdS=bn}
@@ -713,7 +713,7 @@ function frame(n){
   const timerText=S.inf?'':many?String(Math.ceil(tleft)):'∞';if(timerText!==lastTimerText){lastTimerText=timerText;$('timer').textContent=timerText}const hot=many&&!S.inf&&tleft<=10;if($('timer').classList.contains('hot')!==hot)$('timer').classList.toggle('hot',hot)}
  if(S.mode=='play')hudUpd();
  if(S.mode=='lobby'&&S.pub)lobbyTick();
- const t=n||performance.now();for(const k in rem)stepRemote(rem[k],t,dt);for(const q of CRS){if(Math.abs(q.x-q.dx)>120||Math.abs(q.y-q.dy)>120){q.dx=q.x;q.dy=q.y}else{const e=1-Math.exp(-dt*35);q.dx+=(q.x-q.dx)*e;q.dy+=(q.y-q.dy)*e}}for(const k in DEC)stepRemote(DEC[k],t,dt);trailAll(dt);
+ const t=n||performance.now();for(const k in rem)stepRemote(rem[k],t,rdt);for(const q of CRS){if(Math.abs(q.x-q.dx)>120||Math.abs(q.y-q.dy)>120){q.dx=q.x;q.dy=q.y}else{const e=1-Math.exp(-dt*35);q.dx+=(q.x-q.dx)*e;q.dy+=(q.y-q.dy)*e}}for(const k in DEC)stepRemote(DEC[k],t,rdt);trailAll(dt);
  if(parts.length){
  let w=0;
  for(let i=0;i<parts.length;i++){const q=parts[i];q.l-=dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.vy+=500*dt;if(q.l>0)parts[w++]=q}
@@ -787,7 +787,8 @@ function rec(list){let cur=null;return{
  s(c,lw){cur={k:'s',c,lw,a:1,p:new Path2D()};list.push(cur);return cur.p}}}
 function pCirc(p,x,y,r){p.moveTo(x+r,y);p.arc(x,y,r,0,Math.PI*2);p.closePath()}
 function pPoly(p,ox,oy,a,x,y,w,h){const c=Math.cos(a),s=Math.sin(a);[[x,y],[x+w,y],[x+w,y+h],[x,y+h]].forEach((v,i)=>{const X=ox+v[0]*c-v[1]*s,Y=oy+v[0]*s+v[1]*c;i?p.lineTo(X,Y):p.moveTo(X,Y)});p.closePath()}
-function buildWorld(){
+function buildWorld(){WLOD={};buildWorld0()}
+function buildWorld0(){
  WORLD.length=0;FG.length=0;if(CURMP)return buildTheme();
  const R=rec(WORLD);
  R.f('#3d97f7').rect(LX,-600,RX-LX,WH+600);          /* playfield; the screen is pre-filled pink so walls need no abutting shapes */
@@ -806,7 +807,12 @@ function buildWorld(){
  const F=rec(FG);const fa=F.f('#2df58a',.94);[[20,722,44],[93,742,44],[162,732,44],[248,742,44]].forEach(h=>fa.roundRect(h[0],h[1],h[2],WH-h[1]+30,22));
  const ft=F.f('#c4145f');ft.rect(218,350,45,34);
  const fl=F.f('#22f07a');fl.roundRect(192,290,98,64,22);fl.roundRect(200,335,14,28,7)}
-function drawOps(list){for(const o of list){cx.globalAlpha=o.a;if(o.k=='f'){cx.fillStyle=o.c;cx.fill(o.p)}else{cx.strokeStyle=o.c;cx.lineWidth=o.lw;cx.stroke(o.p)}}cx.globalAlpha=1}
+function drawOpsTo(g,list){for(const o of list){g.globalAlpha=o.a;if(o.k=='f'){g.fillStyle=o.c;g.fill(o.p)}else{g.strokeStyle=o.c;g.lineWidth=o.lw;g.stroke(o.p)}}g.globalAlpha=1}
+function drawOps(list){drawOpsTo(cx,list)}
+/* the static scenery is rasterised once per map at 3 sizes and blitted each frame (a few hundred vector fills per frame was the main cost on phones); zoomed beyond the biggest bitmap it falls back to vector */
+let WLOD={};
+function lodBmp(L){let b=WLOD[L];if(b!==undefined)return b;b=null;try{const w=Math.round(1600*L),h=Math.round(836*L),c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d',{alpha:false});g.fillStyle=TH.wall;g.fillRect(0,0,w,h);g.scale(L,L);drawOpsTo(g,WORLD);b=c}catch(e){b=null}WLOD[L]=b;return b}
+function drawWorldBg(s){const L=s<=.55?.5:s<=1.1?1:s<=2.1?2:0,b=L?lodBmp(L):null;if(b){cx.imageSmoothingEnabled=true;cx.drawImage(b,0,0,1600,836)}else drawOps(WORLD)}
 function draw(){
  const s=cam.z*DPR;
  cx.setTransform(1,0,0,1,0,0);cx.fillStyle=TH.wall;cx.fillRect(0,0,cv.width,cv.height);
@@ -814,7 +820,7 @@ function draw(){
  /* camera origin snapped to whole device pixels: static scenery never shimmers while the camera pans */
  const TX=Math.round((W/2-cam.x*cam.z+shx)*DPR),TY=Math.round((H/2-cam.y*cam.z+shy)*DPR);
  cx.setTransform(s,0,0,s,TX,TY);
- cx.save();cx.beginPath();cx.rect(0,0,1600,836);cx.clip();drawOps(WORLD);drawFeatures();if(CRS.length&&(S.mode=='play'||S.mode=='over'))drawCrates();cx.restore();
+ cx.save();cx.beginPath();cx.rect(0,0,1600,836);cx.clip();drawWorldBg(s);drawFeatures();if(CRS.length&&(S.mode=='play'||S.mode=='over'))drawCrates();cx.restore();
  if(S.ev&&S.ev.t=='l'&&(S.mode=='play'||S.mode=='over')){const q=PL[S.ev.pi];if(q){const sl=q.dy||0,kk=q.k||1,poly=(o,hh)=>{cx.beginPath();cx.moveTo(q.x,q.y+o);cx.lineTo(q.x+q.w,q.y+sl+o);cx.lineTo(q.x+q.w,q.y+sl+o+hh);cx.lineTo(q.x,q.y+o+hh);cx.fill()};if(S.ev.ph==0){cx.globalAlpha=.45+.45*Math.sin(time*18);cx.fillStyle='#ffe14d';poly(-4*kk,(q.h+6)*kk)}else{cx.fillStyle='#ff3b1a';poly(-3*kk,(q.h+3)*kk);cx.fillStyle='#ffb830';for(let x=q.x+8;x<q.x+q.w-8;x+=26){cx.beginPath();cx.arc(x,q.y-3+sl*(x-q.x)/q.w,5+Math.sin(time*6+x)*2.5,0,7);cx.fill()}}cx.globalAlpha=1}}
  const inG=S.mode=='play'||S.mode=='over';
  if(inG){drawTraps();drawLightning()}
@@ -1118,7 +1124,7 @@ const CAT={sk:['Skin',[["Midnight", "#0d3a4b", 0, ["f", "#0d3a4b", ""]], ["Slate
  fc:['Face',[["Classic", "", 0], ["Shades", "shades", 150], ["Hearts", "heart", 200], ["Happy", "happy", 0], ["Wink", "wink", 100], ["Surprised", "surp", 120], ["Sleepy", "sleepy", 150], ["Angry", "angry", 150], ["Cute", "cute", 200], ["Kawaii", "kawaii", 200], ["Sad", "sad", 200], ["Tongue", "tongue", 250], ["Dead", "dead", 250], ["Glasses", "glass", 300], ["Cat", "cat", 300], ["Mustache", "stache", 350], ["Monocle", "monocle", 400], ["Zombie", "zombie", 400], ["Clown", "clown", 450], ["Vampire", "vamp", 500], ["Pirate", "patch", 500], ["3D Glasses", "d3", 550], ["Scar", "scar", 600], ["Robot", "robot", 700], ["Dizzy", "dizzy", 700], ["Evil", "evil", 800], ["Star Eyes", "star", 900], ["Money", "money", 1000], ["Fire Eyes", "fire", 1400], ["Laser Visor", "laser", 1800]]],
  tr:['Trail',[["None", "", 0], ["Sparkle", "sparkle", 250], ["Fire", "fire", 400], ["Bubble", "bubble", 300], ["Rainbow", "rainbow", 700], ["Smoke", "smoke", 150], ["Snow", "snow", 200], ["Leaves", "leaves", 200], ["Hearts", "hearts", 300], ["Stars", "stars", 300], ["Confetti", "confetti", 350], ["Ice", "ice", 350], ["Slime", "slime", 400], ["Electric", "electric", 450], ["Coins", "coins", 500], ["Pixel", "pixel", 500], ["Petals", "petals", 550], ["Poison", "poison", 600], ["Candy", "candy", 600], ["Ember", "ember", 700], ["Water", "water", 700], ["Ghost", "ghost", 800], ["Matrix", "matrix", 900], ["Galaxy", "galaxy", 1100], ["Gold Dust", "gold", 1300], ["Comet", "comet", 1500], ["Magic", "magic", 1700], ["Void", "void", 2000], ["Aurora", "aurora", 2400], ["Inferno", "inferno", 2800]]],
  em:['Emotes',[["GG", "gg", 0], ["Wow", "wow", 0], ["LOL", "lol", 0], ["Love", "love", 0], ["Angry", "ang", 150], ["Cry", "cry", 150], ["Cool", "cool", 250], ["Zzz", "zzz", 100], ["Nerd", "nerd", 100], ["Party", "party", 150], ["Sweat", "sweat", 100], ["Smirk", "smirk", 100], ["Skull", "skull", 400], ["Fire", "fire", 500], ["100", "h100", 250], ["Thumbs Up", "thumb", 150], ["Ghost", "ghost", 250], ["Star Struck", "starry", 400], ["King", "king", 800], ["EZ", "ez", 100], ["GL", "gl", 100], ["NT", "nt", 100], ["OOF", "oof", 150], ["BRB", "brb", 150], ["RIP", "rip", 200], ["LMAO", "lmao", 200], ["SUS", "sus", 300], ["POG", "pog", 300], ["?!", "qx", 300], ["WP", "wp", 100]]]};
-const AB_PRICE={fake:0,smoke:300,trap:500,spring:200,rocket:250,blink:350,uppercut:300,recharge:350,shock:400,magnet:450,shield:500,swap:600,clones:700,zap:800},CK=['sk','ac','hat','fc','tr'];
+const AB_PRICE={fake:0,smoke:300,trap:500,spring:200,rocket:250,uppercut:300,recharge:350,shock:400,magnet:450,shield:500,swap:600,clones:700,zap:800},CK=['sk','ac','hat','fc','tr'];
 /* economy (must match server.js): tokens x PM, top-tier items cost gems instead */
 const PM=3,GD=20,GEM_MIN={sk:1800,ac:700,hat:900,fc:1000,tr:1700,em:800},GEM_AB=['swap','clones','zap'],GM={},ABG={};
 Object.keys(CAT).forEach(k=>CAT[k][1].forEach((it,i)=>{const p=it[2];if(!p)return;if(p>=GEM_MIN[k]){GM[k+i]=1;it[2]=Math.max(25,Math.round(p/GD/5)*5)}else it[2]=p*PM}));
