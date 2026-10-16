@@ -170,7 +170,8 @@ body.inm #mute,body.inm #leave{display:none!important}
 .bar{height:10px;background:rgba(255,255,255,.1);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;border-radius:9px}
 .rec{display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:10px;background:rgba(255,255,255,.05);font-size:12px;margin-top:4px}.rec em{font:400 12px 'Lilita One';font-style:normal;padding:1px 8px;border-radius:99px}
 .bdg{display:flex;gap:8px;justify-content:center}.bdg div{display:flex;flex-direction:column;align-items:center;gap:3px;width:104px;padding:8px 4px;border-radius:12px;background:rgba(255,255,255,.04);opacity:.45;color:#fff}.bdg div.on{opacity:1;background:rgba(255,210,63,.14);border:1px solid rgba(255,210,63,.4)}.bdg small{font-size:11px}
-.mp,.mp:focus,.mp:active{outline:none;-webkit-appearance:none;appearance:none}.mp .mt,.mp b,.mp small{background:none!important;box-shadow:none;text-shadow:none}.mp,.mg2 .mp{background:rgba(70,80,170,.55)!important}.mp .mt{background:rgba(255,255,255,.12)!important}.mp.on .mt{background:rgba(255,255,255,.22)!important}.pvb{margin-top:10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}.pvb div{display:flex;gap:8px}.elim{background:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:0!important;box-shadow:none!important;padding:0!important;gap:8px;text-shadow:-2px -2px 0 #1b2a6b,2px -2px 0 #1b2a6b,-2px 2px 0 #1b2a6b,2px 2px 0 #1b2a6b,0 3px 0 #1b2a6b,0 6px 12px rgba(0,0,0,.25);letter-spacing:.6px}.elim i{background:none!important;width:auto!important;height:auto!important;font-size:1.1em!important;filter:drop-shadow(0 2px 0 #1b2a6b)}.elim b{color:#ffd23f!important}.elim small{opacity:1!important;font-size:13px!important;color:#fff;text-shadow:-2px -2px 0 #1b2a6b,2px -2px 0 #1b2a6b,-2px 2px 0 #1b2a6b,2px 2px 0 #1b2a6b,0 3px 0 #1b2a6b,0 6px 12px rgba(0,0,0,.25)}.ch .sh{top:54.5%;transform:translate(-50%,-50%)}.ch .hp{top:54.5%;transform:translateY(-50%);display:flex;justify-content:center;gap:calc(var(--s)*.1);font-size:calc(var(--s)*.26);letter-spacing:0}.ch .hp svg,.ch .hp img{display:block}</style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
+.mp,.mp:focus,.mp:active{outline:none;-webkit-appearance:none;appearance:none}.mp .mt,.mp b,.mp small{background:none!important;box-shadow:none;text-shadow:none}.mp,.mg2 .mp{background:rgba(70,80,170,.55)!important}.mp .mt{background:rgba(255,255,255,.12)!important}.mp.on .mt{background:rgba(255,255,255,.22)!important}.pvb{margin-top:10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}.pvb div{display:flex;gap:8px}.elim{background:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:0!important;box-shadow:none!important;padding:0!important;gap:8px;text-shadow:-2px -2px 0 #1b2a6b,2px -2px 0 #1b2a6b,-2px 2px 0 #1b2a6b,2px 2px 0 #1b2a6b,0 3px 0 #1b2a6b,0 6px 12px rgba(0,0,0,.25);letter-spacing:.6px}.elim i{background:none!important;width:auto!important;height:auto!important;font-size:1.1em!important;filter:drop-shadow(0 2px 0 #1b2a6b)}.elim b{color:#ffd23f!important}.elim small{opacity:1!important;font-size:13px!important;color:#fff;text-shadow:-2px -2px 0 #1b2a6b,2px -2px 0 #1b2a6b,-2px 2px 0 #1b2a6b,2px 2px 0 #1b2a6b,0 3px 0 #1b2a6b,0 6px 12px rgba(0,0,0,.25)}.ch .sh{top:54.5%;transform:translate(-50%,-50%)}.ch .hp{top:54.5%;transform:translateY(-50%);display:flex;justify-content:center;gap:calc(var(--s)*.1);font-size:calc(var(--s)*.26);letter-spacing:0}.ch .hp svg,.ch .hp img{display:block}body.kb *{animation:none!important}body.kb #ov.bg::before{display:none}
+</style><script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script></head><body>
 <canvas id="c"></canvas>
 <div id="timer"></div><div id="board"></div><div id="gh"><div class="gt" id="ght"></div><div class="gb" id="ghb"></div></div><div id="toast"></div>
 <button class="ib" id="mute" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">🔊</button>
@@ -188,6 +189,7 @@ var MINP=[1,4,3],MN=['Classic','Infection','Freeze Tag'],MUTE=false,QF=1,QUIET=0
 const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
 const $=id=>document.getElementById(id);
 let W,H,DPR,sky;
+let KB=0;addEventListener('focusin',e=>{const t=e.target;if(t&&t.matches&&t.matches('input,textarea')){KB=1;document.body.classList.add('kb');try{document.fullscreenElement&&document.exitFullscreen().catch(()=>{})}catch(x){}[80,350,700].forEach(d=>setTimeout(()=>scrollTo(0,0),d))}});addEventListener('focusout',()=>{KB=0;document.body.classList.remove('kb')});
 const kbOpen=()=>{const e=document.activeElement;return !!e&&(e.tagName=='INPUT'||e.tagName=='TEXTAREA')};
 function rs(){if(W&&kbOpen()&&innerWidth===W&&innerHeight<H)return;W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1000000?1:area>500000?1.25:1.5;DPR=Math.min(raw,maxDpr)*QF;cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
 addEventListener('resize',rs);addEventListener('focusout',()=>setTimeout(()=>{rs();try{fitLobby()}catch(e){}},350));addEventListener('orientationchange',()=>setTimeout(rs,250));rs();
@@ -214,23 +216,23 @@ const DASH_V=1000,DASH_T=.16,DASH_CD=15,AB_CD=30,SMOKE_T=5,SMOKE_R=190,TRAP_T=5,
 
 /* ---------- audio ---------- */
 /* ---------- IMMERSIVE AUDIO ENGINE (procedural: no files needed) ---------- */
-let AC,MB,MG,SB,MF,RV,NB,ZL=0,PADT=0,VC=0;const ATH={};
+let AC,MB,MG,SB,MF,RV,NB,ZL=0,PADT=0,VC=0,MBv,MOB=matchMedia('(pointer:coarse)').matches;const ATH={};
 const ath=(k,ms)=>{const n=performance.now();if(ATH[k]&&n-ATH[k]<ms)return 0;ATH[k]=n;return 1};
 function ac(){if(AC)return AC;try{const AX=window.AudioContext||window.webkitAudioContext;try{AC=new AX({latencyHint:'playback'})}catch(e){AC=new AX()}AC.onstatechange=()=>{if(AC&&AC.state!='running'&&!document.hidden)AC.resume().catch(()=>{})};
- const cp=AC.createDynamicsCompressor();cp.threshold.value=-14;cp.knee.value=10;cp.ratio.value=12;cp.attack.value=.003;cp.release.value=.2;MB=AC.createGain();const LP=AC.createBiquadFilter();LP.type='lowpass';LP.frequency.value=12000;const OUT=AC.createGain();OUT.gain.value=.8;MB.connect(LP);LP.connect(cp);cp.connect(OUT);OUT.connect(AC.destination);
+ const cp=AC.createDynamicsCompressor();cp.threshold.value=-14;cp.knee.value=10;cp.ratio.value=12;cp.attack.value=.003;cp.release.value=.2;MB=AC.createGain();const LP=AC.createBiquadFilter();LP.type='lowpass';LP.frequency.value=12000;const OUT=AC.createGain();OUT.gain.value=MOB?.55:.8;const HP=AC.createBiquadFilter();HP.type='highpass';HP.frequency.value=MOB?110:20;MB.connect(HP);HP.connect(LP);LP.connect(cp);cp.connect(OUT);OUT.connect(AC.destination);
  MF=AC.createBiquadFilter();MF.type='lowpass';MF.frequency.value=16000;MF.connect(MB);
  MG=AC.createGain();MG.gain.value=.42;MG.connect(MF);SB=AC.createGain();SB.gain.value=.65;SB.connect(MB);
- RV=AC.createConvolver();const n=AC.sampleRate*1.1|0,b=AC.createBuffer(2,n,AC.sampleRate);
+ RV=AC.createConvolver();const n=MOB?64:AC.sampleRate*1.1|0,b=AC.createBuffer(2,n,AC.sampleRate);
  for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.7)}
  RV.buffer=b;const rg=AC.createGain();rg.gain.value=.2;RV.connect(rg);rg.connect(MB);
  NB=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const d=NB.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}catch(e){AC=null}return AC}
 /* tone: freq, dur, wave, vol, pitch-slide, delay(s), bus, reverb-send, attack */
-function tn(f,d,ty='sine',v=.1,sl=0,t0=0,bus,rv=.15,at=.012){if(MUTE||(!bus&&VC>=22))return;if(VC>10)rv=0;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),o=A.createOscillator(),g=A.createGain();
+function tn(f,d,ty='sine',v=.1,sl=0,t0=0,bus,rv=.15,at=.012){if(MUTE||(!bus&&VC>=(MOB?10:22)))return;if(MOB||VC>10)rv=0;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),o=A.createOscillator(),g=A.createGain();
  o.type=ty;o.frequency.setValueAtTime(f,t);if(sl)o.frequency.exponentialRampToValueAtTime(Math.max(20,f+sl),t+d);
  at=Math.min(at,d*.6);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,v),t+at);g.gain.exponentialRampToValueAtTime(.0001,t+d);
  o.connect(g);g.connect(bus||SB);if(rv){const s=A.createGain();s.gain.value=rv;g.connect(s);s.connect(RV)}const cn=!bus;if(cn)VC++;o.onended=()=>{if(cn)VC--};o.start(t);o.stop(t+d+.05)}
 /* noise burst through a filter sweep */
-function nz(d,v=.1,ft='lowpass',f0=800,f1=0,t0=0,q=1,bus,rv=.1){if(MUTE||(!bus&&VC>=22))return;if(VC>10)rv=0;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),s=A.createBufferSource(),f=A.createBiquadFilter(),g=A.createGain();
+function nz(d,v=.1,ft='lowpass',f0=800,f1=0,t0=0,q=1,bus,rv=.1){if(MUTE||(!bus&&VC>=(MOB?10:22)))return;if(MOB||VC>10)rv=0;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),s=A.createBufferSource(),f=A.createBiquadFilter(),g=A.createGain();
  s.buffer=NB;s.loop=true;f.type=ft;f.Q.value=q;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+d);
  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,v),t+Math.min(.02,d/3));g.gain.exponentialRampToValueAtTime(.0001,t+d);
  s.connect(f);f.connect(g);g.connect(bus||SB);if(rv){const r=A.createGain();r.gain.value=rv;g.connect(r);r.connect(RV)}const cn=!bus;if(cn)VC++;s.onended=()=>{if(cn)VC--};s.start(t);s.stop(t+d+.05)}
@@ -289,14 +291,14 @@ function sch(st16,t){const K=MUS.sc,C=SCN[K],bar=(st16>>4)&3,s=st16&15,o=Math.ma
  else{if(s%2==0)tn(s%4?bf*2:bf,sp*1.7,'sawtooth',.07,0,o,MG,0);if(s%4==0)kk(o,.22);if(s==4||s==12||s==14)cl(o,.05);ht(o,.012+(s%2?0:.006));if([0,6,10].includes(s))ch.forEach(f=>tn(f,sp*2,'sawtooth',.018,0,o,MG,.2));tn(ch[(s*3)%ch.length]*2,sp*1.2,'square',.012,0,o,MG,.2);if(bar==3&&s==8)nz(sp*8,.1,'highpass',400,6000,o,2,MG,.3)}}
 const MUS={sc:'',st:0,nt:0,on:0,
  set(n){const A=ac();if(!A||n==this.sc)return;this.sc=n;this.on=0;MG.gain.cancelScheduledValues(A.currentTime);MG.gain.setTargetAtTime(0,A.currentTime,.12);
-  setTimeout(()=>{if(this.sc!=n)return;this.st=0;this.nt=0;this.on=1;MG.gain.cancelScheduledValues(AC.currentTime);MG.gain.setTargetAtTime(.55,AC.currentTime,.25);if(n=='intense')SFX.riser()},420)},
+  setTimeout(()=>{if(this.sc!=n)return;this.st=0;this.nt=0;this.on=1;MG.gain.cancelScheduledValues(AC.currentTime);MG.gain.setTargetAtTime(.42,AC.currentTime,.25);if(n=='intense')SFX.riser()},420)},
  muff(b){if(MF)MF.frequency.setTargetAtTime(b?500:16000,AC.currentTime,.3)},
  tick(){const A=AC;if(!A||A.state!='running'||MUTE||!this.on||!SCN[this.sc])return;const sp=60/SCN[this.sc].bpm/4;if(!this.nt||this.nt<A.currentTime-.1)this.nt=A.currentTime+.05;while(this.nt<A.currentTime+.35){sch(this.st,this.nt);this.nt+=sp;this.st++}}};
 function jingle(w){w?SFX.win():SFX.lose()}
 function startMusic(){try{ac();AC.resume()}catch(e){}}
 /* ---------- watcher: scene music, ticks, footsteps, jump/land, zipline, blackout/lava, lightning ---------- */
 let pg=0,pvy=0,stT=0,sa=0,lastSec=-1,evk='',nL=0,overAt=0;const RP={};
-function watch(){try{if(!AC||typeof S=='undefined')return;const A=AC,m=S.mode,pl=m=='play';MB.gain.setTargetAtTime(MUTE?0:1,A.currentTime,.05);
+function watch(){try{if(!AC||typeof S=='undefined')return;const A=AC,m=S.mode,pl=m=='play';if(MBv!==MUTE){MBv=MUTE;MB.gain.setTargetAtTime(MUTE?0:1,A.currentTime,.05)}
  let sc='home';if(pl)sc=(S.st=='play'&&tleft<=10&&tleft>0&&!S.inf)?'intense':'play';else if(m=='lobby')sc='lobby';else if(m=='over'){if(!overAt)overAt=performance.now();sc=performance.now()-overAt<7000?'none':'home'}
  if(m!='over')overAt=0;MUS.set(sc);
  if(sc=='intense'){const s=Math.ceil(tleft);if(s!=lastSec){lastSec=s;SFX.tick(s)}}else lastSec=-1;
@@ -344,7 +346,7 @@ function elimBanner(me,n){const e=document.createElement('div');e.className='eli
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
 let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped&&!kbOpen())?'flex':'none'}
-['touchend','click'].forEach(e=>addEventListener(e,()=>{fsTapped=1;if(!document.fullscreenElement&&!kbOpen())lockLand();fsChk()},{passive:true}));
+['touchend','click'].forEach(e=>addEventListener(e,ev=>{if(ev.target&&ev.target.closest&&ev.target.closest('input,textarea'))return;fsTapped=1;if(!document.fullscreenElement&&!kbOpen())lockLand();fsChk()},{passive:true}));
 ['resize','orientationchange','fullscreenchange'].forEach(e=>addEventListener(e,()=>setTimeout(fsChk,150)));setTimeout(fsChk,300);   // first tap anywhere (and any tap after leaving fullscreen) goes fullscreen
 if(window.visualViewport)visualViewport.addEventListener('resize',()=>{if(kbOpen())return;setTimeout(()=>{rs();fitLobby()},60)});
 
@@ -827,7 +829,7 @@ function frame(n){
  const ax=ME.x,ay=ME.y,al=Math.min(1,acc*PHYS_HZ);
  if(S.mode=='play'&&ME.alive&&ME.px!==undefined&&Math.abs(ax-ME.px)<80&&Math.abs(ay-ME.py)<80){ME.x=ME.px+(ax-ME.px)*al;ME.y=ME.py+(ay-ME.py)*al}
  const vk=Math.exp(-dt*(Math.abs(VO.x)+Math.abs(VO.y)>24?14:7));VO.x*=vk;VO.y*=vk;if(S.mode=='play'&&ME.alive){ME.x+=VO.x;ME.y+=VO.y}
- arrowUpd(dt);camUpd(dt);draw();ME.x=ax;ME.y=ay}
+ arrowUpd(dt);camUpd(dt);if(!KB&&!(S.mode!='play'&&document.body.classList.contains('inm')))draw();ME.x=ax;ME.y=ay}
 function cdLeft(){return Math.max(0,S.cdl-(performance.now()-S.cdAt)/1000)}
 /* client-side PREDICTION: I move instantly on my own screen and send the inputs; the server's answer corrects me. No tagging, timer or scoring happens here. */
 function upd(dt){
