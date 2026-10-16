@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-visual">
 <title>Tag</title>
 <meta name="theme-color" content="#3d9bf7"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
@@ -188,8 +188,9 @@ var MINP=[1,4,3],MN=['Classic','Infection','Freeze Tag'],MUTE=false,QF=1,QUIET=0
 const cv=document.getElementById('c');let cx=cv.getContext('2d',{alpha:false}),ov=document.getElementById('ov');let worldCanvas,worldCtx,worldReady=false;
 const $=id=>document.getElementById(id);
 let W,H,DPR,sky;
-function rs(){W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1000000?1:area>500000?1.25:1.5;DPR=Math.min(raw,maxDpr)*QF;cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
-addEventListener('resize',rs);addEventListener('orientationchange',()=>setTimeout(rs,250));rs();
+const kbOpen=()=>{const e=document.activeElement;return !!e&&(e.tagName=='INPUT'||e.tagName=='TEXTAREA')};
+function rs(){if(W&&kbOpen()&&innerWidth===W&&innerHeight<H)return;W=innerWidth;H=innerHeight;const area=W*H,raw=devicePixelRatio||1;const maxDpr=area>1000000?1:area>500000?1.25:1.5;DPR=Math.min(raw,maxDpr)*QF;cv.width=Math.max(1,Math.round(W*DPR));cv.height=Math.max(1,Math.round(H*DPR));sky=cx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#3d97f7');sky.addColorStop(1,'#5ccdf5')}
+addEventListener('resize',rs);addEventListener('focusout',()=>setTimeout(()=>{rs();try{fitLobby()}catch(e){}},350));addEventListener('orientationchange',()=>setTimeout(rs,250));rs();
 if(matchMedia('(pointer:coarse)').matches)document.body.classList.add('t');
 
 /* ---------- world ---------- */
@@ -213,26 +214,26 @@ const DASH_V=1000,DASH_T=.16,DASH_CD=15,AB_CD=30,SMOKE_T=5,SMOKE_R=190,TRAP_T=5,
 
 /* ---------- audio ---------- */
 /* ---------- IMMERSIVE AUDIO ENGINE (procedural: no files needed) ---------- */
-let AC,MB,MG,SB,MF,RV,NB,ZL=0,PADT=0;const ATH={};
+let AC,MB,MG,SB,MF,RV,NB,ZL=0,PADT=0,VC=0;const ATH={};
 const ath=(k,ms)=>{const n=performance.now();if(ATH[k]&&n-ATH[k]<ms)return 0;ATH[k]=n;return 1};
-function ac(){if(AC)return AC;try{AC=new (window.AudioContext||window.webkitAudioContext)();
- const cp=AC.createDynamicsCompressor();cp.threshold.value=-16;cp.ratio.value=4;MB=AC.createGain();MB.connect(cp);cp.connect(AC.destination);
+function ac(){if(AC)return AC;try{const AX=window.AudioContext||window.webkitAudioContext;try{AC=new AX({latencyHint:'playback'})}catch(e){AC=new AX()}AC.onstatechange=()=>{if(AC&&AC.state!='running'&&!document.hidden)AC.resume().catch(()=>{})};
+ const cp=AC.createDynamicsCompressor();cp.threshold.value=-14;cp.knee.value=10;cp.ratio.value=12;cp.attack.value=.003;cp.release.value=.2;MB=AC.createGain();const LP=AC.createBiquadFilter();LP.type='lowpass';LP.frequency.value=12000;const OUT=AC.createGain();OUT.gain.value=.8;MB.connect(LP);LP.connect(cp);cp.connect(OUT);OUT.connect(AC.destination);
  MF=AC.createBiquadFilter();MF.type='lowpass';MF.frequency.value=16000;MF.connect(MB);
- MG=AC.createGain();MG.gain.value=.55;MG.connect(MF);SB=AC.createGain();SB.gain.value=.9;SB.connect(MB);
- RV=AC.createConvolver();const n=AC.sampleRate*1.9|0,b=AC.createBuffer(2,n,AC.sampleRate);
+ MG=AC.createGain();MG.gain.value=.42;MG.connect(MF);SB=AC.createGain();SB.gain.value=.65;SB.connect(MB);
+ RV=AC.createConvolver();const n=AC.sampleRate*1.1|0,b=AC.createBuffer(2,n,AC.sampleRate);
  for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.7)}
- RV.buffer=b;const rg=AC.createGain();rg.gain.value=.3;RV.connect(rg);rg.connect(MB);
+ RV.buffer=b;const rg=AC.createGain();rg.gain.value=.2;RV.connect(rg);rg.connect(MB);
  NB=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const d=NB.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}catch(e){AC=null}return AC}
 /* tone: freq, dur, wave, vol, pitch-slide, delay(s), bus, reverb-send, attack */
-function tn(f,d,ty='sine',v=.1,sl=0,t0=0,bus,rv=.15,at=.012){if(MUTE)return;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),o=A.createOscillator(),g=A.createGain();
+function tn(f,d,ty='sine',v=.1,sl=0,t0=0,bus,rv=.15,at=.012){if(MUTE||(!bus&&VC>=22))return;if(VC>10)rv=0;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),o=A.createOscillator(),g=A.createGain();
  o.type=ty;o.frequency.setValueAtTime(f,t);if(sl)o.frequency.exponentialRampToValueAtTime(Math.max(20,f+sl),t+d);
  at=Math.min(at,d*.6);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,v),t+at);g.gain.exponentialRampToValueAtTime(.0001,t+d);
- o.connect(g);g.connect(bus||SB);if(rv){const s=A.createGain();s.gain.value=rv;g.connect(s);s.connect(RV)}o.start(t);o.stop(t+d+.05)}
+ o.connect(g);g.connect(bus||SB);if(rv){const s=A.createGain();s.gain.value=rv;g.connect(s);s.connect(RV)}const cn=!bus;if(cn)VC++;o.onended=()=>{if(cn)VC--};o.start(t);o.stop(t+d+.05)}
 /* noise burst through a filter sweep */
-function nz(d,v=.1,ft='lowpass',f0=800,f1=0,t0=0,q=1,bus,rv=.1){if(MUTE)return;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),s=A.createBufferSource(),f=A.createBiquadFilter(),g=A.createGain();
+function nz(d,v=.1,ft='lowpass',f0=800,f1=0,t0=0,q=1,bus,rv=.1){if(MUTE||(!bus&&VC>=22))return;if(VC>10)rv=0;const A=ac();if(!A)return;const t=A.currentTime+Math.max(0,t0),s=A.createBufferSource(),f=A.createBiquadFilter(),g=A.createGain();
  s.buffer=NB;s.loop=true;f.type=ft;f.Q.value=q;f.frequency.setValueAtTime(f0,t);if(f1)f.frequency.exponentialRampToValueAtTime(f1,t+d);
  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,v),t+Math.min(.02,d/3));g.gain.exponentialRampToValueAtTime(.0001,t+d);
- s.connect(f);f.connect(g);g.connect(bus||SB);if(rv){const r=A.createGain();r.gain.value=rv;g.connect(r);r.connect(RV)}s.start(t);s.stop(t+d+.05)}
+ s.connect(f);f.connect(g);g.connect(bus||SB);if(rv){const r=A.createGain();r.gain.value=rv;g.connect(r);r.connect(RV)}const cn=!bus;if(cn)VC++;s.onended=()=>{if(cn)VC--};s.start(t);s.stop(t+d+.05)}
 function snd(f,d,t='square',v=.05,s=0){if(MUTE||QUIET)return;tn(f,d,t=='square'?'triangle':t,v*1.5,s,0,0,.15)}  /* legacy calls now go through the new engine */
 const SFX={
  click(){if(!ath('c',40))return;tn(880,.06,'triangle',.05,-250,0,0,.1);tn(1320,.05,'sine',.03,0,.015,0,.1)},
@@ -342,10 +343,10 @@ const AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* AR: the glide of the arrow bet
 function elimBanner(me,n){const e=document.createElement('div');e.className='elim'+(me?' me':'');e.innerHTML=me?'<i>💀</i><div>You\'re out<small>👻 Ghost mode: tap the arena to zap!</small></div>':'<i>💀</i><div><b style="font-weight:400">'+esc(n||'Someone')+'</b> is out</div>';document.body.appendChild(e);setTimeout(()=>e.remove(),2700)}
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
-let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped)?'flex':'none'}
-['touchend','click'].forEach(e=>addEventListener(e,()=>{fsTapped=1;if(!document.fullscreenElement)lockLand();fsChk()},{passive:true}));
+let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped&&!kbOpen())?'flex':'none'}
+['touchend','click'].forEach(e=>addEventListener(e,()=>{fsTapped=1;if(!document.fullscreenElement&&!kbOpen())lockLand();fsChk()},{passive:true}));
 ['resize','orientationchange','fullscreenchange'].forEach(e=>addEventListener(e,()=>setTimeout(fsChk,150)));setTimeout(fsChk,300);   // first tap anywhere (and any tap after leaving fullscreen) goes fullscreen
-if(window.visualViewport)visualViewport.addEventListener('resize',()=>setTimeout(()=>{rs();fitLobby()},60));
+if(window.visualViewport)visualViewport.addEventListener('resize',()=>{if(kbOpen())return;setTimeout(()=>{rs();fitLobby()},60)});
 
 /* ---------- accounts (login is enforced by the server; this is just the UI) ---------- */
 let AUTH=null;const AURL=window.TAG_WS?window.TAG_WS.replace(/^ws/,'http').replace(/\/$/,'')+'/auth':'/auth';
@@ -492,7 +493,7 @@ addEventListener('pagehide',e=>{if(e.persisted)return;try{if(room){room.left=1;n
 /* coming back to a tab (phones often kill sockets in the background): reconnect at once instead of waiting for a watchdog */
 document.addEventListener('visibilitychange',()=>{if(document.hidden||!room||room.left)return;const w=room.ws;if(!w||w.readyState>1)tryResume();else if(Date.now()-room.rx>9000)try{w.close()}catch(e){}});
 function leaveRoom(msg){S.bk=null;if(room){room.left=1;try{netSend({t:'leave'});room.ws&&room.ws.close()}catch(e){}}room=null;S.rm=null;rem={};isHost=false;peers=[];menu(typeof msg=='string'?msg:'')}
-addEventListener('resize',()=>setTimeout(fitLobby,60));
+addEventListener('resize',()=>{if(!kbOpen())setTimeout(fitLobby,60)});
 
 /* ---------- public lobby ---------- */
 /* public lobby: the SERVER starts the match 3 s after the room fills; this only shows the countdown */
