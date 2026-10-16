@@ -754,7 +754,7 @@ function botPlan(r, p) {
   all.sort((a, b) => a.c - b.c);
   const bp = Math.random() < (1 - p.sk) * .3 ? Object.assign({}, all[rnd(Math.min(3, all.length))], { j: all[0].j }) : all[0];   // a rare human-like slip
   const pl = { d: bp.d, j: bp.j, s: bp.s, a: 0, g: 0 }, DD = p.it ? nd : td;
-  if (r.st === 'play' && p.acd <= 0 && DD < 1e8 && Math.random() < .55) {   // ability: fake / smoke / trap
+  if (r.st === 'play' && !r.tut && p.acd <= 0 && DD < 1e8 && Math.random() < .55) {   // ability: fake / smoke / trap
     if (p.ab === 'fake') pl.a = DD < (p.it ? 220 : 320) ? 1 : 0;
     else if (p.ab === 'smoke') pl.a = p.it ? (DD < 200 ? 1 : 0) : (DD < 360 && DD > 90 ? 1 : 0);
     else if (p.ab === 'trap') pl.a = p.g && (p.it ? DD < 260 : DD > 140 && DD < 480) ? 1 : 0;
@@ -810,12 +810,12 @@ function zoneSpots(r, n, right) {   // infection / freeze: one team per map edge
 function startRound(r, ids, t) {
   r.rn++; r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.ord = ids.slice(); for (const q of r.players.values()) q.outAt = 0; clearFx(r); initCrates(r);
   let pts = r.inf ? null : spots(r, ids.length);
-  const first = ids[rnd(ids.length)]; r.first = first;
+  const first = r.tut ? (ids.find(i => { const z = r.players.get(i); return z && !z.bot; }) || ids[rnd(ids.length)]) : ids[rnd(ids.length)]; r.first = first;
   const frs = new Set(r.inf === 2 ? ids.slice().sort(() => Math.random() - .5).slice(0, Math.max(1, ids.length >> 1)) : [first]);   // freeze tag: 50% of the players are freezers
   if (r.inf) { const d = ids.filter(i => !frs.has(i)), a = ids.filter(i => frs.has(i)), L = zoneSpots(r, d.length, 0), R = zoneSpots(r, a.length, 1), m = {}; d.forEach((i, k) => m[i] = L[k]); a.forEach((i, k) => m[i] = R[k]); pts = ids.map(i => m[i]); }   // defenders left, attackers right
   ids.forEach((id, k) => { const p = r.players.get(id); if (!p) return; spawn(p, 0, t, pts[k]); p.alive = true; p.it = frs.has(id) ? 1 : 0; });
   for (const p of r.players.values()) if (!ids.includes(p.id)) { p.alive = false; p.it = 0; }
-  r.rs = r.inf === 0 ? classicS(ids.length) : r.inf === 2 ? FREEZE_S : ROUND_S;
+  r.rs = r.tut ? 15 : r.inf === 0 ? classicS(ids.length) : r.inf === 2 ? FREEZE_S : ROUND_S;
 
   r.evK = -1; r.evF = rnd(2); r.cdEnd = t + CD_MS; r.deadline = r.cdEnd + roundS(r) * 1000; r.tagFrom = r.cdEnd + TAG_GRACE_MS;
   bcastRoom(r);
@@ -837,6 +837,7 @@ function finish(r, id, wt) {
   for (const q of r.players.values()) if (q.bk != null && id && String(q.bk) === String(id) && q.id !== id && q.rec) q.bonus = 100;   // spectator who backed the winner
   for (const q of r.players.values()) { q.it = 0; if (r.inf === 1 && q.id === r.first && !W.has(q.id)) { q.rec = 0; continue; } rec(q, W.has(q.id), 1); }   // infection: the starting IT can't win by design, so it is not counted as a loss
   r.res = r.ord.map(id => r.players.get(id) || (r.gone && r.gone[id])).filter(Boolean).map(q => ({ id: q.id, nm: q.nm, b: q.bot ? 1 : 0, w: W.has(q.id) ? 1 : 0, o: q.outAt || 0, tw: q.acct ? q.acct.w : 0 })).sort((a, b) => b.w - a.w || b.o - a.o).map(x => ({ id: x.id, nm: x.nm, b: x.b, w: x.w, tw: x.tw }));   // this match's standings (winners first, then whoever lasted longest)
+  if (r.tut) bcast(r, '{"t":"tutdone"}');
   bcastRoom(r);
 }
 
@@ -850,7 +851,7 @@ function toLobby(r) {
 function resumeClassic(r, t, al) {   // classic: keep positions, new random tag, fresh 30 s
   for (const q of r.players.values()) q.it = 0;
   const h = r.players.get(al[rnd(al.length)]); if (h) h.it = 1;
-  r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.rs = classicS(al.length); r.deadline = t + r.rs * 1000; r.tagFrom = t + TAG_GRACE_MS;
+  r.st = 'play'; r.loser = r.ln = null; r.lk = null; r.rs = r.tut ? 15 : classicS(al.length); r.deadline = t + r.rs * 1000; r.tagFrom = t + TAG_GRACE_MS;
   bcastRoom(r);
 }
 
@@ -911,6 +912,20 @@ function nearOthers(r, p, rad) {   // other living, unfrozen players within rad 
   return o.sort((a, b) => a[0] - b[0]);
 }
 function shove(q, vx, vy) { if (q.hb || q.gt || q.gk) return; q.vx = vx; q.vy = vy; q.g = 0; q.coy = q.buf = 0; q.cut = 1; q.dash = 0; q.zip = -1; q.bst = PAD_BST; q.rs++; }
+
+/* ---- TUTORIAL room: 5 easy bots, you start as IT, rounds are 15 s, and if the bomb is still on you at 0 it is passed to a bot (you can't be eliminated) ---- */
+function tutHint(r, t) {
+  const h = [...r.players.values()].find(q => !q.bot && q.ws); if (!h) return;
+  const bots = [...r.players.values()].filter(q => q.bot && q.alive).length;
+  let k;
+  if (r.st === 'between') k = 'out';
+  else if (t < r.cdEnd) k = 'cd';
+  else if (h.it) { k = (r.deadline - t) / 1000 <= 6 ? 'pass' : 'it'; }
+  else k = 'run';
+  if (r.tutHold > t) return;
+  const key = k + bots; if (key === r.tutK) return; r.tutK = key;
+  sendP(h, JSON.stringify({ t: 'tut', k, n: bots }));
+}
 function useAbility(r, p) {
   if (r.st !== 'play' || p.acd > 0) return;
   const k = p.ab;
@@ -1143,6 +1158,7 @@ function simRoom(r, t) {
     p.hi = (p.hi + 1) & 31; p.hx[p.hi] = p.x; p.hy[p.hi] = p.y;
   }
 
+  if (r.tut && (r.st === 'play' || r.st === 'between')) tutHint(r, t);
   if (r.st === 'between') { if (t >= r.betweenEnd) { const al = aliveIds(r); if (al.length >= 2) { if (r.inf === 0) resumeClassic(r, t, al); else startRound(r, al, t); } else finish(r, al[0]); } return; }
   if (r.st !== 'play' || cd) return;
   tickFx(r);
@@ -1214,7 +1230,13 @@ function simRoom(r, t) {
   }
   // the arrow holder who runs into a decoy pops it (the holder's own decoys are ignored)
   for (let i = r.dec.length - 1; i >= 0; i--) if (r.dec[i].o !== holder.id && hit(holder, r.dec[i], 3)) r.dec.splice(i, 1);
-  if (!r.practice && t >= r.deadline) expire(r, t, holder);
+  if (!r.practice && t >= r.deadline) {
+    if (r.tut && !holder.bot) {   // tutorial mercy: the human is never eliminated, the bomb jumps to the nearest bot
+      const o = nearOthers(r, holder, 1e5)[0];
+      if (o) { const q = o[1]; holder.it = 0; q.it = 1; r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 350 }; r.deadline = t + r.rs * 1000; r.tutHold = t + 3000; r.tutK = ''; bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id })); sendP(holder, '{"t":"tut","k":"saved","n":0}'); return; }
+    }
+    expire(r, t, holder);
+  }
 }
 
 function snapshot(r, t, tt) {
@@ -1425,6 +1447,14 @@ wss.on('connection', (ws, req) => {
           return;
         }
         return;
+      }
+      if (m.t === 'tut') {   // first-time tutorial: private room, 5 easy bots, nothing counted
+        if (rooms.size >= MAX_ROOMS) return err('busy');
+        let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
+        const nr = mkRoom(code, false); nr.tut = 1; nr.sel = 1; nr.inf = 0;
+        addPlayer(nr, ws.acct.n); if (!r) return;
+        addBots(nr, 5); for (const b of nr.players.values()) if (b.bot) b.sk = .5;
+        return startMatch(nr, now());
       }
       if (m.t === 'create') {
         if (rooms.size >= MAX_ROOMS) return err('busy');
