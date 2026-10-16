@@ -22,7 +22,7 @@ const LOBBY_GRACE_MS = 10000;  // a dropped connection in a lobby / results scre
 const ALLOWED = (process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);   // optional: restrict which sites may open a socket
 const TICK_MS = 1000 / 60;     // simulation rate (must match the client's PHYS_HZ = 60)
 const DT = 1 / 60;
-const SNAP_BASE = 2;                                  // 30 snapshots/s: the client interpolates with velocities (Hermite), so it looks as smooth as 60/s but costs half the CPU/bandwidth
+const SNAP_BASE = 1;                                  // 30 snapshots/s: the client interpolates with velocities (Hermite), so it looks as smooth as 60/s but costs half the CPU/bandwidth
 let snapEvery = +process.env.TAG_SNAP_EVERY || SNAP_BASE;   // send a snapshot every N ticks (2 = 30/s, 3 = 20/s). Drops to 3 by itself when the server is starved of CPU (see the tick loop).
 const FIXED_SNAP = !!process.env.TAG_SNAP_EVERY;
 const ROUND_S = +process.env.TAG_ROUND_S || 180;           // seconds per round
@@ -36,9 +36,9 @@ const TAG_GRACE_MS = 300;      // nobody can be tagged right after GO
 const BETWEEN_MS = 3200;       // pause after someone is eliminated
 const BOT_GAP_MS = 2000;       // public lobby not full: one bot joins every 2 s (a real player takes a bot's seat)
 const LOBBY_GO_MS = 3000;      // public lobby full -> match starts after this
-const LOCK_MS = 1200;          // the player who just passed the tag can't take it straight back
+const LOCK_MS = 800;          // the player who just passed the tag can't take it straight back
 const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
-const STALL_MS = 150;          // wait this long for a late input packet before treating the player as idle
+const STALL_MS = 80;          // wait this long for a late input packet before treating the player as idle
 const LOBBY_IDLE_MS = +process.env.TAG_LOBBY_IDLE_MS || 10 * 60 * 1000;   // a seat in a public lobby is held at most this long (no permanent idlers)
 const QCAP = 24;               // max queued inputs per player (anti speed-hack: input rate is capped at 60/s)
 
@@ -505,14 +505,15 @@ const onQ = (q, p) => q.dy ? (p.x + PW / 2 >= q.x && p.x + PW / 2 <= q.x + q.w &
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
 /* Lag compensation: the player who tags sees the others ~RTT+interp-delay in the past (and himself predicted in the present), so contact is judged on HIS screen:
    his current position against the other player's position from that many ticks ago. A bot holder has no screen -> the human runner's screen decides. */
-const LAGC_MAX = 20, LAGC_EXTRA = 55;   // rewind cap (ticks) / default render delay until the client reports its real one
+const LAGC_MAX = 8, LAGC_EXTRA = 55;   // rewind cap (ticks) / default render delay until the client reports its real one
 const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + (p.rd ? p.rd + 8 : LAGC_EXTRA)) / TICK_MS));
 const hitRew = (a, b, k) => { const i = (b.hi - k) & 31, x = b.hx[i], y = b.hy[i]; return a.x < x + PW - 3 && a.x + PW > x + 3 && a.y < y + PH - 3 && a.y + PH > y + 3; };
 function tagHit(h, q) {
-  if (hit(h, q, 2)) return true;   // plain contact on the server always counts; the lag-compensated check below only adds to it
+  if (hit(h, q, -2)) return true;      // real contact on the server always tags
+  if (!hit(h, q, -20)) return false;   // lag compensation only helps within 20 px: never a tag from a distance
   if (!h.bot && h.ws) return hitRew(h, q, lagK(h));
   if (!q.bot && q.ws) return hitRew(q, h, lagK(q));
-  return hit(h, q, 3);
+  return false;
 }
 
 /* ---------------- crates: solid boxes; hold GRAB next to one to drag it ---------------- */
@@ -642,22 +643,27 @@ function updateLobbyGo(r, t) {
   r.botNext = conn(r) >= 1 && tot(r) < PUB_SIZE ? (r.botNext || t + BOT_GAP_MS) : 0;   // bots join one by one while people are waiting
 }
 
+const BAB = ['fake', 'trap', 'spring', 'rocket', 'uppercut', 'recharge', 'shock', 'magnet', 'shield', 'swap'];
 const BOT_NAMES = ['Zed', 'Mika', 'Rex', 'Nova', 'Kai', 'Luna', 'Jax', 'Pixel', 'Turbo', 'Echo', 'Blaze', 'Milo'];
 function addBots(r, cnt) {
   const used = new Set([...r.players.values()].map(p => p.ci)), nm = new Set([...r.players.values()].map(p => p.nm));
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .93 + Math.random() * .07; b.ab = [...ABIL][rnd(ABIL.size)]; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .93 + Math.random() * .07; b.ab = BAB[rnd(BAB.length)]; b.hop = null; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
 
 /* ---- bots: every ~0.25 s they simulate up to 18 short plans on a copy of their own body (same physics as the real game), look 0.5 s ahead and pick the best one.
    Runners flee while avoiding walls / crowds, idle runners wander between platforms, the holder chases; everyone uses dash, grab and their ability. ---- */
+/* ---- LIGHT bots: no physics simulation. Every ~0.1 s one cheap decision (O(players)), using the precomputed platform-hop graph (NAV) to climb/route.
+   Chase = path-nearest runner, flee = run away from the holder (avoids walls), wander = hop between platforms. Dash/grab used; no smoke/clones (those hid everyone). ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk > 0) p.btk--; else if (r.pb > 0) { r.pb--; p.btk = (lagEma > 2 ? 18 : 12) + rnd(3); botPlan(r, p); p.k = 0; }
+  if (--p.btk <= 0) { p.btk = 6 + rnd(3); botPlan(r, p); p.k = 0; }
+  const h = p.hop;
+  if (h && p.g && Math.abs(p.x - h.x) < 9) { p.pl = { d: h.d, j: h.J, s: h.ds, a: 0, g: 0 }; p.k = 0; p.btk = Math.max(h.J, 6) + 4; p.hop = null; }   // exact launch spot reached: fire the precomputed hop
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0) | (pl.a && k === 1 ? 32 : 0) | (k < pl.g ? 64 : 0);
@@ -678,7 +684,7 @@ function navBuild() {   // which platform reaches which (real physics: walking o
     for (let k = 0; k < 150; k++) {
       step(s, { l: d < 0, r: d > 0, j: k < J, d: 0, s: ds && !k }, DT);
       if (s.y > WH + 40) return;
-      if (!s.g) air = 1; else if (air) { const l = pfOf(s); if (l >= 0 && l !== i && !E[i].some(e => e.j === l)) E[i].push({ j: l, x, y: SOL[i].y - PH, pad }); return; }
+      if (!s.g) air = 1; else if (air) { const l = pfOf(s); if (l >= 0 && l !== i && !E[i].some(e => e.j === l)) E[i].push({ j: l, x, y: SOL[i].y - PH, pad, d, J, ds }); return; }
     }
   };
   for (const mid of [0, 1]) for (let i = 0; i < n; i++) {
@@ -691,77 +697,51 @@ function navBuild() {   // which platform reaches which (real physics: walking o
   SX = sx0; return { E, D };
 }
 function botPlan(r, p) {
-  const NV = NAV[CURMAP] || (NAV[CURMAP] = navBuild()), pf = q => { if (q.g) { const f = pfOf(q); if (f >= 0) q.lp = f; } return q.lp >= 0 ? q.lp : -1; };   // platform someone stands on (or stood on last)
-  const cur = pf(p); let near = null, nd = 1e9, ns = 1e9, rescue = null, rd = 1e9, thr = null, td = 1e9; const oth = [];
+  const NV = NAV[CURMAP] || (NAV[CURMAP] = navBuild()), pf = q => { if (q.g) { const f = pfOf(q); if (f >= 0) q.lp = f; } return q.lp >= 0 ? q.lp : -1; };
+  const cur = pf(p); let near = null, bs = 1e9, thr = null, td = 1e9, resc = null, rd = 1e9;
   for (const q of r.players.values()) {
     if (q === p || !q.alive) continue;
-    const d = Math.hypot(q.x - p.x, (q.y - p.y) * 1.2), qp = pf(q), sc = d + (cur >= 0 && qp >= 0 ? Math.min(NV.D[cur][qp], 8) * 260 : 0);   // the chaser picks the runner who is closest by PATH, not just in a straight line
-    if (!q.it && !q.fz) oth.push(q);
-    if (p.it) { if (!q.it && !q.fz && sc < ns) { ns = sc; nd = d; near = q; } }
+    const d = Math.abs(q.x - p.x) + Math.abs(q.y - p.y) * 1.5;
+    if (p.it) { if (!q.it && !q.fz) { const qp = q.g ? pf(q) : q.lp, sc = d + (cur >= 0 && qp >= 0 ? Math.min(NV.D[cur][qp], 8) * 260 : 0); if (sc < bs) { bs = sc; near = q; } } }
     else if (q.it) { if (d < td) { td = d; thr = q; } }
-    else if (r.inf === 2 && q.fz && d < rd) { rd = d; rescue = q; }
+    else if (r.inf === 2 && q.fz && d < rd) { rd = d; resc = q; }
   }
-  const NP = { d: 0, j: 0, s: 0, a: 0, g: 0 };
-  if (p.hb) { const h = r.players.get(p.hb); p.pl = { d: h && h.x > p.x ? -1 : 1, j: 0, s: p.dcd <= 0 && Math.random() < .85 ? 1 : 0, a: 0, g: 0 }; return; }   // held: dash away to break free
+  p.hop = null;
+  if (p.hb) { const h = r.players.get(p.hb); p.pl = { d: h && h.x > p.x ? -1 : 1, j: 0, s: p.dcd <= 0 ? 1 : 0, a: 0, g: 0 }; return; }   // held: dash away to break free
   let tg = null, mode = 2;   // 0 chase, 1 flee, 2 wander
   if (p.it) { if (near) { tg = near; mode = 0; } }
-  else if (rescue && td > 320) { tg = rescue; mode = 0; }
-  else if (thr && td < (p.fl ? 700 : 520)) { tg = thr; mode = 1; }   // hysteresis: no flee/wander flip-flop
-  p.fl = mode === 1;
-  const mv = Math.hypot(p.x - p.sx, p.y - p.sy);
-  if (mode < 2 && mv < 6 && ++p.stk > 3 && (mode === 0 || td > 250)) { p.stk = 0; p.sx = p.x; p.sy = p.y; p.pl = { d: rnd(3) - 1, j: 22, s: p.dcd <= 0 ? 1 : 0, a: 0, g: 0 }; p.btk = 12; return; }   // wedged (crates, ledge, trap): break loose with a full jump + dash
-  if (mv >= 6) p.stk = 0;
-  p.sx = p.x; p.sy = p.y;
-  let tx, ty, tp = -1;
-  if (mode === 2) {
-    const reached = p.wp && Math.hypot(p.x - p.wp[0], p.y - p.wp[1]) < 50;
-    if (!p.wp || reached || --p.wpT <= 0) {
-      if (reached && Math.random() < .3) { p.wp = null; p.pl = NP; return; }   // a short human pause
-      p.wp = botWp(); p.wpT = 30 + rnd(20);
+  else if (thr && td < 520) { tg = thr; mode = 1; }
+  else if (resc && td > 400) { tg = resc; mode = 0; }
+  let d = 0, j = 0, s = 0, tp = -1, tx = p.x;
+  const mv = Math.abs(p.x - p.sx) + Math.abs(p.y - p.sy); p.sx = p.x; p.sy = p.y;
+  if (mode < 2 && mv < 6) p.stk++; else p.stk = 0;
+  if (p.stk > 3) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 22, s: p.dcd <= 0 ? 1 : 0, a: 0, g: 0 }; p.btk = 24; return; }   // wedged: full jump + dash
+  if (mode === 1) {
+    d = p.x >= tg.x ? 1 : -1;
+    const ed = Math.min(p.x - LX, RX - PW - p.x);
+    if (ed < 150) { const c = p.x < (LX + RX) / 2 ? 1 : -1; if (c !== d && p.g && td < 220) j = 22; d = c; }   // never into a wall; hop over the chaser if cornered
+    else if (td < 140 && p.g && Math.random() < .3) j = 14;
+    if (td < 230 && p.dcd <= 0 && p.dash <= 0 && Math.random() < .6) s = 1;
+  } else {
+    let ty;
+    if (mode === 0) { tx = tg.x + tg.vx * .2; ty = tg.y; tp = tg.g ? pf(tg) : tg.lp; }
+    else {
+      if (!p.wp || Math.abs(p.x - p.wp[0]) < 40 && Math.abs(p.y - p.wp[1]) < 60 || --p.wpT <= 0) { if (p.wp && Math.random() < .3) { p.wp = null; p.pl = { d: 0, j: 0, s: 0, a: 0, g: 0 }; return; } p.wp = botWp(); p.wpT = 40 + rnd(30); }   // short human pause
+      tx = p.wp[0]; ty = p.wp[1]; tp = p.wp[2];
     }
-    tx = p.wp[0]; ty = p.wp[1]; tp = p.wp[2];
-  } else { tx = tg.x + tg.vx * .25 + (Math.random() - .5) * 24; ty = tg.y + tg.vy * .08; tp = mode === 0 ? pf(tg) : -1; }   // aim slightly ahead of a moving target
-  let rx = tx, ry = ty, rpad = 0;   // where to head right now: the launch spot of the next hop towards the target's platform
-  if (mode !== 1 && cur >= 0 && tp >= 0 && cur !== tp && NV.D[cur][tp] < 99) { let bs = 1e9; for (const e of NV.E[cur]) { const h = NV.D[e.j][tp]; if (h >= NV.D[cur][tp]) continue; const sc = h * 1000 + Math.abs(p.x - e.x); if (sc < bs) { bs = sc; rx = e.x; ry = e.y; rpad = e.pad ? 1 : 0; } } }
-  const thp = mode === 1 ? pf(thr) : -1;
-  const js = p.g || p.coy > 0 ? (lagEma > 2 ? [0, 22] : [0, 8, 22]) : [0, 12], canD = p.dcd <= 0 && p.dash <= 0 && (mode < 2 || p.dcd <= 0 && Math.random() < .3), all = [];
-  for (let d = -1; d <= 1; d++) for (const j of js) for (let ds = 0; ds <= (canD ? 1 : 0); ds++) {
-    const s = Object.assign({}, p); let c = 0, dead = false, mn = 1e9, lau = 0;
-    for (let k = 0; k < 30; k++) {
-      step(s, { l: d < 0, r: d > 0, j: k < j, d: 0, s: ds && !k }, DT); if (s.vy < -1000) lau = 1;   // launched by a pad
-      if (s.y > WH - 30 || s.x < LX - 30 || s.x > RX + 30) { dead = true; break; }
-      if (k % 6 === 5) {
-        const dd = Math.hypot(s.x - rx, (s.y - ry) * 1.2); if (dd < mn) mn = dd;
-        if (mode === 1) { c -= Math.min(Math.hypot(s.x - thr.x, (s.y - thr.y) * 1.2), 600); const e = Math.min(s.x - LX, RX - PW - s.x); if (e < 170) c += (170 - e) * 1.6; }   // flee, but never into a wall / corner
-        else c += mode === 0 ? dd : dd * .6;
-        if (mode) for (const o of oth) { const od = Math.hypot(o.x - s.x, o.y - s.y); if (od < 130) c += (130 - od) * (mode === 2 ? 2 : .8); }   // keep spread out
-        for (const t of r.tr) if (t.o !== p.id && Math.abs(s.x + PW / 2 - t.x) < 34 && Math.abs(s.y + PH - t.y) < 30) c += 2500;   // never walk into a trap
-      }
-    }
-    if (dead) continue;
-    let ln = pfOf(s), fl = 0;   // let the plan finish falling (same direction held) and see which platform it lands on
-    if (ln < 0 && !s.g) { const z = Object.assign({}, s); for (let k = 0; k < 40 && !z.g; k++) step(z, { l: d < 0, r: d > 0, j: 0, d: 0, s: 0 }, DT); if (z.y > WH - 30 || z.x < LX - 30 || z.x > RX + 30) continue; ln = pfOf(z); fl = z.g ? 0 : 1; }   // fl: still in the air (e.g. bouncing on a pad) = never a good end
-    if (mode === 1) { if (thp >= 0 && ln >= 0) c -= Math.min(NV.D[thp][ln], 4) * 1200; }
-    else if (tp >= 0) c += (ln >= 0 ? Math.min(NV.D[ln][tp], 6) : (cur >= 0 ? Math.min(NV.D[cur][tp], 6) : 3) + (fl ? (lau && rpad ? -.5 : 1.5) : .5)) * 3000;   // a pad launch is only good when the route says so
-    if (mode === 0 && mn < 40) c -= 600; else if (mode === 1 && s.g) c -= 40; else if (mode === 2 && mn < 50) c -= 100;
-    if (j) c += mode === 2 ? 60 : 20;                                                // no pointless hopping: a jump must pay for itself
-    if (ds) c += mode === 1 ? (td < 220 ? 10 : 60) : mode === 0 ? (nd < 320 ? 0 : 40) : 60;
-    if (!d && mode === 0) c += 8;
-    if (p.pl && p.pl.d === d) c -= 25;                              // keep going the same way (smooth, human)
-    all.push({ d, j, s: ds, c: c + Math.random() });
+    d = Math.abs(tx - p.x) < 12 ? 0 : tx > p.x ? 1 : -1;
+    if (cur >= 0 && tp >= 0 && cur !== tp && NV.D[cur][tp] < 99) {   // route: walk to the launch spot of the next hop towards the target platform
+      let be = null, bd = 1e9; const dc = NV.D[cur][tp];
+      for (const e of NV.E[cur]) { if (NV.D[e.j][tp] >= dc) continue; const dd = Math.abs(p.x - e.x); if (dd < bd) { bd = dd; be = e; } }
+      if (be) { p.hop = be; d = be.x > p.x ? 1 : -1; if (bd < 9 && p.g) { p.pl = { d: be.d, j: be.J, s: be.ds, a: 0, g: 0 }; p.btk = Math.max(be.J, 6) + 4; p.hop = null; return; } }
+    } else if (mode === 0 && p.dcd <= 0 && p.dash <= 0 && Math.abs(tg.x - p.x) < 260 && Math.abs(tg.y - p.y) < 60) s = 1;   // dash at a runner on the same level
+    if (mode === 0 && p.it && Math.abs(tg.x - p.x) < 150 && tg.y < p.y - 50 && p.g && !p.hop) j = 14;
   }
-  if (!all.length) { p.pl = NP; return; }
-  all.sort((a, b) => a.c - b.c);
-  const bp = Math.random() < (1 - p.sk) * .3 ? Object.assign({}, all[rnd(Math.min(3, all.length))], { j: all[0].j }) : all[0];   // a rare human-like slip
-  const pl = { d: bp.d, j: bp.j, s: bp.s, a: 0, g: 0 }, DD = p.it ? nd : td;
-  if (r.st === 'play' && !r.tut && p.acd <= 0 && DD < 1e8 && Math.random() < .55) {   // ability: fake / smoke / trap
-    if (p.ab === 'fake') pl.a = DD < (p.it ? 220 : 320) ? 1 : 0;
-    else if (p.ab === 'smoke') pl.a = p.it ? (DD < 200 ? 1 : 0) : (DD < 360 && DD > 90 ? 1 : 0);
-    else if (p.ab === 'trap') pl.a = p.g && (p.it ? DD < 260 : DD > 140 && DD < 480) ? 1 : 0;
-    else pl.a = DD < (p.it ? 280 : 230) ? 1 : 0;
-  }
-  if (p.gs > 0 && (p.gt || p.gk)) pl.g = 14;                       // keep holding what we grabbed
-  else if (p.it && nd < 70 && p.gcd <= 0 && Math.random() < .9) pl.g = 14;   // grab a runner who is within reach
+  if (Math.random() > p.sk + .05) d = 0;   // rare human-like hesitation (tutorial bots, sk=.5, are much slower)
+  const DD = mode === 0 ? bs : td, pl = { d, j, s, a: 0, g: 0 };
+  if (r.st === 'play' && !r.tut && p.acd <= 0 && DD < 260 && Math.random() < .3) pl.a = 1;   // ability (never smoke/clones)
+  if (p.gs > 0 && (p.gt || p.gk)) pl.g = 14; else if (p.it && mode === 0 && Math.abs(tg.x - p.x) + Math.abs(tg.y - p.y) < 70 && p.gcd <= 0 && Math.random() < .9) pl.g = 14;   // grab a runner in reach
+  if (j || pl.g) p.btk = Math.max(j, pl.g) + 2;
   p.pl = pl;
 }
 
@@ -1222,7 +1202,7 @@ function simRoom(r, t) {
       if (r.lk && r.lk.from === q.id && r.lk.to === holder.id) continue;
       holder.it = 0; q.it = 1; holder.tg = (holder.tg | 0) + 1; q.tt = (q.tt | 0) + 1;
       if (holder.gt === q.id) ungrab(r, holder, GRAB_CD); else if (q.gt === holder.id) ungrab(r, q, GRAB_CD);   // a tag ends the grip between the two
-      r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 350 };
+      r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 250 };
       bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id }));
       holder = q;
       break;
@@ -1233,7 +1213,7 @@ function simRoom(r, t) {
   if (!r.practice && t >= r.deadline) {
     if (r.tut && !holder.bot) {   // tutorial mercy: the human is never eliminated, the bomb jumps to the nearest bot
       const o = nearOthers(r, holder, 1e5)[0];
-      if (o) { const q = o[1]; holder.it = 0; q.it = 1; r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 350 }; r.deadline = t + r.rs * 1000; r.tutHold = t + 3000; r.tutK = ''; bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id })); sendP(holder, '{"t":"tut","k":"saved","n":0}'); return; }
+      if (o) { const q = o[1]; holder.it = 0; q.it = 1; r.lk = { from: holder.id, to: q.id, until: t + LOCK_MS, min: t + 250 }; r.deadline = t + r.rs * 1000; r.tutHold = t + 3000; r.tutK = ''; bcast(r, JSON.stringify({ t: 'tag', a: q.id, b: holder.id })); sendP(holder, '{"t":"tut","k":"saved","n":0}'); return; }
     }
     expire(r, t, holder);
   }
