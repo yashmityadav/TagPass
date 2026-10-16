@@ -40,7 +40,7 @@ const LOCK_MS = 1200;          // the player who just passed the tag can't take 
 const GRACE_MS = 15000;        // a dropped connection keeps its character this long and may reconnect
 const STALL_MS = 150;          // wait this long for a late input packet before treating the player as idle
 const LOBBY_IDLE_MS = +process.env.TAG_LOBBY_IDLE_MS || 10 * 60 * 1000;   // a seat in a public lobby is held at most this long (no permanent idlers)
-const QCAP = 12;               // max queued inputs per player (anti speed-hack: input rate is capped at 60/s)
+const QCAP = 24;               // max queued inputs per player (anti speed-hack: input rate is capped at 60/s)
 
 /* ---- abilities ---- */
 const DASH_V = 1000, DASH_T = 0.16, DASH_CD = 15;   // dash (everyone): speed px/s, duration s, cooldown s
@@ -505,10 +505,11 @@ const onQ = (q, p) => q.dy ? (p.x + PW / 2 >= q.x && p.x + PW / 2 <= q.x + q.w &
 const hit = (a, b, pad) => a.x < b.x + PW - pad && a.x + PW > b.x + pad && a.y < b.y + PH - pad && a.y + PH > b.y + pad;
 /* Lag compensation: the player who tags sees the others ~RTT+interp-delay in the past (and himself predicted in the present), so contact is judged on HIS screen:
    his current position against the other player's position from that many ticks ago. A bot holder has no screen -> the human runner's screen decides. */
-const LAGC_MAX = 14, LAGC_EXTRA = 55;   // rewind cap (ticks) / default render delay until the client reports its real one
+const LAGC_MAX = 20, LAGC_EXTRA = 55;   // rewind cap (ticks) / default render delay until the client reports its real one
 const lagK = p => Math.min(LAGC_MAX, Math.round((((p.ws && p.ws.rtt) || 0) + (p.rd ? p.rd + 8 : LAGC_EXTRA)) / TICK_MS));
 const hitRew = (a, b, k) => { const i = (b.hi - k) & 31, x = b.hx[i], y = b.hy[i]; return a.x < x + PW - 3 && a.x + PW > x + 3 && a.y < y + PH - 3 && a.y + PH > y + 3; };
 function tagHit(h, q) {
+  if (hit(h, q, 2)) return true;   // plain contact on the server always counts; the lag-compensated check below only adds to it
   if (!h.bot && h.ws) return hitRew(h, q, lagK(h));
   if (!q.bot && q.ws) return hitRew(q, h, lagK(q));
   return hit(h, q, 3);
@@ -656,7 +657,7 @@ function addBots(r, cnt) {
    Runners flee while avoiding walls / crowds, idle runners wander between platforms, the holder chases; everyone uses dash, grab and their ability. ---- */
 function botInput(r, p, t) {
   if (p.fz || t < r.cdEnd) return 0;
-  if (p.btk > 0) p.btk--; else if (r.pb > 0) { r.pb--; p.btk = (lagEma > 6 ? 16 : 10) + rnd(3); botPlan(r, p); p.k = 0; }
+  if (p.btk > 0) p.btk--; else if (r.pb > 0) { r.pb--; p.btk = (lagEma > 2 ? 18 : 12) + rnd(3); botPlan(r, p); p.k = 0; }
   const pl = p.pl; if (!pl) return 0;
   const k = p.k++;
   return (pl.d < 0 ? 1 : pl.d > 0 ? 2 : 0) | (k < pl.j ? 4 : 0) | (pl.s && k === 0 ? 16 : 0) | (pl.a && k === 1 ? 32 : 0) | (k < pl.g ? 64 : 0);
@@ -723,10 +724,10 @@ function botPlan(r, p) {
   let rx = tx, ry = ty, rpad = 0;   // where to head right now: the launch spot of the next hop towards the target's platform
   if (mode !== 1 && cur >= 0 && tp >= 0 && cur !== tp && NV.D[cur][tp] < 99) { let bs = 1e9; for (const e of NV.E[cur]) { const h = NV.D[e.j][tp]; if (h >= NV.D[cur][tp]) continue; const sc = h * 1000 + Math.abs(p.x - e.x); if (sc < bs) { bs = sc; rx = e.x; ry = e.y; rpad = e.pad ? 1 : 0; } } }
   const thp = mode === 1 ? pf(thr) : -1;
-  const js = p.g || p.coy > 0 ? (lagEma > 6 ? [0, 22] : [0, 8, 22]) : [0, 12], canD = p.dcd <= 0 && p.dash <= 0 && (mode < 2 || p.dcd <= 0 && Math.random() < .3), all = [];
+  const js = p.g || p.coy > 0 ? (lagEma > 2 ? [0, 22] : [0, 8, 22]) : [0, 12], canD = p.dcd <= 0 && p.dash <= 0 && (mode < 2 || p.dcd <= 0 && Math.random() < .3), all = [];
   for (let d = -1; d <= 1; d++) for (const j of js) for (let ds = 0; ds <= (canD ? 1 : 0); ds++) {
     const s = Object.assign({}, p); let c = 0, dead = false, mn = 1e9, lau = 0;
-    for (let k = 0; k < 36; k++) {
+    for (let k = 0; k < 30; k++) {
       step(s, { l: d < 0, r: d > 0, j: k < j, d: 0, s: ds && !k }, DT); if (s.vy < -1000) lau = 1;   // launched by a pad
       if (s.y > WH - 30 || s.x < LX - 30 || s.x > RX + 30) { dead = true; break; }
       if (k % 6 === 5) {
@@ -766,7 +767,7 @@ function botPlan(r, p) {
 
 function spawn(p, k, t, sp) {
   p.x = sp[0] + k * 42; p.y = sp[1]; p.vx = p.vy = 0; p.g = 0; p.coy = p.buf = p.cut = p.drop = 0; p.pj = false; p.face = 1;
-  p.rs++; p.q.length = 0; p.lastCmd = t; p.lastB = 0; p.starve = 0; p.debt = 0;
+  p.rs++; p.q.length = 0; p.lastCmd = t; p.lastB = 0; p.starve = 0; p.debt = 0; p.credit = 2;
   p.ps = false; p.dash = 0; p.dd = 1; p.dcd = 0; p.slow = 0; p.lv = 0; p.acd = 0; p.pa = 0; p.bst = p.pcd = p.bv = 0; p.zip = -1; p.zd = 1; p.zs = 0; p.zcd = 0; resetGrab(p); p.fz = 0; p.fimm = 0; p.shd = 0;   // every round starts with dash + ability + grab ready
 }
 
@@ -1091,6 +1092,22 @@ function consume(p) {
   p.lastSeq = c.s; p.lastB = b; return b;
 }
 
+// Every input the client sent is simulated exactly once, in order (never repeated, never dropped), so the client's prediction always equals the server state.
+// A late packet just waits; a burst is caught up with a time budget (credit), so nobody can speed-hack by flooding inputs.
+function runHuman(r, p, cd) {
+  p.credit = Math.min(4, p.credit + 1);
+  let did = 0;
+  while (p.credit >= 1) {
+    if (!p.q.length) {
+      if (did || ++p.starve <= REPEAT_MAX) break;
+      p.lastB = 0; p.credit--; advance(r, p, 0); break;   // really silent (hidden tab / lost signal): stand still
+    }
+    p.starve = 0;
+    const c = p.q.shift(); p.lastSeq = c.s; p.lastB = c.b; p.credit--; did++;
+    advance(r, p, (cd || p.fz) ? 0 : c.b);
+  }
+}
+
 function advance(r, p, b) {
   step(p, { l: b & 1, r: b & 2, j: b & 4, d: b & 8, s: b & 16 }, DT);
   const ab = (b & 32) ? 1 : 0;                                                       // ability button: acts on the rising edge only
@@ -1120,8 +1137,7 @@ function simRoom(r, t) {
     if (!p.alive) continue;
     if (p.acd > 0) p.acd -= DT; if (p.shd > 0) p.shd -= DT; if (p.lv > 0) p.lv -= DT;                                           // ability cooldown
     p.slow = inTrap(r, p) || p.lv > 0;                                                // standing in a trap?
-    let b = p.bot ? botInput(r, p, t) : consume(p);
-    advance(r, p, (cd || p.fz) ? 0 : b);
+    if (p.bot) advance(r, p, (cd || p.fz) ? 0 : botInput(r, p, t)); else runHuman(r, p, cd);
     if (p.bot && r.st === 'play' && !cd) { if (!p.emoNx) p.emoNx = t + 25000 + rnd(35000); else if (t >= p.emoNx) { p.emoNx = t + 30000 + rnd(60000); if (Math.random() < .4) bcast(r, JSON.stringify({ t: 'emo', o: p.id, k: rnd(30) })); } }   // random bot emote every 4-13 s
     if (p.hrs !== p.rs) { p.hx.fill(p.x); p.hy.fill(p.y); p.hrs = p.rs; }                 // position history (lag compensation)
     p.hi = (p.hi + 1) & 31; p.hx[p.hi] = p.x; p.hy[p.hi] = p.y;
@@ -1355,7 +1371,7 @@ wss.on('connection', (ws, req) => {
         p.lastIn = s;
         if (p.q.length < QCAP) p.q.push({ s, b });
       }
-      if (typeof m.d === 'number' && m.d >= 0) p.rd = Math.min(160, m.d | 0);   // how far behind (ms) this client draws other players: tags are judged against that view
+      if (typeof m.d === 'number' && m.d >= 0) p.rd = Math.min(240, m.d | 0);   // how far behind (ms) this client draws other players: tags are judged against that view
       return;
     }
     if (m.t === 'hb') { ws.pres = t; send(ws, '{"t":"hb"}'); return; }
