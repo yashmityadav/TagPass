@@ -346,7 +346,7 @@ function elimBanner(me,n){const e=document.createElement('div');e.className='eli
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
 function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
 let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped&&!kbOpen())?'flex':'none'}
-['touchend','click'].forEach(e=>addEventListener(e,ev=>{if(ev.target&&ev.target.closest&&ev.target.closest('input,textarea'))return;fsTapped=1;if(!document.fullscreenElement&&!kbOpen())lockLand();fsChk()},{passive:true}));
+['touchend','click'].forEach(e=>addEventListener(e,ev=>{if(ev.target&&ev.target.closest&&ev.target.closest('input,textarea,#vk'))return;fsTapped=1;if(!document.fullscreenElement&&!kbOpen())lockLand();fsChk()},{passive:true}));
 ['resize','orientationchange','fullscreenchange'].forEach(e=>addEventListener(e,()=>setTimeout(fsChk,150)));setTimeout(fsChk,300);   // first tap anywhere (and any tap after leaving fullscreen) goes fullscreen
 if(window.visualViewport)visualViewport.addEventListener('resize',()=>{if(kbOpen())return;setTimeout(()=>{rs();fitLobby()},60)});
 
@@ -1345,4 +1345,37 @@ saved:'🛟 Time ran out, so we passed the bomb for you. In a real match you wou
 out:'💥 A bot was eliminated! Keep going until all bots are out.'};
 function tutMsg(m){const e=tutEl();e.style.borderColor=m.k=='pass'?'#ff5252':'#ffd54a';e.innerHTML=(TUTT[m.k]||'')+(m.n&&m.k!='saved'?'<br><span style="opacity:.85">Bots left: '+m.n+'</span>':'')}
 function tutDone(){try{localStorage.setItem('tagtut_'+AUTH.u,'1')}catch(e){}tutHide();const d=document.createElement('div');d.id='tutd';d.style.cssText='position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;background:rgba(20,28,70,.85);color:#fff;font:800 22px Nunito,system-ui,sans-serif;text-align:center;padding:20px';d.innerHTML='<div style="font-size:54px">🏆</div><div style="font-size:28px">You won the tutorial!</div><div style="font-size:16px;opacity:.9">You know the basics. Now play real matches!</div><button class="xb g big" onclick="tutHide();leaveRoom()">▶ Continue</button>';document.body.appendChild(d)}
+/* ---- on-screen keyboard for phones: the native keyboard resizes the page, drops fullscreen and rotates the screen, so the text fields use this one instead ---- */
+(function(){
+if(!matchMedia('(pointer:coarse)').matches)return;
+const L1='1234567890',R=[['qwertyuiop','asdfghjkl','zxcvbnm'],['!@#$%^&*()','-_+=.,?/:;',"~'\"<>|\\{}"]];
+let sym=0,sh=0,tg=null,rep=0;
+const vk=document.createElement('div');vk.id='vk';document.body.appendChild(vk);
+const st=document.createElement('style');st.textContent="#vk{position:fixed;left:0;right:0;bottom:0;z-index:300;display:none;flex-direction:column;gap:5px;align-items:center;padding:7px 6px calc(env(safe-area-inset-bottom,0px) + 7px);background:rgba(14,18,58,.97);border-top:2px solid rgba(255,255,255,.2);font-family:Nunito,system-ui,sans-serif;font-weight:800;touch-action:none}#vk.on{display:flex}#vk .r{display:flex;gap:5px;width:100%;max-width:640px;justify-content:center}#vk .k{flex:1;min-width:0;height:min(40px,10.5vh);display:grid;place-items:center;border-radius:9px;background:rgba(255,255,255,.16);color:#fff;font-size:min(20px,5.2vh);-webkit-user-select:none;user-select:none}#vk .k:active{background:rgba(255,255,255,.4)}#vk .w{flex:1.6}#vk .g{background:#1fa95a}#vk .a{background:rgba(255,225,77,.55)}";document.head.appendChild(st);
+const key=(c,l,x)=>'<div class="k '+(x||'')+'" data-k="'+encodeURIComponent(c)+'">'+(l||c)+'</div>',row=a=>'<div class="r">'+a+'</div>';
+function paint(){const up=c=>sh&&!sym?c.toUpperCase():c,m=a=>[...a].map(c=>key(c,up(c))).join('');
+ vk.innerHTML=row(m(L1)+key('BS','⌫','w'))+row(m(R[sym][0]))+row(m(R[sym][1])+key('GO','↵','w g'))+row((sym?'':key('SH','⇧','w'+(sh?' a':'')))+m(R[sym][2])+key('SY',sym?'abc':'?123','w')+key('X','✕','w'))}
+function place(){if(!tg)return;ov.style.translate='';const h=vk.offsetHeight,r=tg.getBoundingClientRect(),lim=innerHeight-h-10;if(r.bottom>lim)ov.style.translate='0 '+(-Math.min(r.bottom-lim,Math.max(0,r.top-10)))+'px'}
+function show(t){tg=t;KB=1;document.body.classList.add('kb');if(!vk.classList.contains('on')){sh=0;sym=0;paint();vk.classList.add('on')}place()}
+function hide(){tg=null;KB=0;vk.classList.remove('on');document.body.classList.remove('kb');ov.style.translate='';clr()}
+function clr(){clearTimeout(rep);clearInterval(rep);rep=0}
+function press(k){const t=tg;if(!t||!document.body.contains(t))return hide();
+ if(k=='X'){t.blur();return hide()}
+ if(k=='SH'){sh=!sh;return paint()}
+ if(k=='SY'){sym^=1;return paint()}
+ if(k=='GO'){t.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));return}
+ let v=t.value,a=t.selectionStart,b=t.selectionEnd;if(a==null){a=b=v.length}
+ if(k=='BS'){if(a==b&&a>0)a--;v=v.slice(0,a)+v.slice(b);b=a}
+ else{let c=k;if(t.id=='cd'||(sh&&!sym))c=c.toUpperCase();if(t.maxLength>0&&v.length-(b-a)>=t.maxLength)return;v=v.slice(0,a)+c+v.slice(b);a=b=a+1;if(sh&&!sym){sh=0;paint()}}
+ t.value=v;try{t.setSelectionRange(a,a)}catch(e){}t.dispatchEvent(new Event('input',{bubbles:true}))}
+['touchstart','mousedown'].forEach(e=>vk.addEventListener(e,ev=>ev.preventDefault(),{passive:false}));
+vk.addEventListener('pointerdown',e=>{const k=e.target.closest('.k');if(!k)return;e.preventDefault();const c=decodeURIComponent(k.dataset.k);press(c);if(c=='BS'){clr();rep=setTimeout(()=>{rep=setInterval(()=>press('BS'),70)},380)}});
+['pointerup','pointercancel'].forEach(e=>addEventListener(e,clr));
+const nat=()=>ov.querySelectorAll('input:not([inputmode])').forEach(i=>i.setAttribute('inputmode','none'));
+new MutationObserver(nat).observe(ov,{childList:true,subtree:true});nat();
+document.addEventListener('pointerdown',e=>{const t=e.target;if(t.matches&&t.matches('input'))t.setAttribute('inputmode','none');
+ else if(tg&&!vk.contains(t)&&!(t.closest&&t.closest('.xi'))){try{tg.blur()}catch(x){}setTimeout(()=>{const a=document.activeElement;if(!(a&&a.matches&&a.matches('input')))hide()},300)}},true);
+addEventListener('focusin',e=>{const t=e.target;if(t&&t.matches&&t.matches('input')){t.setAttribute('inputmode','none');show(t)}});
+setInterval(()=>{if(tg&&!document.body.contains(tg))hide()},400);
+})();
 </script></body></html>
