@@ -71,8 +71,8 @@ function loadHtml() {
   try {
     mtime = fs.statSync(FILE).mtimeMs;
     html = fs.readFileSync(FILE);
-    gz = zlib.gzipSync(html, { level: 9 });
-    try { br = zlib.brotliCompressSync(html, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: html.length } }); } catch { br = null; }
+    gz = zlib.gzipSync(html, { level: 6 });
+    try { br = zlib.brotliCompressSync(html, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 7, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: html.length } }); } catch { br = null; }
     etag = '"' + crypto.createHash('sha1').update(html).digest('hex').slice(0, 16) + '"';
   } catch (e) {
     html = null;
