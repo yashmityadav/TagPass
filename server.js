@@ -1275,7 +1275,7 @@ function loopBody() {
   lagEma += (lag - lagEma) * 0.05;
   if (!FIXED_SNAP) {
     if (snapEvery === SNAP_BASE && lagEma > 10) { snapEvery = SNAP_BASE + 1; calmSince = 0; console.log('high load: snapshots at 20/s'); }
-    else if (snapEvery > SNAP_BASE) { if (lagEma < 1.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 20000) { snapEvery = SNAP_BASE; calmSince = 0; console.log('load normal: snapshots at 30/s'); } } else calmSince = 0; }
+    else if (snapEvery > SNAP_BASE) { if (lagEma < 1.5) { if (!calmSince) calmSince = t; else if (t - calmSince > 6000) { snapEvery = SNAP_BASE; calmSince = 0; console.log('load normal: snapshots at 30/s'); } } else calmSince = 0; }
   }
   let due = 0; for (let nt = nextTick; nt <= t && due < 5; nt += TICK_MS) due++;
   for (let i = 0; i < due; i++) { tickAll(t, nextTick, i === due - 1); nextTick += TICK_MS; }   // fixed 60 Hz, catches up after a hiccup
