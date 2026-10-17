@@ -389,8 +389,8 @@ const sp=(a,x)=>post(Object.assign({m:'soc',tk:AUTH&&AUTH.tk,a},x||{})).then(r=>
 async function socPoll(a,x){if(!AUTH)return;const d=await sp(a,x);if(!d)return null;if(d.e=='tk'){logout('Session expired. Please log in again.');return null}if(!d.ok)return d;
  if(seen&&!a){d.rq.forEach(n=>seen.has('r'+n)||toast('👋 '+n+' sent you a friend request',3200));d.f.forEach(f=>seen.has('f'+f.n)||toast('🤝 '+f.n+' is now your friend',3200));d.inv.forEach(i=>seen.has('i'+i.n+i.c)||toast('📨 '+i.n+' invited you to a party',3500))}
  seen=new Set([...d.rq.map(n=>'r'+n),...d.f.map(f=>'f'+f.n),...d.inv.map(i=>'i'+i.n+i.c)]);SOC=d;const s=JSON.stringify(d);if(s!==socSig){socSig=s;fRender()}return d}
-async function fAct(a,n,c){const d=await socPoll(a,{n,c:c||(PT&&PT.st&&PT.st.code)||(PT&&PT.code)});if(!d)return toast('Server busy. Try again.');if(!d.ok)return toast(({nf:'Player not found',self:"That's you!",dup:'Already friends',nop:'Invite failed. Is your friend online?'})[d.e]||'Failed. Try again.');
- const t={add:'Request sent ✔',inv:'Invite sent 📨',acc:'Friend added 🤝'}[a];if(t)toast(t,1600)}
+async function fAct(a,n,c){const d=await socPoll(a,{n,c:c||(PT&&PT.st&&PT.st.code)||(PT&&PT.code)});if(!d)return toast('Server busy. Try again.');if(!d.ok)return toast(({nf:'Player not found',self:"That's you!",dup:'Already friends',full:'They have too many pending requests',nop:'Invite failed. Is your friend online?'})[d.e]||'Failed. Try again.');
+ const t=d.r=='gone'?'Request expired or no longer exists':{add:{sent:'Request sent ✔ (expires in 7 days)',already:'Request already sent ⏳',friends:'You are now friends 🤝'}[d.r],inv:'Invite sent 📨',acc:'Friend added 🤝'}[a];if(t)toast(t,1600)}
 function fAdd(){const v=$('fa').value.trim();if(!v)return;$('fa').value='';fAct('add',v)}
 function fRm(n,b){if(rmN===n){rmN='';return fAct('rm',n)}rmN=n;b.textContent='Sure?';setTimeout(()=>{rmN='';fRender()},3000)}
 let CJ='',TAB=0,IM_T=0,LASTP='';

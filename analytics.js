@@ -41,15 +41,16 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
   function purchase(pk, id) { const d = D(day()); d.rv += pk.c || 0; d.pu++; packs[id] = (packs[id] || 0) + 1; dDirty = true; }
 
   const online = () => { let n = 0; for (const s of sess.values()) if (s.n > 0) n++; return n; };
-  setInterval(() => {   // every minute: concurrent users + close finished visits
+  let tick = 0;
+  setInterval(() => {   // every 5 s: concurrent users + close finished visits
     const t = Date.now(), c = online(), d = D(day(t)), b = Math.floor((t % DAY) / 1800000);
     if (c > d.h[b]) { d.h[b] = c; dDirty = true; } if (c > d.pk) d.pk = c;
-    live.push([t, c]); if (live.length > 180) live.shift();
+    if (++tick % 12 === 0) { live.push([t, c]); if (live.length > 180) live.shift(); }   // chart history: 1 point / min
     for (const [k, s] of sess) if (s.n === 0 && t - s.end >= SESS_GAP) {
       const sec = Math.max(0, (s.end - s.start) / 1000), e = D(day(s.end)); e.ss += sec;
       e.sb[sec < 60 ? 0 : sec < 300 ? 1 : sec < 900 ? 2 : sec < 1800 ? 3 : sec < 3600 ? 4 : 5]++; sess.delete(k); dDirty = true;
     }
-  }, 60000).unref();
+  }, 5000).unref();
 
   /* ---------- persistence (Upstash, same DB as the accounts) ---------- */
   async function flush() {
@@ -125,6 +126,10 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
     };
   }
 
+  const liveNow = () => {   // computed fresh on every request = real time
+    let inM = 0, lob = 0, rm = 0; for (const r of rooms.values()) { rm++; let h = 0; for (const p of r.players.values()) if (p.ws && !p.bot) h++; if (r.st === 'play' || r.st === 'between') inM += h; else if (r.pub) lob += h; }
+    const c = online(), t = Date.now(); return { online: c, inMatch: inM, lobby: lob, rooms: rm, series: live.concat([[t, c]]) };
+  };
   /* ---------- http: /admin and /admin/api ---------- */
   const hs = s => crypto.createHash('sha256').update(String(s)).digest(), bad401 = new Map(); setInterval(() => bad401.clear(), 60000).unref();
   function http(req, res, url) {
@@ -145,8 +150,8 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
           if (!crypto.timingSafeEqual(hs(req.headers['x-admin-key'] || ''), hs(KEY))) { bad401.set(ip, (bad401.get(ip) || 0) + 1); return out(401, { e: 'key' }); }
           let m = {}; try { m = JSON.parse(b || '{}'); } catch {}
           if (m.r && Date.now() - snapAt > 300000) { await scan(); cache = null; }   // "refresh accounts" button: at most once per 5 min (it reads the DB)
-          if (!cache || Date.now() - cacheAt > 15000) { cache = build(); cacheAt = Date.now(); }
-          out(200, cache);
+          if (!cache || Date.now() - cacheAt > 2000) { cache = build(); cacheAt = Date.now(); }
+          out(200, Object.assign({}, cache, { now: Date.now(), live: liveNow() }));
         } catch (e) { console.error('admin api:', e.message); out(500, { e: 'err' }); }
       });
       return;

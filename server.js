@@ -95,6 +95,8 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const ACC = new Map(), byTok = new Map(), dirty = new Set();   // in-memory caches of what the DB holds
 let accT = 0;
 async function getAcc(k) { let a = ACC.get(k); if (a) return a; const [v] = await db(['GET', 'acc:' + k]); if (!v) return null; a = ACC.get(k) || JSON.parse(v); ACC.set(k, a); return a; }
+const RQ_TTL = 7 * 864e5;   // friend requests expire after 7 days
+function rqPrune(a) { a.rq = a.rq || []; a.rqt = a.rqt || {}; const n = Date.now(); let c = 0; a.rq = a.rq.filter(k => { if (!a.rqt[k]) { a.rqt[k] = n; c = 1; return true } if (n - a.rqt[k] > RQ_TTL) { delete a.rqt[k]; c = 1; return false } return true }); for (const k in a.rqt) if (!a.rq.includes(k)) { delete a.rqt[k]; c = 1 } return c }
 async function tokAcc(tk) {
   if (typeof tk !== 'string' || !tk || tk.length > 64) return null;
   const h = sha(tk); let a = byTok.get(h); if (a) return a;
@@ -133,18 +135,23 @@ function authReq(req, res) {
       if (m.m === 'soc') {   // friends: poll + add / accept / decline / remove / invite
         const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' });
         me.f = me.f || []; me.rq = me.rq || [];
+        let rs = ''; if (rqPrune(me)) accSave(me);
         const a = m.a, nm = String(m.n || '').toLowerCase(), T = /^[a-z0-9_]{3,12}$/.test(nm) ? await getAcc(nm) : null;
-        if (T) { T.f = T.f || []; T.rq = T.rq || []; }
+        if (T) { T.f = T.f || []; T.rq = T.rq || []; if (rqPrune(T)) accSave(T); }
         if (a === 'add') {
           if (!T) return out(404, { e: 'nf' }); if (T.k === me.k) return out(400, { e: 'self' });
           if (me.f.includes(T.k)) return out(400, { e: 'dup' });
-          if (me.rq.includes(T.k)) { me.rq = me.rq.filter(x => x !== T.k); me.f.push(T.k); T.f.push(me.k); accSave(T); }   // they already asked me: instant friends
-          else if (!T.rq.includes(me.k) && T.rq.length < 30) { T.rq.push(me.k); accSave(T); }
+          if (me.rq.includes(T.k)) {   // they already asked me: instant friends
+            me.rq = me.rq.filter(x => x !== T.k); delete me.rqt[T.k]; me.f.push(T.k); if (!T.f.includes(me.k)) T.f.push(me.k); accSave(T); rs = 'friends';
+          } else if (T.rq.includes(me.k)) rs = 'already';   // my request is still pending (expires after 7 days)
+          else { if (T.rq.length >= 30) return out(400, { e: 'full' }); T.rq.push(me.k); T.rqt[me.k] = Date.now(); accSave(T); rs = 'sent'; }
           accSave(me);
         } else if ((a === 'acc' || a === 'dec') && T && me.rq.includes(T.k)) {
-          me.rq = me.rq.filter(x => x !== T.k);
-          if (a === 'acc' && me.f.length < 50) { if (!me.f.includes(T.k)) me.f.push(T.k); if (!T.f.includes(me.k)) T.f.push(me.k); accSave(T); }
+          me.rq = me.rq.filter(x => x !== T.k); delete me.rqt[T.k];
+          if (a === 'acc') { if (!me.f.includes(T.k)) me.f.push(T.k); if (!T.f.includes(me.k)) T.f.push(me.k); T.rq = T.rq.filter(x => x !== me.k); delete T.rqt[me.k]; accSave(T); }
           accSave(me);
+        } else if (a === 'acc' || a === 'dec') {
+          rs = 'gone';   // expired or already handled
         } else if (a === 'rm' && T) {
           me.f = me.f.filter(x => x !== T.k); T.f = T.f.filter(x => x !== me.k); accSave(T); accSave(me);
         } else if (a === 'inv') {
@@ -158,7 +165,7 @@ function authReq(req, res) {
         for (const k of me.f) { const f = await getAcc(k); if (f) fl.push({ n: f.n, on: on.has(f.k) ? 1 : 0, p: f.p, w: f.w, l: f.l }); }
         for (const k of me.rq) { const f = await getAcc(k); if (f) rq.push(f.n); }
         const inv = (INV.get(me.k) || []).filter(x => Date.now() - x.t < 120000 && (parties.has(x.c) || rooms.has(x.c))).map(x => ({ n: x.n, c: x.c, r: x.r ? 1 : 0 }));
-        return out(200, { ok: 1, f: fl, rq, inv });
+        return out(200, { ok: 1, f: fl, rq, inv, r: rs });
       }
       if (m.m === 'pr') {   // every reward, purchase and claim is decided here, never by the browser
         const n = (msIp.get(ip) || 0) + 1; msIp.set(ip, n); if (n > 90) return out(429, { e: 'rate' });
