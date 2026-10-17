@@ -294,7 +294,7 @@ function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1,
   const X = prog(a); let g = null;
   {   // profile analytics are recorded for every counted match, including ones the player quit
     const du0 = Math.max(0, (now() - (p.mt0 || now())) / 1000), sv0 = win || !p.outAt ? du0 : Math.max(0, (p.outAt - (p.mt0 || p.outAt)) / 1000), S0 = sxOf(X);
-    S0.tg += p.tg | 0; S0.tt += p.tt | 0; S0.pt += du0; S0.sv += Math.min(sv0, du0); S0.sn++; S0.md[p.mdi | 0] = (S0.md[p.mdi | 0] | 0) + 1; S0.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du0)]); S0.rc.length = Math.min(S0.rc.length, 10);
+    S0.tg += p.tg | 0; S0.tt += p.tt | 0; S0.pt += du0; S0.sv += Math.min(sv0, du0); S0.sn++; S0.md[p.mdi | 0] = (S0.md[p.mdi | 0] | 0) + 1; S0.rc.unshift([win ? 1 : 0, p.mdi | 0, p.mpi | 0, Math.round(du0)]); S0.rc.length = Math.min(S0.rc.length, 10); AN.match(a, p, win, du0, fin);
   }
   if (win) { X.ws++; if (X.ws > X.bws) X.bws = X.ws; } else X.ws = 0;
   if (fin) {   // rewards only for matches played to the end, never for quitting
@@ -332,7 +332,7 @@ async function rzpSettle(id, who) {   // asks Razorpay itself whether the order 
   const o = await r.json(), pk = o.notes && Object.hasOwn(PACKS, o.notes.pack) ? PACKS[o.notes.pack] : null, a = pk ? await getAcc(String(o.notes.acct || '')) : null;
   if (!pk || !a || (who && who !== a) || o.status !== 'paid' || o.amount !== pk.c || o.currency !== 'INR') return false;
   const P = payDay(a);
-  if (!P.ids.includes(o.id)) { const X = prog(a); X.tok += pk.t || 0; X.gem += pk.g || 0; P.ids.push(o.id); if (P.ids.length > 100) P.ids.shift(); accSave(a); console.log('purchase', a.k, o.notes.pack); }
+  if (!P.ids.includes(o.id)) { const X = prog(a); X.tok += pk.t || 0; X.gem += pk.g || 0; P.ids.push(o.id); if (P.ids.length > 100) P.ids.shift(); accSave(a); console.log('purchase', a.k, o.notes.pack); AN.purchase(pk, o.notes.pack); }
   return true;
 }
 async function rzpVerify(a, m) {   // the checkout popup hands the browser a signature; only Razorpay's secret can make a valid one
@@ -359,6 +359,7 @@ function rzpHook(req, res) {   // Razorpay -> server backup (e.g. the player clo
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
 
+  if (url === '/admin' || url.startsWith('/admin/')) return AN.http(req, res, url);
   if (url === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
     return res.end('ok');
@@ -405,6 +406,7 @@ server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 
 const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: false });
+const AN = require('./analytics')({ db, wss, ACC, rooms, MEM, UP: UP_URL });   // private analytics dashboard (/admin)
 
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
@@ -1352,7 +1354,7 @@ wss.on('connection', (ws, req) => {
         tokAcc(m.tk).then(a => {
           const q = ws.pend; ws.pend = null;
           if (!a) return err('auth');
-          ws.acct = a; send(ws, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l }));
+          ws.acct = a; send(ws, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l })); AN.open(ws, a, req);
           for (const x of q) ws.emit('message', x[0], x[1]);
         }, () => { ws.pend = null; err('busy'); });
       }
@@ -1493,7 +1495,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     pdrop();
-    const left = (perIp.get(ip) || 1) - 1;
+    AN.close(ws); const left = (perIp.get(ip) || 1) - 1;
     if (left <= 0) perIp.delete(ip); else perIp.set(ip, left);
     if (r && p && p.ws === ws) {
       p.ws = null; p.dc = now();                                  // keep the character for a while: the player may just be reconnecting
@@ -1542,7 +1544,7 @@ server.listen(PORT, '0.0.0.0', () => {
 function shutdown() {
   console.log('Shutting down...');
   for (const ws of wss.clients) { try { ws.close(1001); } catch {} }
-  accFlush().finally(() => server.close(() => process.exit(0)));
+  Promise.all([accFlush(), AN.flush()]).finally(() => server.close(() => process.exit(0)));
   setTimeout(() => process.exit(0), 4000).unref();
 }
 process.on('SIGTERM', shutdown);
