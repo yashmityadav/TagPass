@@ -45,11 +45,11 @@ const QCAP = 24;               // max queued inputs per player (anti speed-hack:
 /* ---- abilities ---- */
 const DASH_V = 1000, DASH_T = 0.16, DASH_CD = 15;   // dash (everyone): speed px/s, duration s, cooldown s
 const AB_CD = 30;                                    // cooldown (s) of the ability each player picks before the match
-const FAKE_T = 5, SMOKE_T = 5, TRAP_T = 5;           // how long each effect lasts (s)
-const TRAP_W = 110, TRAP_IMM = 1;                    // trap width (px); its owner is immune for the first second so they can step off it
+const FAKE_T = 8, SMOKE_T = 8, TRAP_T = 8;           // how long each effect lasts (s)
+const TRAP_W = 180, TRAP_IMM = 1;                    // trap width (px); its owner is immune for the first second so they can step off it
 const SLOW_K = 0.4, JUMP_K = 0.8;                    // speed / jump multipliers while standing in a trap
 /* ---- grab: hold the button next to a player to latch on and drag them along (Human-Fall-Flat style). Everyone has it. ---- */
-const GRAB_REACH = 46, GRAB_REACH_T = 0.7;           // how far (px beyond the body) the hand reaches / how long (s) the hands stay out before it counts as a miss
+const GRAB_REACH = 110, GRAB_REACH_T = 0.7;           // how far (px beyond the body) the hand reaches / how long (s) the hands stay out before it counts as a miss
 const GRAB_MAX = 6, GRAB_MIN = 0.25;               // longest hold (s) / shortest hold (a tap or a lag blip can't drop the grip instantly)
 const GRAB_CD = 8, GRAB_MISS_CD = 1.5;               // cooldown (s) after a hold / after a miss
 const GRAB_ROPE = 70, GRAB_BREAK = 300, GRAB_IMM = 1.2;   // max distance between the two bodies (px) / the grip snaps beyond this / a freed player can't be re-grabbed for this long (s)
@@ -955,27 +955,27 @@ function useAbility(r, p) {
     r.tr.push({ id: ++r.fxn, x: Math.round(p.x + PW / 2), y: Math.round(p.y + PH), o: p.id, life: TRAP_T });
   } else if (k === 'spring') {
     if (p.hb) return;
-    p.vy = -1150; p.g = 0; p.coy = p.buf = 0; p.cut = 1; p.dash = 0; p.zip = -1; p.rs++;
+    p.vy = -1450; p.g = 0; p.coy = p.buf = 0; p.cut = 1; p.dash = 0; p.zip = -1; p.rs++;
   } else if (k === 'rocket') {
     if (p.hb) return;
-    p.vx = p.face * 1250; p.dash = 0; p.zip = -1; p.bst = PAD_BST; p.rs++;
+    p.vx = p.face * 1700; p.dash = 0; p.zip = -1; p.bst = PAD_BST; p.rs++;
   } else if (k === 'uppercut') {
-    const o = nearOthers(r, p, 170); if (!o.length) return;
-    shove(o[0][1], o[0][1].vx * .3, -1250);
+    const o = nearOthers(r, p, 450); if (!o.length) return;
+    shove(o[0][1], o[0][1].vx * .3, -1500);
   } else if (k === 'recharge') {
     p.dcd = 0; p.gcd = 0;
   } else if (k === 'shock' || k === 'magnet') {
-    const o = nearOthers(r, p, 300); if (!o.length) return;
-    for (const [, q] of o) { const dir = (Math.sign(q.x - p.x) || 1) * (k === 'shock' ? 1 : -1); shove(q, dir * (k === 'shock' ? 950 : 800), k === 'shock' ? -520 : -300); }
+    const o = nearOthers(r, p, 700); if (!o.length) return;
+    for (const [, q] of o) { const sg = Math.sign(q.x - p.x) || 1, dist = Math.abs(q.x - p.x); if (k === 'shock') shove(q, sg * 1500, -700); else shove(q, -sg * Math.min(1500, 350 + dist * 3), -350); }
   } else if (k === 'shield') {
     if (p.it) return;                                                               // an IT with a shield would be pointless
-    p.shd = 3;
+    p.shd = 5;
   } else if (k === 'swap') {
-    const o = nearOthers(r, p, 700); if (!o.length || p.hb || p.gt || p.gk || p.zip >= 0) return;
+    const o = nearOthers(r, p, 1800); if (!o.length || p.hb || p.gt || p.gk || p.zip >= 0) return;
     const q = o[0][1]; if (q.hb || q.gt || q.gk || q.zip >= 0) return;
     const x = p.x, y = p.y; p.x = q.x; p.y = q.y; q.x = x; q.y = y; p.g = q.g = 0; p.rs++; q.rs++;
   } else if (k === 'zap') {
-    const o = nearOthers(r, p, 900); if (!o.length) return;
+    const o = nearOthers(r, p, 1800); if (!o.length) return;
     const q = o[0][1]; r.lt.push({ id: ++r.fxn, x: Math.round(q.x + PW / 2), y: Math.round(q.y + PH / 2), age: 0, hit: 0 });
   } else return;
   p.acd = ABCD[k] || AB_CD;
