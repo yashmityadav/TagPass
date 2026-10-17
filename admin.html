@@ -1,0 +1,102 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Tag · Analytics</title>
+<style>
+:root{--bg:#0b0f1a;--c:#141b2d;--b:#232d47;--t:#e8ecf7;--m:#8b97b8;--g:#34d399;--r:#f87171;--bl:#60a5fa;--y:#fbbf24;--p:#a78bfa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:14px/1.4 system-ui,sans-serif;padding:16px;max-width:1440px;margin:auto}
+h1{font-size:20px;margin:0}header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}button{background:var(--c);color:var(--t);border:1px solid var(--b);border-radius:8px;padding:6px 12px;cursor:pointer;font:inherit}
+button.on{background:var(--bl);color:#04122b;border-color:var(--bl);font-weight:600}.dot{width:9px;height:9px;border-radius:50%;background:var(--g);box-shadow:0 0 8px var(--g);display:inline-block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:10px;margin-bottom:14px}
+.k{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:12px}.k small{color:var(--m);display:block;font-size:12px}.k b{font-size:24px;display:block;margin:2px 0}.k i{font-style:normal;font-size:12px;color:var(--m)}
+.up{color:var(--g)!important}.dn{color:var(--r)!important}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:14px;min-width:0}.card h3{margin:0 0 8px;font-size:14px;color:var(--m);font-weight:600}
+.cv{position:relative;height:250px}.wide{grid-column:1/-1}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;text-align:right;border-bottom:1px solid var(--b)}th:first-child,td:first-child{text-align:left}th{color:var(--m);font-weight:500}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.pill{background:#0e1424;border:1px solid var(--b);border-radius:20px;padding:4px 12px}.pill b{color:var(--bl)}
+.note{color:var(--m);font-size:12px;margin-top:12px}#lg{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;z-index:9}
+#lg input{background:var(--c);border:1px solid var(--b);color:var(--t);border-radius:8px;padding:10px;font:inherit;width:260px}
+@media(max-width:480px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<div id="lg"><h1>🔒 Tag Analytics</h1><input id="ki" type="password" placeholder="Admin key" autofocus><button onclick="go()">Enter</button><div id="le" style="color:var(--r)"></div></div>
+<header><h1>📊 Tag Analytics</h1><div class="row"><span><span class="dot"></span> <b id="on">0</b> online</span>
+<button data-r="7">7d</button><button data-r="30" class="on">30d</button><button data-r="90">90d</button><button id="rf" title="Re-count every account in the database (max once / 5 min)">⟳ Refresh accounts</button><span id="up" style="color:var(--m);font-size:12px"></span></div></header>
+<div class="kpis" id="kp"></div>
+<div class="pills" id="gr"></div>
+<div class="grid">
+<div class="card wide"><h3>Active users (DAU / WAU / MAU)</h3><div class="cv"><canvas id="c1"></canvas></div></div>
+<div class="card"><h3>New vs returning users per day</h3><div class="cv"><canvas id="c2"></canvas></div></div>
+<div class="card"><h3>Total registered users</h3><div class="cv"><canvas id="c3"></canvas></div></div>
+<div class="card"><h3>Avg session length &amp; in-match minutes per active user</h3><div class="cv"><canvas id="c4"></canvas></div></div>
+<div class="card"><h3>Matches played (player-matches) &amp; quit rate</h3><div class="cv"><canvas id="c5"></canvas></div></div>
+<div class="card"><h3>Peak concurrent users per day</h3><div class="cv"><canvas id="c6"></canvas></div></div>
+<div class="card"><h3>Online now (last 3 h)</h3><div class="cv"><canvas id="c7"></canvas></div></div>
+<div class="card wide"><h3>When do players play? (avg peak online per half-hour, your local time, last 14 days)</h3><div class="cv"><canvas id="c8"></canvas></div></div>
+<div class="card"><h3>Visit length distribution</h3><div class="cv"><canvas id="c9"></canvas></div></div>
+<div class="card"><h3>Player funnel</h3><div class="cv"><canvas id="c10"></canvas></div></div>
+<div class="card"><h3>Game modes</h3><div class="cv"><canvas id="c11"></canvas></div></div>
+<div class="card"><h3>Maps</h3><div class="cv"><canvas id="c12"></canvas></div></div>
+<div class="card"><h3>Devices (visits)</h3><div class="cv"><canvas id="c13"></canvas></div></div>
+<div class="card"><h3>Revenue per day (₹)</h3><div class="cv"><canvas id="c14"></canvas></div></div>
+<div class="card wide"><h3>Retention</h3><div class="pills" id="rt"></div><div style="overflow-x:auto"><table id="ct"></table></div></div>
+<div class="card"><h3>Top players (lifetime matches)</h3><table id="tp"></table></div>
+<div class="card"><h3>Health</h3><table id="hl"></table></div>
+</div>
+<div class="note" id="nt"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+var $=function(i){return document.getElementById(i)},KEY=sessionStorage.getItem('ak')||'',R=30,DATA=null,C={},T=null,PB=['Classic','Infection','Freeze tag'],MP=['Classic','Frozen Peaks','Desert Ruins'];
+var COL=['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#22d3ee'];
+Chart.defaults.color='#8b97b8';Chart.defaults.borderColor='#232d47';Chart.defaults.maintainAspectRatio=false;Chart.defaults.plugins.legend.labels.boxWidth=12;
+function go(){KEY=$('ki').value;load(0)}
+$('ki').onkeydown=function(e){if(e.key=='Enter')go()};
+function load(r){fetch('/admin/api',{method:'POST',headers:{'x-admin-key':KEY,'Content-Type':'application/json'},body:JSON.stringify({r:r?1:0})}).then(function(x){if(x.status==401||x.status==429){sessionStorage.removeItem('ak');$('lg').style.display='flex';$('le').textContent=x.status==429?'Too many tries, wait a minute.':'Wrong key.';throw 0}return x.json()}).then(function(d){sessionStorage.setItem('ak',KEY);$('lg').style.display='none';DATA=d;render();if(!T)T=setInterval(function(){load(0)},30000)}).catch(function(){})}
+function sum(a){return a.reduce(function(x,y){return x+(+y||0)},0)}
+function f(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'k':Math.round(n).toLocaleString('en')}
+function mm(s){s=Math.round(s||0);return Math.floor(s/60)+'m '+('0'+s%60).slice(-2)+'s'}
+function pc(a,b){return b?Math.round(a/b*1000)/10+'%':'–'}
+function dl(d){return new Date(d*864e5).toLocaleDateString('en',{day:'numeric',month:'short',timeZone:'UTC'})}
+function delta(a,b){if(!b)return a?'<i class="up">new</i>':'<i>–</i>';var p=(a-b)/b*100;return '<i class="'+(p>=0?'up':'dn')+'">'+(p>=0?'▲ ':'▼ ')+Math.abs(p).toFixed(0)+'%</i>'}
+function mk(id,cfg){if(C[id]){C[id].data=cfg.data;C[id].options=cfg.options||{};C[id].update('none')}else C[id]=new Chart($(id),cfg)}
+function ln(l,d,c,x){return Object.assign({label:l,data:d,borderColor:c,backgroundColor:c+'33',tension:.3,pointRadius:0,borderWidth:2},x||{})}
+function bar(l,d,c,x){return Object.assign({label:l,data:d,backgroundColor:c,borderRadius:3},x||{})}
+function op(x){return Object.assign({responsive:true,interaction:{mode:'index',intersect:false}},x||{})}
+function dn(id,labels,data){mk(id,{type:'doughnut',data:{labels:labels,datasets:[{data:data,backgroundColor:COL,borderColor:'#141b2d'}]},options:{plugins:{legend:{position:'right'}}}})}
+function render(){
+ var d=DATA,rows=d.rows,v=rows.slice(-R),L=v.map(function(r){return dl(r.d)}),td=rows[rows.length-1],yd=rows[rows.length-2],s=d.snap||{},l7=rows.slice(-7),p7=rows.slice(-14,-7),n=function(a,k){return sum(a.map(function(r){return r[k]}))};
+ $('on').textContent=d.live.online;$('up').textContent='updated '+new Date(d.now).toLocaleTimeString();
+ var ses7=n(l7,'s'),ssec7=n(l7,'ss'),dau7=n(l7,'dau'),m30=rows.slice(-30),rev30=n(m30,'rv')/100,pu=s.payers||0;
+ var K=[['Total users',f(s.total||d.tracked),'+'+n(l7,'nu')+' in 7d'],['Online now',d.live.online,d.live.inMatch+' in match · '+d.live.lobby+' in lobby'],['DAU (today)',td.dau,delta(td.dau,yd.dau)+' vs yesterday'],['WAU',td.wau,'last 7 days'],['MAU',td.mau,'last 30 days'],
+ ['Stickiness',pc(td.dau,td.mau),'DAU / MAU'],['New today',td.nu,n(l7,'nu')+' this week'],['Avg visit',ses7?mm(ssec7/ses7):'–','last 7 days'],['In-match / user',td.dau?mm((td.ms||0)/td.dau):'–','today, per active user'],
+ ['Visits / user',td.dau?(td.s/td.dau).toFixed(1):'–','today'],['Matches today',f(td.m),'quit rate '+pc(td.q||0,td.m||0)],['Peak online today',td.pk||0,'all time '+Math.max.apply(null,rows.map(function(r){return r.pk||0}))],
+ ['Revenue 30d','₹'+f(rev30),pu+' payers · '+pc(pu,s.total||1)+' of users'],['ARPPU','₹'+(pu?f(sum(rows.map(function(r){return r.rv}))/100/Math.max(1,pu)):0),'lifetime avg per payer'],['Retention D1 / D7',(d.ret[1]?d.ret[1][0]:'–')+'% / '+(d.ret[7]?d.ret[7][0]:'–')+'%','new-user cohorts'],['Lapsed users',d.lapsed,'active 8–30d ago, not this week']];
+ $('kp').innerHTML=K.map(function(k){return '<div class="k"><small>'+k[0]+'</small><b>'+k[1]+'</b><i>'+k[2]+'</i></div>'}).join('');
+ $('gr').innerHTML=[['DAU (7d avg)',n(l7,'dau')/7,n(p7,'dau')/7],['New users / week',n(l7,'nu'),n(p7,'nu')],['Matches / week',n(l7,'m'),n(p7,'m')],['Revenue / week ₹',n(l7,'rv')/100,n(p7,'rv')/100]].map(function(g){var p=g[2]?(g[1]-g[2])/g[2]*100:null;return '<div class="pill">'+g[0]+': <b>'+f(g[1])+'</b> '+(p==null?'':'<i class="'+(p>=0?'up':'dn')+'" style="font-style:normal">'+(p>=0?'▲':'▼')+Math.abs(p).toFixed(0)+'% WoW</i>')+'</div>'}).join('');
+ mk('c1',{type:'line',data:{labels:L,datasets:[ln('DAU',v.map(function(r){return r.dau}),COL[1],{fill:true}),ln('WAU',v.map(function(r){return r.wau}),COL[0]),ln('MAU',v.map(function(r){return r.mau}),COL[3])]},options:op()});
+ mk('c2',{type:'bar',data:{labels:L,datasets:[bar('New',v.map(function(r){return r.nu}),COL[2]),bar('Returning',v.map(function(r){return Math.max(0,r.dau-r.nu)}),COL[0])]},options:op({scales:{x:{stacked:true},y:{stacked:true}}})});
+ mk('c3',{type:'line',data:{labels:L,datasets:[ln('Total users',v.map(function(r){return r.cum}),COL[1],{fill:true})]},options:op()});
+ mk('c4',{type:'line',data:{labels:L,datasets:[ln('Avg visit (min)',v.map(function(r){return r.s?+(r.ss/r.s/60).toFixed(1):0}),COL[0]),ln('In-match min / user',v.map(function(r){return r.dau?+(r.ms/r.dau/60).toFixed(1):0}),COL[3])]},options:op()});
+ mk('c5',{type:'bar',data:{labels:L,datasets:[bar('Matches',v.map(function(r){return r.m||0}),COL[0]),ln('Quit %',v.map(function(r){return r.m?+(r.q/r.m*100).toFixed(1):0}),COL[4],{type:'line',yAxisID:'y1'})]},options:op({scales:{y1:{position:'right',grid:{display:false},min:0,max:100}}})});
+ mk('c6',{type:'bar',data:{labels:L,datasets:[bar('Peak online',v.map(function(r){return r.pk||0}),COL[5])]},options:op()});
+ var ls=d.live.series;mk('c7',{type:'line',data:{labels:ls.map(function(x){return new Date(x[0]).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}),datasets:[ln('Online',ls.map(function(x){return x[1]}),COL[1],{fill:true,stepped:true})]},options:op()});
+ var off=Math.round(-new Date().getTimezoneOffset()/30),hs=new Array(48).fill(0),hc=new Array(48).fill(0);
+ rows.slice(-14).forEach(function(r){if(r.h)r.h.forEach(function(x,i){if(r.pk>0){hs[i]+=x;hc[i]++}})});
+ var HL=[],HV=[];for(var i=0;i<48;i++){var j=(i+off+96)%48;HL.push(('0'+Math.floor(i/2)).slice(-2)+':'+(i%2?'30':'00'));HV[j]=hc[i]?+(hs[i]/hc[i]).toFixed(1):0}
+ mk('c8',{type:'bar',data:{labels:HL,datasets:[bar('Avg peak online',HV,COL[2])]},options:op()});
+ var sb=[0,0,0,0,0,0];v.forEach(function(r){(r.sb||[]).forEach(function(x,i){sb[i]+=x})});
+ mk('c9',{type:'bar',data:{labels:['<1m','1–5m','5–15m','15–30m','30–60m','60m+'],datasets:[bar('Visits',sb,COL[3])]},options:op()});
+ mk('c10',{type:'bar',data:{labels:['Registered','Played ≥1 match','Played ≥5','Played ≥20','Paid'],datasets:[bar('Users',[s.total||0,s.p1||0,s.p5||0,s.p20||0,s.payers||0],COL[1])]},options:op({indexAxis:'y'})});
+ var md=[0,0,0],mp=[0,0,0],dv=[0,0];v.forEach(function(r){[0,1,2].forEach(function(i){md[i]+=(r.md||[])[i]||0;mp[i]+=(r.mp||[])[i]||0});dv[0]+=(r.dv||[])[0]||0;dv[1]+=(r.dv||[])[1]||0});
+ dn('c11',PB,md);dn('c12',MP,mp);dn('c13',['Mobile','Desktop'],dv);
+ mk('c14',{type:'bar',data:{labels:L,datasets:[bar('₹',v.map(function(r){return (r.rv||0)/100}),COL[2])]},options:op()});
+ $('rt').innerHTML=[1,3,7,14,30].map(function(k){var r=d.ret[k];return '<div class="pill">D'+k+': <b>'+(r?r[0]+'%':'–')+'</b>'+(r?' <span style="color:var(--m)">('+r[1]+' users)</span>':'')+'</div>'}).join('');
+ var h='<tr><th>Cohort (signup day)</th><th>Users</th><th>D1</th><th>D3</th><th>D7</th></tr>';
+ d.coh.slice().reverse().forEach(function(c){h+='<tr><td>'+dl(c.d)+'</td><td>'+c.n+'</td>'+[1,3,7].map(function(k){if(c.d+k>d.today)return '<td style="color:var(--m)">–</td>';var p=(c.r[k]||0)/c.n;return '<td style="background:rgba(52,211,153,'+(p*.7).toFixed(2)+')">'+Math.round(p*100)+'%</td>'}).join('')+'</tr>'});
+ $('ct').innerHTML=d.coh.length?h:'<tr><td style="color:var(--m)">Cohorts appear after the first new signups are tracked.</td></tr>';
+ $('tp').innerHTML='<tr><th>Player</th><th>Matches</th><th>Wins</th><th>Win %</th></tr>'+(s.top||[]).map(function(t){return '<tr><td>'+String(t[0]).replace(/[<>&]/g,'')+'</td><td>'+t[1]+'</td><td>'+t[2]+'</td><td>'+pc(t[2],t[1])+'</td></tr>'}).join('');
+ $('hl').innerHTML=[['Lifetime matches',f(s.matches)],['Lifetime wins',f(s.wins)],['Users seen since tracking',d.tracked],['Active last 30d',d.tracked-d.dormant],['Lapsed (8–30d)',d.lapsed],['Dormant (30d+)',d.dormant],['Open rooms',d.live.rooms],['Packs sold',Object.keys(d.packs).map(function(k){return k+'×'+d.packs[k]}).join(' ')||'–'],['Accounts counted',s.total?new Date(d.snapAt).toLocaleString():'–']].map(function(x){return '<tr><td>'+x[0]+'</td><td>'+x[1]+'</td></tr>'}).join('');
+ $('nt').textContent='Tracking since '+dl(d.since)+'. Earlier history does not exist; accounts created before that count as "existing" and appear in totals, not in new-user / retention cohorts. Hours are shown in your local time. Matches are per player (a 10-player match = 10).'
+}
+document.querySelectorAll('[data-r]').forEach(function(b){b.onclick=function(){R=+b.dataset.r;document.querySelectorAll('[data-r]').forEach(function(x){x.classList.toggle('on',x==b)});if(DATA)render()}});
+$('rf').onclick=function(){load(1)};
+if(KEY)load(0);
+</script></body></html>
