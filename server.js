@@ -698,12 +698,20 @@ function navBuild() {   // which platform reaches which (real physics: walking o
   for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (D[i][k] + D[k][j] < D[i][j]) D[i][j] = D[i][k] + D[k][j];
   SX = sx0; return { E, D };
 }
+function botAhead(p, d) {   // what is right in front of me? 0 free, 1 low obstacle (crate / ledge: jump it), 2 high wall or arena edge
+  if (!d) return 0;
+  if (d > 0 ? p.x > RX - PW - 24 : p.x < LX + 24) return 2;
+  const x0 = d > 0 ? p.x + PW : p.x - 44, x1 = x0 + 44, y0 = p.y + 4, y1 = p.y + PH - 4; let o = 0;
+  for (const q of SX) if (x0 < q.x + q.w && x1 > q.x && y0 < q.y + q.h && y1 > q.y) { if (p.y + PH - q.y > 120) return 2; o = 1; }   // SX = platforms + crates (set by simRoom)
+  return o;
+}
 function botPlan(r, p) {
   const NV = NAV[CURMAP] || (NAV[CURMAP] = navBuild()), pf = q => { if (q.g) { const f = pfOf(q); if (f >= 0) q.lp = f; } return q.lp >= 0 ? q.lp : -1; };
-  const cur = pf(p); let near = null, bs = 1e9, thr = null, td = 1e9, resc = null, rd = 1e9;
+  const cur = pf(p); let near = null, bs = 1e9, thr = null, td = 1e9, resc = null, rd = 1e9, sep = 0;
   for (const q of r.players.values()) {
     if (q === p || !q.alive) continue;
-    const d = Math.abs(q.x - p.x) + Math.abs(q.y - p.y) * 1.5;
+    const dx = q.x - p.x, dy = q.y - p.y, d = Math.abs(dx) + Math.abs(dy) * 1.5;
+    if (!sep && Math.abs(dx) < 30 && Math.abs(dy) < 36) sep = dx > 0 || (dx === 0 && q.id > p.id) ? -1 : 1;   // someone is standing on top of me: step apart
     if (p.it) { if (!q.it && !q.fz) { const qp = q.g ? pf(q) : q.lp, sc = d + (cur >= 0 && qp >= 0 ? Math.min(NV.D[cur][qp], 8) * 260 : 0); if (sc < bs) { bs = sc; near = q; } } }
     else if (q.it) { if (d < td) { td = d; thr = q; } }
     else if (r.inf === 2 && q.fz && d < rd) { rd = d; resc = q; }
@@ -714,37 +722,55 @@ function botPlan(r, p) {
   if (p.it) { if (near) { tg = near; mode = 0; } }
   else if (thr && td < 520) { tg = thr; mode = 1; }
   else if (resc && td > 400) { tg = resc; mode = 0; }
-  let d = 0, j = 0, s = 0, tp = -1, tx = p.x;
+  // universal unstick (walls, crates, corners, anything): not moving although I wanted to -> full jump + dash, then turn around
   const mv = Math.abs(p.x - p.sx) + Math.abs(p.y - p.sy); p.sx = p.x; p.sy = p.y;
-  if (mode < 2 && mv < 6) p.stk++; else p.stk = 0;
-  if (p.stk > 3) { p.stk = 0; p.pl = { d: rnd(3) - 1, j: 22, s: p.dcd <= 0 ? 1 : 0, a: 0, g: 0 }; p.btk = 24; return; }   // wedged: full jump + dash
-  if (mode === 1) {
+  if (p.ld && mv < 6 && p.g) p.stk++; else p.stk = 0;
+  if (p.stk >= 2) { const hard = p.stk >= 4; if (hard) { p.stk = 0; p.wp = null; } p.pl = { d: hard ? -p.ld : p.ld, j: 24, s: p.dcd <= 0 ? 1 : 0, a: 0, g: 0 }; p.ld = p.pl.d; p.btk = 26; return; }
+  let d = 0, j = 0, s = 0, tp = -1, tx = p.x, nf = 0;
+  if (mode === 1 && td >= 230 && cur >= 0) {   // threat not on top of me: run to the platform that is the most hops away from the holder (not into a corner)
+    const tpT = pf(tg);
+    if (tpT >= 0) {
+      let bi = cur, bsc = -1e9;
+      for (let i = 0; i < SOL.length; i++) { if (SOL[i].w < 70 || NV.D[cur][i] > 3) continue; const sc = NV.D[tpT][i] * 100 - NV.D[cur][i] * 35 + Math.random() * 25; if (sc > bsc) { bsc = sc; bi = i; } }
+      const q = SOL[bi]; tx = Math.max(LX + 60, Math.min(RX - 60, tg.x < q.x + q.w / 2 ? q.x + q.w - 50 : q.x + 30)); tp = bi; nf = 1;
+    }
+  }
+  if (mode === 1 && !nf) {   // close threat: run away from the holder, never into a wall, hop over him if cornered
     d = p.x >= tg.x ? 1 : -1;
     const ed = Math.min(p.x - LX, RX - PW - p.x);
-    if (ed < 150) { const c = p.x < (LX + RX) / 2 ? 1 : -1; if (c !== d && p.g && td < 220) j = 22; d = c; }   // never into a wall; hop over the chaser if cornered
+    if (ed < 150) { const c = p.x < (LX + RX) / 2 ? 1 : -1; if (c !== d && p.g && td < 220) j = 22; d = c; }
     else if (td < 140 && p.g && Math.random() < .3) j = 14;
     if (td < 230 && p.dcd <= 0 && p.dash <= 0 && Math.random() < .6) s = 1;
   } else {
-    let ty;
-    if (mode === 0) { tx = tg.x + tg.vx * .2; ty = tg.y; tp = tg.g ? pf(tg) : tg.lp; }
-    else {
-      if (!p.wp || Math.abs(p.x - p.wp[0]) < 40 && Math.abs(p.y - p.wp[1]) < 60 || --p.wpT <= 0) { if (p.wp && Math.random() < .3) { p.wp = null; p.pl = { d: 0, j: 0, s: 0, a: 0, g: 0 }; return; } p.wp = botWp(); p.wpT = 40 + rnd(30); }   // short human pause
-      tx = p.wp[0]; ty = p.wp[1]; tp = p.wp[2];
+    if (mode === 0) { tx = tg.x + tg.vx * .2; tp = tg.g ? pf(tg) : tg.lp; }
+    else if (!nf) {   // wander: pick the spot (of 3) that is farthest from other bots' spots; leave a slowing lava platform
+      if (!p.wp || Math.abs(p.x - p.wp[0]) < 40 && Math.abs(p.y - p.wp[1]) < 60 || --p.wpT <= 0) {
+        if (p.wp && Math.random() < .3) { p.wp = null; p.ld = 0; p.pl = { d: 0, j: 0, s: 0, a: 0, g: 0 }; return; }   // short human pause
+        let bw = null, bm = -2;
+        for (let i = 0; i < 3; i++) { const w = botWp(); let m = 1e9; for (const q of r.players.values()) if (q !== p && q.bot && q.wp) m = Math.min(m, Math.abs(q.wp[0] - w[0]) + Math.abs(q.wp[1] - w[1]) * .5); if (p.lv > 0 && w[2] === cur) m = -1; if (m > bm) { bm = m; bw = w; } }
+        p.wp = bw; p.wpT = 40 + rnd(30);
+      }
+      tx = p.wp[0]; tp = p.wp[2];
     }
     d = Math.abs(tx - p.x) < 12 ? 0 : tx > p.x ? 1 : -1;
     if (cur >= 0 && tp >= 0 && cur !== tp && NV.D[cur][tp] < 99) {   // route: walk to the launch spot of the next hop towards the target platform
       let be = null, bd = 1e9; const dc = NV.D[cur][tp];
       for (const e of NV.E[cur]) { if (NV.D[e.j][tp] >= dc) continue; const dd = Math.abs(p.x - e.x); if (dd < bd) { bd = dd; be = e; } }
-      if (be) { p.hop = be; d = be.x > p.x ? 1 : -1; if (bd < 9 && p.g) { p.pl = { d: be.d, j: be.J, s: be.ds, a: 0, g: 0 }; p.btk = Math.max(be.J, 6) + 4; p.hop = null; return; } }
+      if (be) { p.hop = be; d = be.x > p.x ? 1 : -1; if (bd < 9 && p.g) { p.pl = { d: be.d, j: be.J, s: be.ds, a: 0, g: 0 }; p.ld = be.d; p.btk = Math.max(be.J, 6) + 4; p.hop = null; return; } }
     } else if (mode === 0 && p.dcd <= 0 && p.dash <= 0 && Math.abs(tg.x - p.x) < 260 && Math.abs(tg.y - p.y) < 60) s = 1;   // dash at a runner on the same level
     if (mode === 0 && p.it && Math.abs(tg.x - p.x) < 150 && tg.y < p.y - 50 && p.g && !p.hop) j = 14;
+    if (mode === 2 && sep && !p.hop) { d = sep; s = 0; }   // don't pile up on another bot
+  }
+  if (p.g && d) {   // obstacle right ahead: hop crates / ledges, turn around at high walls
+    const bl = botAhead(p, d);
+    if (bl === 1 && !j) j = 18; else if (bl === 2) { if (mode === 2 && !p.hop) { p.wp = null; d = -d; } else if (mode !== 1) j = 24; }
   }
   if (Math.random() > p.sk + .05) d = 0;   // rare human-like hesitation (tutorial bots, sk=.5, are much slower)
   const DD = mode === 0 ? bs : td, pl = { d, j, s, a: 0, g: 0 };
   if (r.st === 'play' && !r.tut && p.acd <= 0 && DD < 260 && Math.random() < .3) pl.a = 1;   // ability (never smoke/clones)
   if (p.gs > 0 && (p.gt || p.gk)) pl.g = 14; else if (p.it && mode === 0 && Math.abs(tg.x - p.x) + Math.abs(tg.y - p.y) < 70 && p.gcd <= 0 && Math.random() < .9) pl.g = 14;   // grab a runner in reach
   if (j || pl.g) p.btk = Math.max(j, pl.g) + 2;
-  p.pl = pl;
+  p.ld = d; p.pl = pl;
 }
 
 function spawn(p, k, t, sp) {
