@@ -4,6 +4,7 @@
 // => a background tab / frozen phone / laggy host can never pause or alter the match for anyone else,
 //    and nobody can teleport, speed-hack, fake a tag or touch the timer.
 // Run: npm install && npm start
+// CrazyGames edition: players log in with their CrazyGames account (verified JWT), everyone else plays as a guest (bots only, nothing saved on the server).
 'use strict';
 const http = require('http'), fs = require('fs'), path = require('path');
 const zlib = require('zlib'), crypto = require('crypto');
@@ -99,7 +100,7 @@ const RQ_TTL = 7 * 864e5;   // friend requests expire after 7 days
 function rqPrune(a) { a.rq = a.rq || []; a.rqt = a.rqt || {}; const n = Date.now(); let c = 0; a.rq = a.rq.filter(k => { if (!a.rqt[k]) { a.rqt[k] = n; c = 1; return true } if (n - a.rqt[k] > RQ_TTL) { delete a.rqt[k]; c = 1; return false } return true }); for (const k in a.rqt) if (!a.rq.includes(k)) { delete a.rqt[k]; c = 1 } return c }
 async function tokAcc(tk) {
   if (typeof tk !== 'string' || !tk || tk.length > 64) return null;
-  const h = sha(tk); let a = byTok.get(h); if (a) return a;
+  const h = sha(tk); let a = byTok.get(h); if (a) { if (a.guest) a.seen = Date.now(); return a; }
   const [k] = await db(['GET', 'tok:' + h]); a = k ? await getAcc(k) : null; if (a) byTok.set(h, a); return a;
 }
 async function newTok(a) {
@@ -107,20 +108,92 @@ async function newTok(a) {
   while (a.tk.length > 5) { const o = a.tk.shift(); byTok.delete(o); cmds.push(['DEL', 'tok:' + o]); }
   cmds.push(['SET', 'acc:' + a.k, JSON.stringify(a)]); await db(...cmds); return tk;
 }
-function accSave(a) { dirty.add(a); if (!accT) accT = setTimeout(accFlush, 3000); }   // stats are batched into one request
+function accSave(a) { if (a.guest) return; dirty.add(a); if (!accT) accT = setTimeout(accFlush, 3000); }   // stats are batched into one request
 async function accFlush() {
   accT = 0; if (!dirty.size) return;
   const l = [...dirty]; dirty.clear();
   try { await db(...l.map(a => ['SET', 'acc:' + a.k, JSON.stringify(a)])); }
   catch (e) { console.error('account save failed:', e.message); for (const a of l) dirty.add(a); if (!accT) accT = setTimeout(accFlush, 10000); }
 }
-const accOut = (a, tk) => ({ ok: 1, u: a.n, tk, st: { p: a.p, w: a.w, l: a.l }, pr: prog(a) });
+const accOut = (a, tk) => ({ ok: 1, u: a.n, tk, st: { p: a.p, w: a.w, l: a.l }, pr: prog(a), g: a.guest ? 1 : 0 });
+
+/* ---------------- CrazyGames login + guests ---------------- */
+const CG_GAME = process.env.CG_GAME_ID || '', CG_DEV = process.env.CG_DEV === '1';   // CG_DEV=1: accept unsigned tokens (local testing with the SDK's fake user)
+let CGK = { k: null, t: 0 };
+async function cgKey(force) {
+  if (!force && CGK.k && Date.now() - CGK.t < 36e5) return CGK.k;
+  const r = await fetch('https://sdk.crazygames.com/publicKey.json'); if (!r.ok) throw new Error('cg key ' + r.status);
+  const j = await r.json(); let pem = typeof j === 'string' ? j : (j.publicKey || j.public_key || j.key);
+  if (typeof pem !== 'string') throw new Error('cg key format');
+  if (!pem.includes('BEGIN')) pem = '-----BEGIN PUBLIC KEY-----\n' + (pem.replace(/\s+/g, '').match(/.{1,64}/g) || []).join('\n') + '\n-----END PUBLIC KEY-----';
+  CGK = { k: crypto.createPublicKey(pem), t: Date.now() }; return CGK.k;
+}
+async function cgVerify(tok) {   // -> the token's payload ({ userId, username, ... }) or null
+  if (typeof tok !== 'string' || tok.length < 20 || tok.length > 6000) return null;
+  const sp = tok.split('.'); if (sp.length !== 3) return null;
+  let h, p; try { h = JSON.parse(Buffer.from(sp[0], 'base64url').toString()); p = JSON.parse(Buffer.from(sp[1], 'base64url').toString()); } catch { return null; }
+  if (!h || !p || typeof p !== 'object') return null;
+  if (!CG_DEV) {
+    if (h.alg !== 'RS256') return null;
+    const data = Buffer.from(sp[0] + '.' + sp[1]), sig = Buffer.from(sp[2], 'base64url');
+    let ok = crypto.verify('RSA-SHA256', data, await cgKey(false), sig);
+    if (!ok && Date.now() - CGK.t > 60000) ok = crypto.verify('RSA-SHA256', data, await cgKey(true), sig);   // key rotated?
+    if (!ok) return null;
+    if (p.exp && p.exp * 1000 < Date.now()) return null;
+    if (CG_GAME && p.gameId && String(p.gameId) !== CG_GAME) return null;
+  }
+  if (typeof p.userId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(p.userId)) return null;
+  return p;
+}
+const cgLock = new Map();
+async function cgAccount(p) {   // CrazyGames userId -> our account (created on first visit, never asks for a password)
+  const uid = p.userId;
+  while (cgLock.has(uid)) await cgLock.get(uid).catch(() => {});
+  const job = (async () => {
+    const [mk] = await db(['GET', 'cgmap:' + uid]);
+    let want = String(p.username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 12);
+    if (mk) { const a = await getAcc(mk); if (a) { if (want.length >= 3 && want.toLowerCase() === a.k && want !== a.n) { a.n = want; accSave(a); } return a; } }
+    if (want.length < 3) want = 'Player' + String(rnd(9000) + 1000);
+    for (let i = 0; i < 25; i++) {
+      const nm = i === 0 ? want : want.slice(0, 12 - 4) + String(rnd(9000) + 1000), k = nm.toLowerCase();
+      const a = { k, n: nm, cg: uid, p: 0, w: 0, l: 0, tk: [] };
+      const [ok] = await db(['SET', 'acc:' + k, JSON.stringify(a), 'NX']);
+      if (!ok) continue;
+      ACC.set(k, a); await db(['SET', 'cgmap:' + uid, k]); return a;
+    }
+    throw new Error('no free name');
+  })();
+  cgLock.set(uid, job);
+  try { return await job; } finally { cgLock.delete(uid); }
+}
+const MAX_GUESTS = 4000; let guestN = 0;
+function cleanPr(x) {   // guest progress lives in the browser; rebuild it field by field so nothing odd gets in
+  if (!x || typeof x !== 'object') return null;
+  const n = (v, m) => Number.isFinite(+v) ? Math.max(0, Math.min(m, Math.floor(+v))) : 0, o = {};
+  o.tok = n(x.tok, 1e9); o.gem = n(x.gem, 1e7); o.xp = n(x.xp, 1e9); o.streak = n(x.streak, 1e5); o.ws = n(x.ws, 1e5); o.bws = n(x.bws, 1e5);
+  o.last = typeof x.last === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.last) ? x.last : '';
+  o.own = {}; if (x.own && typeof x.own === 'object') for (const k of Object.keys(x.own).slice(0, 500)) if (/^[A-Za-z_]{1,8}[A-Za-z0-9_]{0,20}$/.test(k) && x.own[k]) o.own[k] = 1;
+  o.lr = {}; if (x.lr && typeof x.lr === 'object') for (const k of Object.keys(x.lr).slice(0, 600)) if (/^\d{1,3}$/.test(k) && +k >= 1 && +k <= 500 && x.lr[k]) o.lr[k] = 1;
+  o.em = Array.isArray(x.em) && x.em.length === 4 && x.em.every(v => Number.isInteger(v) && v >= 0 && v < 30) ? x.em.slice() : [0, 1, 2, 3];
+  o.eq = { sk: 0, ac: 0, hat: 0, fc: 0, tr: 0, cl: 0 }; if (x.eq && typeof x.eq === 'object') for (const k of Object.keys(o.eq)) o.eq[k] = n(x.eq[k], 200);
+  o.q = []; o.qd = '';
+  if (x.ad && typeof x.ad === 'object') o.ad = { d: String(x.ad.d || '').slice(0, 10), n: n(x.ad.n, 1000), t: 0, q: 0 };
+  return o;
+}
+function guestNew(nm, pr) {   // a guest exists only in RAM: no database row, no leaderboard, no friends, no analytics
+  if (guestN >= MAX_GUESTS) return null;
+  const n = /^Guest\d{4}$/.test(String(nm || '')) ? nm : 'Guest' + (rnd(9000) + 1000);
+  const a = { k: 'g_' + hex(6), n, guest: 1, p: 0, w: 0, l: 0, tk: [], f: [], rq: [], seen: Date.now() };
+  const c = cleanPr(pr); if (c) a.pr = c;
+  const tk = hex(24); byTok.set(sha(tk), a); guestN++; prog(a); return { a, tk };
+}
+setInterval(() => { const t = Date.now(); for (const [h, a] of byTok) if (a.guest && t - a.seen > 6 * 36e5 && ![...wss.clients].some(w => w.acct === a)) { byTok.delete(h); guestN--; } }, 10 * 60 * 1000).unref();
 const msIp = new Map(); setInterval(() => msIp.clear(), 60000).unref();
 const LIVE = new WeakMap(), authIp = new Map(), socIp = new Map(), INV = new Map(); setInterval(() => { authIp.clear(); socIp.clear(); }, 60000).unref();
 function authReq(req, res) {
   const out = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(o)); };
   const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  let b = ''; req.on('data', d => { b += d; if (b.length > 2048) req.destroy(); });
+  let b = ''; req.on('data', d => { b += d; if (b.length > 8192) req.destroy(); });
   req.on('end', async () => {
     try {
       let m; try { m = JSON.parse(b); } catch { return out(400, { e: 'bad' }); }
@@ -128,12 +201,12 @@ function authReq(req, res) {
       const soc = m.m === 'soc' || m.m === 'lb', mp = soc ? socIp : authIp, n = (mp.get(ip) || 0) + 1; mp.set(ip, n);
       if (n > (soc ? 90 : 30)) return out(429, { e: 'rate' });
       if (m.m === 'lb') {   // leaderboard by wins
-        const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' }); lbSeed(me);
+        const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' }); if (me.guest) return out(403, { e: 'guest' }); lbSeed(me);
         const t = Math.max(0, Math.min(2, m.t | 0)), L = lbRows(t), i = L.findIndex(x => x[2] === me.k);
         return out(200, { ok: 1, rows: L.slice(0, 50).map(x => [x[0], x[1]]), me: i < 0 ? null : { r: i + 1, w: L[i][1] } });
       }
       if (m.m === 'soc') {   // friends: poll + add / accept / decline / remove / invite
-        const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' });
+        const me = await tokAcc(m.tk); if (!me) return out(401, { e: 'tk' }); if (me.guest) return out(403, { e: 'guest' });
         me.f = me.f || []; me.rq = me.rq || [];
         let rs = ''; if (rqPrune(me)) accSave(me);
         const a = m.a, nm = String(m.n || '').toLowerCase(), T = /^[a-z0-9_]{3,12}$/.test(nm) ? await getAcc(nm) : null;
@@ -174,29 +247,16 @@ function authReq(req, res) {
         if (m.a !== 'get') accSave(a);
         return out(200, { ok: 1, pr: prog(a) });
       }
-      if (m.m === 'shop') {   // start a real-money checkout
-        const a = await tokAcc(m.tk); if (!a) return out(401, { e: 'tk' });
-        const r = await shopReq(a, m); return r.o ? out(200, { ok: 1, o: r.o, a: r.a, k: r.k, n: r.n }) : out(200, { ok: 0, e: r.e });
-      }
-      if (m.m === 'shopv') {   // the popup finished: verify the signature, credit, return the fresh balance
-        const a = await tokAcc(m.tk); if (!a) return out(401, { e: 'tk' });
-        return (await rzpVerify(a, m)) ? out(200, { ok: 1, pr: prog(a) }) : out(200, { ok: 0, e: 'pay' });
-      }
-      if (m.m === 'tk') { const a = await tokAcc(m.tk); if (a) lbSeed(a); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
-      const u = String(m.u || ''), pw = String(m.p || ''), k = u.toLowerCase();
-      if (!/^[A-Za-z0-9_]{3,12}$/.test(u) || pw.length < 4 || pw.length > 64) return out(400, { e: 'bad' });
-      const scr = salt => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, d) => e ? no(e) : ok(d)));
-      if (m.m === 'reg') {
-        if (await getAcc(k)) return out(409, { e: 'taken' });
-        const salt = hex(16), a = { k, n: u, s: salt, h: (await scr(salt)).toString('hex'), p: 0, w: 0, l: 0, tk: [] };
-        const [ok] = await db(['SET', 'acc:' + k, JSON.stringify(a), 'NX']);   // NX: two people can never grab the same name
-        if (!ok) return out(409, { e: 'taken' });
-        ACC.set(k, a); return out(200, accOut(a, await newTok(a)));
-      }
-      if (m.m === 'login') {
-        const a = await getAcc(k); if (!a) return out(401, { e: 'cred' });
-        if (!crypto.timingSafeEqual(await scr(a.s), Buffer.from(a.h, 'hex'))) return out(401, { e: 'cred' });
+      if (m.m === 'shop' || m.m === 'shopv') return out(410, { e: 'gone' });   // real-money purchases were removed: rewards come from play and from rewarded ads
+      if (m.m === 'tk') { const a = await tokAcc(m.tk); if (a && !a.guest) lbSeed(a); return a ? out(200, accOut(a, m.tk)) : out(401, { e: 'tk' }); }
+      if (m.m === 'cg') {   // CrazyGames user: the SDK's signed token is verified here, then the account is found / created from the userId
+        const p = await cgVerify(m.t); if (!p) return out(401, { e: 'cg' });
+        const a = await cgAccount(p); lbSeed(a);
         return out(200, accOut(a, await newTok(a)));
+      }
+      if (m.m === 'guest') {   // not logged in on CrazyGames: temporary RAM-only session, bots only
+        const g = guestNew(m.nm, m.pr); if (!g) return out(503, { e: 'busy' });
+        return out(200, accOut(g.a, g.tk));
       }
       out(400, { e: 'bad' });
     } catch (e) { console.error('auth error:', e.message); try { out(503, { e: 'busy' }); } catch {} }
@@ -260,9 +320,21 @@ function csClean(a, v) {   // a player can only show cosmetics they own
   const X = prog(a), p = String(v || '').split(',').map(Number);
   return EQK.map((k, j) => { let i = p[j] | 0; if (i < 0 || i >= PRICE[k].length || (PRICE[k][i] && !X.own[k + i])) i = 0; return i; }).join(',');
 }
+const AD_TOK = 150, AD_GEM = 5, AD_CD = 60e3, AD_DAILY = 20;   // ONE rewarded ad = ONE reward (CrazyGames forbids chaining ads); cooldown + daily cap
+function adS(X) { const d = dayKey(Date.now()); if (!X.ad || X.ad.d !== d) X.ad = { d, n: 0, t: (X.ad && X.ad.t) || 0, q: 0 }; return X.ad; }
 function progAct(a, m) {
   const X = prog(a), act = String(m.a);
   if (act === 'get') return '';
+  if (act === 'adreq' || act === 'ad') {
+    const A = adS(X), t = Date.now();
+    if (A.n >= AD_DAILY) return 'adcap';
+    if (t - A.t < AD_CD) return 'adwait';
+    if (act === 'adreq') { A.q = t; return ''; }
+    if (!A.q || t - A.q < 1000 || t - A.q > 600000) return 'bad';   // an ad has to have been requested a moment ago
+    A.q = 0; A.t = t; A.n++;
+    if (m.k === 'g') X.gem += AD_GEM; else X.tok += AD_TOK;
+    return '';
+  }
   if (act === 'buy') {
     let key, price, gem = false;
     if (m.k === 'ab') { if (typeof m.i !== 'string' || !Object.hasOwn(ABP, m.i)) return 'bad'; key = 'ab_' + m.i; price = ABP[m.i]; gem = !!ABG[m.i]; }
@@ -297,7 +369,7 @@ function progAct(a, m) {
 }
 function sxOf(X) { const S = X.sx || (X.sx = {}); S.tg |= 0; S.tt |= 0; S.sv = +S.sv || 0; S.sn |= 0; S.pt = +S.pt || 0; if (!Array.isArray(S.md)) S.md = [0, 0, 0]; if (!Array.isArray(S.rc)) S.rc = []; return S; }
 function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1, won/lost +1, plus the rewards
-  if (!p.rec || !p.acct) return; const so = p.rec === 2; p.rec = 0;   // so: private match = stats only, no tokens / xp / quests / leaderboard
+  if (!p.rec || !p.acct || p.acct.guest) return; const so = p.rec === 2; p.rec = 0;   // so: private match = stats only, no tokens / xp / quests / leaderboard
   const a = p.acct; a.p++; if (win) { a.w++; if (!so) lbWin(a); } else a.l++;
   const X = prog(a); let g = null;
   {   // profile analytics are recorded for every counted match, including ones the player quit
@@ -317,53 +389,6 @@ function rec(p, win, fin) {   // one finished (or abandoned) match -> played +1,
 }
 
 /* ---- real-money store (Razorpay). env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET. Amounts are decided HERE, never by the browser. ---- */
-const RZP_ID = process.env.RAZORPAY_KEY_ID || '', RZP_SEC = process.env.RAZORPAY_KEY_SECRET || '', RZP_WH = process.env.RAZORPAY_WEBHOOK_SECRET || '';
-const RZP_AUTH = 'Basic ' + Buffer.from(RZP_ID + ':' + RZP_SEC).toString('base64');
-const PACKS = {   // c = price in paise (INR x 100). Amounts are fixed here; the browser only ever sends a pack id
-  t1: { n: '2,000 Tokens', c: 34900, t: 2000 }, t2: { n: '6,000 Tokens', c: 84900, t: 6000 }, t3: { n: '15,000 Tokens', c: 169900, t: 15000 }, t4: { n: '40,000 Tokens', c: 399900, t: 40000 },
-  g1: { n: '50 Gems', c: 34900, g: 50 }, g2: { n: '130 Gems', c: 84900, g: 130 }, g3: { n: '280 Gems', c: 169900, g: 280 }, g4: { n: '600 Gems', c: 349900, g: 600 } };
-function payDay(a) { if (!a.pay || typeof a.pay !== 'object') a.pay = { ids: [] }; if (!Array.isArray(a.pay.ids)) a.pay.ids = []; return a.pay; }   // ids = paid order ids, so nothing can pay out twice
-const hmacHex = (k, d) => crypto.createHmac('sha256', k).update(d).digest('hex');
-const sameHex = (x, y) => typeof x === 'string' && x.length === y.length && /^[0-9a-f]+$/.test(x) && crypto.timingSafeEqual(Buffer.from(x), Buffer.from(y));
-async function shopReq(a, m) {   // creates a Razorpay order -> { o: orderId, a: paise, k: keyId, n: name } or { e }
-  const pk = typeof m.pk === 'string' && Object.hasOwn(PACKS, m.pk) ? PACKS[m.pk] : null; if (!pk) return { e: 'bad' };
-  if (!RZP_ID || !RZP_SEC) return { e: 'off' };
-  try {
-    const r = await fetch('https://api.razorpay.com/v1/orders', { method: 'POST', headers: { Authorization: RZP_AUTH, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: pk.c, currency: 'INR', receipt: 't' + Date.now().toString(36), notes: { acct: a.k, pack: m.pk } }) });
-    const d = await r.json(); return r.ok && d.id ? { o: d.id, a: pk.c, k: RZP_ID, n: pk.n } : { e: 'pay' };
-  } catch { return { e: 'pay' }; }
-}
-async function rzpSettle(id, who) {   // asks Razorpay itself whether the order is paid, then credits it exactly once
-  if (typeof id !== 'string' || !/^order_[A-Za-z0-9]+$/.test(id)) return false;
-  const r = await fetch('https://api.razorpay.com/v1/orders/' + id, { headers: { Authorization: RZP_AUTH } }); if (!r.ok) return false;
-  const o = await r.json(), pk = o.notes && Object.hasOwn(PACKS, o.notes.pack) ? PACKS[o.notes.pack] : null, a = pk ? await getAcc(String(o.notes.acct || '')) : null;
-  if (!pk || !a || (who && who !== a) || o.status !== 'paid' || o.amount !== pk.c || o.currency !== 'INR') return false;
-  const P = payDay(a);
-  if (!P.ids.includes(o.id)) { const X = prog(a); X.tok += pk.t || 0; X.gem += pk.g || 0; P.ids.push(o.id); if (P.ids.length > 100) P.ids.shift(); accSave(a); console.log('purchase', a.k, o.notes.pack); AN.purchase(pk, o.notes.pack); }
-  return true;
-}
-async function rzpVerify(a, m) {   // the checkout popup hands the browser a signature; only Razorpay's secret can make a valid one
-  if (!RZP_SEC || typeof m.o !== 'string' || typeof m.p !== 'string' || typeof m.s !== 'string' || m.o.length > 60 || m.p.length > 60) return false;
-  if (!sameHex(m.s, hmacHex(RZP_SEC, m.o + '|' + m.p))) return false;
-  return rzpSettle(m.o, a);
-}
-function rzpHook(req, res) {   // Razorpay -> server backup (e.g. the player closed the tab right after paying)
-  const ch = []; let len = 0;
-  req.on('data', d => { len += d.length; if (len > 65536) req.destroy(); else ch.push(d); });
-  req.on('end', async () => {
-    try {
-      if (!RZP_WH) { res.writeHead(503); return res.end(); }
-      const raw = Buffer.concat(ch).toString('utf8');
-      if (!sameHex(String(req.headers['x-razorpay-signature'] || ''), hmacHex(RZP_WH, raw))) { res.writeHead(400); return res.end(); }
-      const ev = JSON.parse(raw), pl = ev && ev.payload || {};
-      const id = ev.event === 'order.paid' ? pl.order && pl.order.entity && pl.order.entity.id : ev.event === 'payment.captured' ? pl.payment && pl.payment.entity && pl.payment.entity.order_id : null;
-      if (id) await rzpSettle(id, null);
-      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}');
-    } catch (e) { console.error('razorpay hook', e.message); res.writeHead(500); res.end(); }
-  });
-}
-
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
 
@@ -379,7 +404,10 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ online: wss.clients.size, waiting, wm }));
   }
-  if (url === '/razorpay' && req.method === 'POST') return rzpHook(req, res);
+  if (url === '/privacy') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    return res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacy</title><body style="font:16px/1.6 system-ui;max-width:640px;margin:32px auto;padding:0 16px"><h1>Privacy</h1><p><b>Logged in with CrazyGames:</b> we store your CrazyGames user id, username, game progress (level, coins, cosmetics, stats), friends and basic gameplay analytics, so that progress, friends, parties and leaderboards work. Nothing else is collected.</p><p><b>Guests:</b> nothing is stored on our servers. Progress stays in your browser only.</p><p>We do not sell data and show no third-party ads except through the CrazyGames ad system. To have your data deleted, contact the developer through the CrazyGames game page.</p></body>');
+  }
   if (url === '/auth') {
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' }); return res.end(); }
     if (req.method === 'POST') return authReq(req, res);
@@ -397,7 +425,7 @@ const server = http.createServer((req, res) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     'X-Frame-Options': 'DENY',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://checkout.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.razorpay.com; media-src 'self' data: blob:; connect-src 'self' ws: wss: https://api.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com; frame-ancestors 'none'"
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://sdk.crazygames.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ws: wss: https://*.crazygames.com; frame-ancestors 'none'"
   };
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
 
@@ -1388,7 +1416,7 @@ wss.on('connection', (ws, req) => {
         tokAcc(m.tk).then(a => {
           const q = ws.pend; ws.pend = null;
           if (!a) return err('auth');
-          ws.acct = a; send(ws, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l })); AN.open(ws, a, req);
+          ws.acct = a; send(ws, JSON.stringify({ t: 'st', p: a.p, w: a.w, l: a.l })); if (!a.guest) AN.open(ws, a, req);
           for (const x of q) ws.emit('message', x[0], x[1]);
         }, () => { ws.pend = null; err('busy'); });
       }
@@ -1418,6 +1446,7 @@ wss.on('connection', (ws, req) => {
 
     /* ---- joining ---- */
     if (!r) {
+      if (ws.acct.guest && (m.t === 'pcreate' || m.t === 'pjoin' || m.t === 'join' || m.t === 'quick')) return err('guest');   // guests: bots only
       /* ---- party: leader makes a code, friends join, all ready, leader picks mode + starts -> everyone enters the same public lobby ---- */
       if (m.t === 'pcreate' || m.t === 'pjoin') {
         if (pt) return;
@@ -1475,7 +1504,7 @@ wss.on('connection', (ws, req) => {
       if (m.t === 'create') {
         if (rooms.size >= MAX_ROOMS) return err('busy');
         let code; do { code = Array.from({ length: 4 }, () => CODE_CHARS[rnd(32)]).join(''); } while (rooms.has(code));
-        const nr = mkRoom(code, false); nr.prac = m.pr ? 1 : 0;   // practice room: host picks mode + map, every match gets 4 bots, nothing is counted
+        const nr = mkRoom(code, false); nr.prac = (m.pr || ws.acct.guest) ? 1 : 0;   // practice room: host picks mode + map, every match gets 4 bots, nothing is counted
         return addPlayer(nr, ws.acct.n);
       }
       if (m.t === 'join') {
