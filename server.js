@@ -231,11 +231,11 @@ function lbWin(a) {
 }
 function lbRows(t) { const d = lbDay(), w = lbWeek(), L = []; for (const [k, e] of LB) { const v = t === 0 ? (e[2] === d ? e[3] : 0) : t === 1 ? (e[4] === w ? e[5] : 0) : e[1]; if (v > 0) L.push([e[0], v, k]); } return L.sort((a, b) => b[1] - a[1]); }
 /* ---- server-authoritative progress: tokens, gems, xp, cosmetics, quests, stats ---- */
-const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, ...[100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
-const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr'], DAILY = [100, 150, 200, 250, 300, 400, 500];
+const PRICE = { sk: [0, 0, 200, 200, 350, 800, 100, 150, 250, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 900, 1000, 1200, 1400, 1600, 1800, 2200, 2500, 3000, 4000], ac: [0, 0, 0, 0, 150, 150, 150, 150, 150, 150, ...[100, 100, 120, 120, 120, 150, 150, 200, 250, 250, 300, 300, 350, 350, 400, 400, 450, 500, 700, 900]], hat: [0, 0, 250, 300, 350, 900, 150, 300, 200, 450, 250, 500, 350, 450, 600, 400, 350, 300, 400, 700, 700, 250, 500, 800, 600, 400, 550, 650, 1200, 1800], fc: [0, 150, 200, 0, 100, 120, 150, 150, 200, 200, 200, 250, 250, 300, 300, 350, 400, 400, 450, 500, 500, 550, 600, 700, 700, 800, 900, 1000, 1400, 1800], tr: [0, 250, 400, 300, 700, 150, 200, 200, 300, 300, 350, 350, 400, 450, 500, 500, 550, 600, 600, 700, 700, 800, 900, 1100, 1300, 1500, 1700, 2000, 2400, 2800], cl: [0, 150, 200, 300, 350, 450, 500, 600, 700, 900, 1500, 2000, 3500], em: [0, 0, 0, 0, 150, 150, 250, 100, 100, 150, 100, 100, 400, 500, 250, 150, 250, 400, 800, 100, 100, 100, 150, 150, 200, 200, 300, 300, 300, 100] };
+const ABP = { fake: 0, smoke: 300, trap: 500, spring: 200, rocket: 250, uppercut: 300, recharge: 350, shock: 400, magnet: 450, shield: 500, swap: 600, clones: 700, zap: 800 }, EQK = ['sk', 'ac', 'hat', 'fc', 'tr', 'cl'], DAILY = [100, 150, 200, 250, 300, 400, 500];
 /* ---- economy: every token price x PM; top-tier items cost gems instead (gem price = old token price / GD) ---- */
 const LAD=[5000,7000,10000,15000,20000,30000,40000,50000,60000,75000,100000],tp=p=>LAD[Math.max(0,Math.min(10,Math.round(Math.log(p/100)/Math.log(40)*10)))],gp=p=>Math.max(100,Math.round(p/50)*10);
-const PM = 3, GD = 20, GEM_MIN = { sk: 1800, ac: 700, hat: 900, fc: 1000, tr: 1700, em: 800 }, GEM_AB = new Set(['swap', 'clones', 'zap']), GEMI = {}, ABG = {};
+const PM = 3, GD = 20, GEM_MIN = { sk: 1800, ac: 700, hat: 900, fc: 1000, tr: 1700, em: 800, cl: 1400 }, GEM_AB = new Set(['swap', 'clones', 'zap']), GEMI = {}, ABG = {};
 for (const k in PRICE) { const L = PRICE[k]; GEMI[k] = L.map(p => !!p && p >= GEM_MIN[k]); PRICE[k] = L.map((p, i) => !p ? 0 : GEMI[k][i] ? gp(p) : tp(p)); }
 for (const k in ABP) { if (!ABP[k]) continue; if (GEM_AB.has(k)) { ABG[k] = 1; ABP[k] = gp(ABP[k]); } else ABP[k] = tp(ABP[k]); }
 const needXp = l => 100 + (l - 1) * 40;
@@ -243,7 +243,7 @@ function lvlOf(x) { let l = 1; while (x >= needXp(l)) { x -= needXp(l); l++; } r
 const LRW = n => n == 4 ? { k: 'hat', i: 6 } : n == 8 ? { k: 'tr', i: 5 } : n == 12 ? { k: 'sk', i: 6 } : n == 16 ? { k: 'hat', i: 8 } : n % 5 == 0 ? { g: n % 10 == 0 ? 20 : 10 } : { t: Math.min(10 + n * 2, 50) * 10 };
 const dayKey = t => new Date(t).toISOString().slice(0, 10);
 function prog(a) {
-  if (!a.pr) a.pr = { tok: 0, gem: 0, xp: 0, streak: 0, last: '', own: {}, lr: {}, em: [0, 1, 2, 3], eq: { sk: 0, ac: 0, hat: 0, fc: 0, tr: 0 }, ws: 0, bws: 0,
+  if (!a.pr) a.pr = { tok: 0, gem: 0, xp: 0, streak: 0, last: '', own: {}, lr: {}, em: [0, 1, 2, 3], eq: { sk: 0, ac: 0, hat: 0, fc: 0, tr: 0, cl: 0 }, ws: 0, bws: 0,
     q: [], qd: '',
     sx: { tg: 0, tt: 0, sv: 0, sn: 0, pt: 0, md: [0, 0, 0], rc: [] } };
   const td = dayKey(Date.now()); if (a.pr.qd !== td) { a.pr.qd = td; a.pr.q = genQ(a.k, td, lvlOf(a.pr.xp || 0)); }   // a fresh set of quests every UTC day, forever (yesterday's unclaimed ones expire)
@@ -660,7 +660,7 @@ function addBots(r, cnt) {
   for (let need = cnt; need > 0; need--) {
     let ci = 0; while (used.has(ci)) ci++; used.add(ci); ci %= 10;
     let n; do { n = BOT_NAMES[rnd(BOT_NAMES.length)]; } while (nm.has(n)); nm.add(n);
-    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .93 + Math.random() * .07; b.ab = BAB[rnd(BAB.length)]; b.hop = null; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
+    const b = newPlayer(n, ci); b.bot = true; b.since = now(); b.cs = [rnd(30), rnd(30), rnd(30), rnd(30), rnd(30), rnd(13)].join(','); b.emoNx = 0; /* bots wear a random look and use emotes */ b.sk = .93 + Math.random() * .07; b.ab = BAB[rnd(BAB.length)]; b.hop = null; b.wp = null; b.wpT = 0; b.btk = rnd(12); b.bst2 = 0; b.stk = 0; b.tc = 0; b.tid = ''; b.tx = b.ty = 0; b.sx = 0; b.sy = 0; b.pl = null;
     r.players.set(b.id, b);
   }
 }
