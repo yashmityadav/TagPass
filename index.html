@@ -1426,7 +1426,7 @@ function tutHide(){const e=document.getElementById('tutb');if(e)e.remove();const
 const TUTT={cd:'🎓 TUTORIAL: win against 5 bots!<br>Move: <b>A/D</b> or <b>←/→</b> · Jump: <b>W/↑/Space</b> (phone: on-screen buttons).<br>You start as <b>IT</b> (the bomb holder)!',
 it:'💣 You are <b>IT</b>! Run into a bot to <b>pass the bomb</b>.<br>Whoever holds it when the timer hits 0 is <b>OUT</b>.',
 pass:'⚠️ <b>HURRY!</b> Touch a bot NOW and <b>pass the bomb before the timer runs out!</b>',
-run:'😅 A bot is IT now. <b>Run away</b> and don\'t get touched!<br>Dash: <b>Shift/K</b> · Grab: <b>Q/J</b> · Ability: <b>E/L</b> · Jump on ziplines in the air.',
+run:'A bot is IT now. <b>Run away</b> and don\'t get touched!<br>Dash: <b>Shift/K</b> · Grab: <b>Q/J</b> · Ability: <b>E/L</b> · Jump on ziplines in the air.',
 saved:'🛟 Time ran out, so we passed the bomb for you. In a real match you would be out. <b>Tag a bot sooner!</b>',
 out:'💥 A bot was eliminated! Keep going until all bots are out.'};
 function tutMsg(m){const e=tutEl();e.style.borderColor=m.k=='pass'?'#ff5252':'#ffd54a';e.innerHTML=(TUTT[m.k]||'')+(m.n&&m.k!='saved'?'<br><span style="opacity:.85">Bots left: '+m.n+'</span>':'')}
