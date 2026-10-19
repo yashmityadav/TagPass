@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-visual">
-<title>Tag</title><script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script><script>/* address of the game server. On CrazyGames the page is hosted by CrazyGames, so it must point at your Render service: edit CG_SERVER (use wss://...). On Render itself / localhost it stays same-origin. */
-const CG_SERVER="wss://tagpass.onrender.com";window.TAG_WS=window.TAG_WS||(/(^|\.)(onrender\.com|localhost)$|^127\./.test(location.hostname)?"":CG_SERVER);</script><style>body{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}input,textarea{-webkit-user-select:text;user-select:text}</style>
+<title>Tag</title>
 <meta name="theme-color" content="#3d9bf7"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -358,131 +357,55 @@ const AR={h:null,ox:0,oy:0,px:0,py:0,pop:0};   /* AR: the glide of the arrow bet
 /* ovShow/ovHide: see UI layer */
 function elimBanner(me,n){const e=document.createElement('div');e.className='elim'+(me?' me':'');e.innerHTML=me?'<i>💀</i><div>You\'re out<small>👻 Ghost mode: tap the arena to zap!</small></div>':'<i>💀</i><div><b style="font-weight:400">'+esc(n||'Someone')+'</b> is out</div>';document.body.appendChild(e);setTimeout(()=>e.remove(),2700)}
 function toast(t,ms=1600){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),ms)}
-function lockLand(){}   /* fullscreen + orientation are handled by CrazyGames */
-let fsTapped=0;function fsChk(){const e=$('fsp');if(e)e.style.display='none'}
+function lockLand(){if(!matchMedia('(pointer:coarse)').matches)return;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){}try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}
+let fsTapped=0;function fsChk(){const c=matchMedia('(pointer:coarse)').matches,ls=innerWidth>innerHeight;if(!ls)fsTapped=0;$('fsp').style.display=(c&&ls&&!document.fullscreenElement&&!fsTapped&&!kbOpen())?'flex':'none'}
 ['touchend','click'].forEach(e=>addEventListener(e,ev=>{if(ev.target&&ev.target.closest&&ev.target.closest('input,textarea,#vk'))return;fsTapped=1;if(!document.fullscreenElement&&!kbOpen())lockLand();fsChk()},{passive:true}));
 ['resize','orientationchange','fullscreenchange'].forEach(e=>addEventListener(e,()=>setTimeout(fsChk,150)));setTimeout(fsChk,300);   // first tap anywhere (and any tap after leaving fullscreen) goes fullscreen
 if(window.visualViewport)visualViewport.addEventListener('resize',()=>{if(kbOpen())return;setTimeout(()=>{rs();fitLobby()},60)});
 
 /* ---------- accounts (login is enforced by the server; this is just the UI) ---------- */
 let AUTH=null;const AURL=window.TAG_WS?window.TAG_WS.replace(/^ws/,'http').replace(/\/$/,'')+'/auth':'/auth';
+try{const a=JSON.parse(localStorage.getItem('tagauth')||'null');if(a&&a.tk&&a.u)AUTH={u:a.u,tk:a.tk,st:a.st||{p:0,w:0,l:0}}}catch(e){}
 const authMsg=()=>JSON.stringify({t:'auth',tk:AUTH&&AUTH.tk});
-const stTxt=()=>AUTH.g?'👤 Guest · saved on this device':'🎮 '+AUTH.st.p+' played · 🏆 '+AUTH.st.w+' won · 💀 '+AUTH.st.l+' lost';
-function saveAuth(){}
+const stTxt=()=>'🎮 '+AUTH.st.p+' played · 🏆 '+AUTH.st.w+' won · 💀 '+AUTH.st.l+' lost';
+function saveAuth(){try{localStorage.setItem('tagauth',JSON.stringify(AUTH))}catch(e){}}
 function setSt(m){if(!AUTH)return;AUTH.st={p:m.p,w:m.w,l:m.l};saveAuth();pfLive();const e=$('stl');if(e)e.textContent=stTxt()}
-function setAuth(d){AUTH={u:d.u,tk:d.tk,st:d.st,g:d.g?1:0};name=d.u;loadMeta(d.pr)}
-function logout(msg){M=MDEF();MLOADED=0;try{localStorage.removeItem('tagauth')}catch(e){}AUTH=null;SOC={f:[],rq:[],inv:[]};seen=null;socSig='';try{PT&&PT.ws.close()}catch(e){}PT=null;try{WARM&&WARM.close()}catch(e){}WARM=null;cgBoot(msg)}
+function setAuth(d){AUTH={u:d.u,tk:d.tk,st:d.st};saveAuth();name=d.u;loadMeta(d.pr)}
+function logout(msg){M=MDEF();MLOADED=0;try{localStorage.removeItem('tagauth')}catch(e){}AUTH=null;SOC={f:[],rq:[],inv:[]};seen=null;socSig='';try{PT&&PT.ws.close()}catch(e){}PT=null;try{WARM&&WARM.close()}catch(e){}WARM=null;loginScreen(msg)}
 const post=b=>fetch(AURL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
-/* ---------- CrazyGames: account (auto login / guest), ads, rooms, events ---------- */
-const CG_FULL_LAUNCH=false;   // <<< set to true when CrazyGames promotes the game from Basic Launch to Full Launch (rewarded + midgame ads are disabled during Basic Launch)
-const AD_T=150,AD_G=5;        // reward of ONE rewarded ad (keep in sync with server.js AD_TOK / AD_GEM)
-const CGS=()=>{try{return window.CrazyGames&&window.CrazyGames.SDK||null}catch(e){return null}};
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let CGOK=0,CGU=null,CGB=0,CGP=0,CGR='',CGLIS=0,CGJOIN='',ADB=0,ADW=0;
-const LOCG=()=>{try{return JSON.parse(localStorage.getItem('tagguest')||'null')||{}}catch(e){return{}}};
-function guestSave(x){try{const o=LOCG();if(AUTH&&AUTH.g){o.pr=M;o.nm=AUTH.u}Object.assign(o,x||{});localStorage.setItem('tagguest',JSON.stringify(o))}catch(e){}}
-async function cgInit(){if(CGOK)return 1;const s=CGS();if(!s)return 0;try{await s.init();CGOK=1;return 1}catch(e){return 0}}
-const cgj=async b=>(await post(b)).json();
-function cgNeedLogin(){toast('Log in with CrazyGames first to use friends & parties 🔒',2800)}
-function cgLogin(){const s=CGS();if(!s||!CGOK||!s.user.showAuthPrompt)return toast('Open the game on CrazyGames to log in',2400);s.user.showAuthPrompt().then(u=>{if(u)location.reload()}).catch(()=>{})}
-function cgLink(c){try{const s=CGS();if(s&&CGOK&&s.game.inviteLink)return s.game.inviteLink({room:c})||''}catch(e){}return''}
-async function cgBoot(msg){
- if(CGB)return;CGB=1;
- try{
-  loginScreen(msg||'Connecting…');
-  const ok=await cgInit(),s=CGS();let tok=null;CGU=null;
-  if(ok){try{s.game.loadingStart&&s.game.loadingStart()}catch(e){}
-   try{if(s.user.isUserAccountAvailable){CGU=await s.user.getUser();if(CGU)tok=await s.user.getUserToken()}}catch(e){tok=null;CGU=null}}
-  let d=null;
-  for(let i=0;i<4;i++){
-   try{d=tok?await cgj({m:'cg',t:tok}):await cgj({m:'guest',nm:LOCG().nm,pr:LOCG().pr})}catch(e){d=null}
-   if(d&&d.ok)break;
-   if(d&&d.e=='cg'){tok=null;CGU=null;continue}   // the server could not verify the CrazyGames token: play as guest instead of getting stuck
-   await sleep(2500)
-  }
-  if(!d||!d.ok){loginScreen('Cannot reach the game server (free hosting may be waking up).',1);return}
-  setAuth(d);cgAfter();menu();
-  try{s&&ok&&s.game.loadingStop&&s.game.loadingStop()}catch(e){}
-  if(CGJOIN){const c=CGJOIN;CGJOIN='';setTimeout(()=>{if(S.mode=='menu')joinCode(c,1)},900)}
- }finally{CGB=0}
-}
-function cgAfter(){
- const s=CGS();if(!s||!CGOK)return;
- try{if(s.game.settings&&s.game.settings.muteAudio)MUTE=true;s.game.addSettingsChangeListener&&s.game.addSettingsChangeListener(x=>{if(x&&x.muteAudio)MUTE=true})}catch(e){}
- if(!CGLIS){CGLIS=1;try{s.user.addAuthListener(u=>{if(u&&(AUTH&&AUTH.g||(CGU&&u.username!==CGU.username)))location.reload()})}catch(e){}
-  try{s.game.addJoinRoomListener&&s.game.addJoinRoomListener(x=>{const p=(x&&x.inviteParams)||x||{};cgInvite(p.party,p.room,1)})}catch(e){}}
- if(!AUTH.g){try{cgInvite(s.game.getInviteParam('party'),s.game.getInviteParam('room'),0)}catch(e){}}
-}
-function cgInvite(party,room,live){
- if(!AUTH||AUTH.g)return;const c=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
- if(party&&c(party).length>=3){LASTP=c(party);if(live&&S.mode=='menu'){dropParty();S.apAt=0;autoParty()}}
- else if(room&&c(room).length>=3){if(live){if(S.mode=='menu')joinCode(c(room),1)}else CGJOIN=c(room)}
-}
-/* gameplay start/stop, joinable-room status, local guest stats: once a second */
-function cgTick(){
- const s=CGS(),pv=$('pvl');if(pv)pv.style.display=(AUTH&&S.mode=='menu')?'block':'none';
- if(AUTH&&AUTH.g){const L=LOCG();L.t=(L.t|0);
-  if(S.mode=='play'){window.GT=(window.GT|0)+1}else if(window.GT){if(window.GT>=15){L.p=(L.p|0)+1;L.pt=(L.pt|0)+window.GT;guestSave({p:L.p,pt:L.pt})}window.GT=0}
-  AUTH.st.p=L.p|0;const X=sxg();X.pt=L.pt|0}
- if(!s||!CGOK)return;
- const pl=!!(AUTH&&S.mode=='play'&&!ADB);
- if(pl!==!!CGP){CGP=pl;try{pl?s.game.gameplayStart():s.game.gameplayStop()}catch(e){}}
- if(!AUTH||AUTH.g)return;
- let id='',j=false,k='';const st=PT&&PT.st;
- if(S.mode=='menu'&&st&&st.code){id=st.code;k='party';j=st.mem.length<3}
- else if(room&&!S.pub&&typeof code=='string'&&code){id=code;k='room';j=true}
- try{if(id){const sg=id+'|'+j;if(sg!==CGR){CGR=sg;s.game.updateRoom({roomId:id,isJoinable:j,inviteParams:{[k]:id}})}}else if(CGR){CGR='';s.game.leftRoom()}}catch(e){}
-}
-setInterval(cgTick,1000);
-document.addEventListener('touchend',()=>{try{if(AC&&AC.state!='running')AC.resume()}catch(e){}},{passive:true});   // iOS: bring the sound back after an interruption
-(function(){const a=document.createElement('a');a.id='pvl';a.textContent='Privacy';a.target='_blank';a.rel='noopener';a.href=AURL.replace(/\/auth$/,'/privacy');a.style.cssText='position:fixed;left:8px;bottom:4px;z-index:5;font:700 11px Nunito,sans-serif;color:#fff;opacity:.45;text-decoration:none;display:none';document.body.appendChild(a)})();
-/* ---- ads: only through the CrazyGames SDK, game blocked + muted while an ad runs, never rewarded on error ---- */
-function adBlock(on){let e=$('adblk');if(!on){e&&e.remove();return}if(e)return;e=document.createElement('div');e.id='adblk';e.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;color:#fff;font:800 24px Nunito,sans-serif;touch-action:none';e.textContent='Loading ad…';document.body.appendChild(e)}
-function cgAd(type,done){
- const s=CGS();if(!s||!CGOK||ADB)return done(false);ADB=1;const mu=MUTE;let st=0;adBlock(1);
- const end=ok=>{if(!ADB)return;ADB=0;adBlock(0);if(st)MUTE=mu;done(ok)};
- try{s.ad.requestAd(type,{adStarted:()=>{st=1;MUTE=true;const e=$('adblk');if(e)e.style.background='transparent';if(e)e.textContent=''},adFinished:()=>end(true),adError:()=>end(false)})}catch(e){end(false)}
- setTimeout(()=>{if(ADB&&!st)end(false)},15000)
-}
-async function watchAd(k){
- if(!CG_FULL_LAUNCH||!AUTH||ADB)return;
- const w=Math.ceil((ADW-Date.now())/1000);if(w>0)return toast('Next ad in '+w+'s',1500);
- if(!await act('adreq'))return;
- cgAd('rewarded',async ok=>{
-  if(!ok)return toast('No ad available right now. Try again later.',2600);
-  const g=gx(),r=await act('ad',{k:k?'g':'t'});
-  if(r){ADW=Date.now()+60000;toast('+'+(k?AD_G+' 💎':AD_T+' 🪙')+'  Thanks for watching!',2400);try{gainFx(g)}catch(e){}shopModal(k?1:0)}
- })
-}
-function shopModal(t){t=t|0;const cur=t?'💎':'🪙',amt=t?AD_G:AD_T,n=(M.ad&&M.ad.d==dk(new Date())?M.ad.n|0:0),w=Math.max(0,Math.ceil((ADW-Date.now())/1000));
- const offer=CG_FULL_LAUNCH?`<div class="pkg" style="grid-template-columns:1fr"><div class="pkc"><div style="font-size:34px">${cur}</div><b>+${amt}</b><button class="xb g" style="width:100%" ${w||ADB?'disabled':''} onclick="watchAd(${t})">📺 ${w?'Next ad in '+w+'s':'Watch an ad'}</button><div style="opacity:.6;font-size:12px">${n}/20 today · 1 ad = 1 reward · optional</div></div></div>`:'';
- modal(`<div class="xc" style="padding:22px"><div class="lt" style="font-size:30px">${cur} Get ${t?'Gems':'Tokens'}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="xb ${t?'d':'g'}" style="flex:1" onclick="shopModal(0)">🪙 Tokens</button><button class="xb ${t?'g':'d'}" style="flex:1" onclick="shopModal(1)">💎 Gems</button></div>${offer}<div style="opacity:.75;font-size:14px;margin-top:14px;line-height:1.6">Everything in the game can be earned by playing. ${t?'Gems come from level rewards and the 7-day login streak.':'Tokens come from matches, quests and the daily gift.'}</div><div style="display:flex;gap:8px;margin-top:12px"><button class="xb b" style="flex:1" onclick="mclose();dailyModal()">🎁 Daily gift</button><button class="xb b" style="flex:1" onclick="mclose();rewardsModal()">⭐ Rewards</button></div><button class="xb d" style="width:100%;margin-top:14px" onclick="mclose()">Close</button></div>`,560)}
-function boot(){cgBoot()}
+async function doAuth(m){const u=$('lu').value.trim(),p=$('lp').value,g=$('msg');
+ if(!/^[A-Za-z0-9_]{3,12}$/.test(u))return g.textContent='Username: 3-12 letters, numbers or _';
+ if(p.length<4)return g.textContent='Password must be at least 4 characters.';
+ g.textContent='Please wait…';
+ try{const d=await(await post({m,u,p})).json();
+  if(!d.ok){const E={cred:'Wrong username or password.',taken:'That username is taken.',rate:'Too many tries. Wait a minute.',busy:'Server busy. Try again in a moment.'};return g.textContent=E[d.e]||'Invalid username or password.'}
+  setAuth(d);menu()}catch(e){g.textContent='Cannot reach the server (free hosting may be waking up). Try again.'}}
+function boot(){menu();if(!AUTH)return;
+ post({m:'tk',tk:AUTH.tk}).then(r=>r.status==401?logout('Session expired. Please log in again.'):r.json().then(d=>{if(d.ok&&AUTH){AUTH.st=d.st;saveAuth();loadMeta(d.pr);if(S.mode=='menu'&&!INSUB)try{homeRender()}catch(e){}const e=$('stl');if(e)e.textContent=stTxt()}})).catch(()=>{})}
 
 /* ---------- screens ---------- */
 let HM='',SOC={f:[],rq:[],inv:[]},socSig='',seen=null,rmN='';
 const MODES=[['🏃','Classic','#ff2d7a'],['🦠','Infection','#2fb85f'],['❄','Freeze Tag','#2b8cff']],hc=s=>([...s].reduce((a,c)=>(a*31+c.charCodeAt(0))|0,7)>>>0)%10,ft=document.createElement('div');ft.id='ft';document.body.appendChild(ft);
 const sp=(a,x)=>post(Object.assign({m:'soc',tk:AUTH&&AUTH.tk,a},x||{})).then(r=>r.json()).catch(()=>null);
-async function socPoll(a,x){if(!AUTH||AUTH.g)return;const d=await sp(a,x);if(!d)return null;if(d.e=='tk'){logout('Session expired. Reconnecting…');return null}if(!d.ok)return d;
+async function socPoll(a,x){if(!AUTH)return;const d=await sp(a,x);if(!d)return null;if(d.e=='tk'){logout('Session expired. Please log in again.');return null}if(!d.ok)return d;
  if(seen&&!a){d.rq.forEach(n=>seen.has('r'+n)||toast('👋 '+n+' sent you a friend request',3200));d.f.forEach(f=>seen.has('f'+f.n)||toast('🤝 '+f.n+' is now your friend',3200));d.inv.forEach(i=>seen.has('i'+i.n+i.c)||toast('📨 '+i.n+' invited you to a party',3500))}
  seen=new Set([...d.rq.map(n=>'r'+n),...d.f.map(f=>'f'+f.n),...d.inv.map(i=>'i'+i.n+i.c)]);SOC=d;const s=JSON.stringify(d);if(s!==socSig){socSig=s;fRender()}return d}
-async function fAct(a,n,c){if(AUTH&&AUTH.g)return cgNeedLogin();const d=await socPoll(a,{n,c:c||(PT&&PT.st&&PT.st.code)||(PT&&PT.code)});if(!d)return toast('Server busy. Try again.');if(!d.ok)return toast(({nf:'Player not found',self:"That's you!",dup:'Already friends',full:'They have too many pending requests',nop:'Invite failed. Is your friend online?'})[d.e]||'Failed. Try again.');
+async function fAct(a,n,c){const d=await socPoll(a,{n,c:c||(PT&&PT.st&&PT.st.code)||(PT&&PT.code)});if(!d)return toast('Server busy. Try again.');if(!d.ok)return toast(({nf:'Player not found',self:"That's you!",dup:'Already friends',full:'They have too many pending requests',nop:'Invite failed. Is your friend online?'})[d.e]||'Failed. Try again.');
  const t=d.r=='gone'?'Request expired or no longer exists':{add:{sent:'Request sent ✔ (expires in 7 days)',already:'Request already sent ⏳',friends:'You are now friends 🤝'}[d.r],inv:'Invite sent 📨',acc:'Friend added 🤝'}[a];if(t)toast(t,1600)}
-function fAdd(){if(AUTH&&AUTH.g)return cgNeedLogin();const v=$('fa').value.trim();if(!v)return;$('fa').value='';fAct('add',v)}
+function fAdd(){const v=$('fa').value.trim();if(!v)return;$('fa').value='';fAct('add',v)}
 function fRm(n,b){if(rmN===n){rmN='';return fAct('rm',n)}rmN=n;b.textContent='Sure?';setTimeout(()=>{rmN='';fRender()},3000)}
 let CJ='',TAB=0,IM_T=0,LASTP='';
 function joinInv(c,n,r){if(PT){const P=PT;PT=null;try{P.ws.close()}catch(e){}}socPoll('idis',{n});if(!r)return partyGo('pjoin',c);if(S.joining)return;CJ=c;S.joining=1;enter0('join').finally(()=>{S.joining=0;CJ=''})}
-function joinMenu(){if(AUTH&&AUTH.g)return cgNeedLogin();modal(`<div class="xc" style="padding:22px;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center"><div class="lt" style="font-size:30px">🚪 Join Room</div><div style="opacity:.7">Enter a private room code or a friend's party code.</div><div style="display:flex;gap:8px;width:100%"><div class="xi"><input id="jc" maxlength="6" placeholder="CODE" style="text-transform:uppercase;letter-spacing:4px;text-align:center" onkeydown="if(event.key=='Enter')joinCode()"></div><button class="xb g" onclick="joinCode()">Join</button></div><div style="opacity:.5;font-size:12px;letter-spacing:3px">OR</div><button class="xb b" style="width:100%" onclick="pubLobby()">🌐 Public Lobby</button><div class="stm" style="font-size:13px">Public lobby: you + up to 2 friends (party of 3). Invite friends, everyone presses Ready, then the leader presses START.</div><button class="xb d" onclick="mclose()">Close</button></div>`,440);setTimeout(()=>{const f=$('jc');f&&f.focus()},80)}
+function joinMenu(){modal(`<div class="xc" style="padding:22px;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center"><div class="lt" style="font-size:30px">🚪 Join Room</div><div style="opacity:.7">Enter a private room code or a friend's party code.</div><div style="display:flex;gap:8px;width:100%"><div class="xi"><input id="jc" maxlength="6" placeholder="CODE" style="text-transform:uppercase;letter-spacing:4px;text-align:center" onkeydown="if(event.key=='Enter')joinCode()"></div><button class="xb g" onclick="joinCode()">Join</button></div><div style="opacity:.5;font-size:12px;letter-spacing:3px">OR</div><button class="xb b" style="width:100%" onclick="pubLobby()">🌐 Public Lobby</button><div class="stm" style="font-size:13px">Public lobby: you + up to 2 friends (party of 3). Invite friends, everyone presses Ready, then the leader presses START.</div><button class="xb d" onclick="mclose()">Close</button></div>`,440);setTimeout(()=>{const f=$('jc');f&&f.focus()},80)}
 function joinCode(c,room){c=(c||($('jc')?$('jc').value:'')).trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);if(c.length<3)return toast('Enter a code first',1800);mclose();if(S.joining)return;if(room){S.joining=1;CJ=c;return enter0('join').finally(()=>{S.joining=0;CJ=''})}dropParty();partyGo('pjoin',c);if(PT)PT.jr=c}
 function pubLobby(){mclose();const st=PT&&PT.st;if(!st)return toast('Connecting…',1800);if(st.mem.length>1)return toast(st.lead===st.you?'Everyone press Ready, then START':'Press Ready and wait for the leader',3200);needTut()?tutGo():soloGo()}
 function dropParty(){const P=PT;PT=null;if(P)try{P.ws.close()}catch(e){}}
-function autoParty(){if(PT||!AUTH||AUTH.g||S.mode!='menu'||S.joining||!$('hm')||Date.now()-(S.apAt||0)<2500)return;S.apAt=Date.now();const c=LASTP;partyGo(c?'pjoin':'pcreate',c);if(PT)PT.auto=1}
+function autoParty(){if(PT||!AUTH||S.mode!='menu'||S.joining||!$('hm')||Date.now()-(S.apAt||0)<2500)return;S.apAt=Date.now();const c=LASTP;partyGo(c?'pjoin':'pcreate',c);if(PT)PT.auto=1}
 function soloGo(){pSend({t:'prdy',v:1});pSend({t:'pstart'})}
-function practice(){S.autoStart=0;S.pr=1;enter(1)}
-function guestPlay(){practice();S.autoStart=1}
+function practice(){S.pr=1;enter(1)}
 setInterval(autoParty,3000);
-function openFriends(a){if(a&&AUTH&&AUTH.g)return cgNeedLogin();tab(0);if(a&&!PT)autoParty();if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{const f=$('fa');f&&f.focus()},60)}
-async function fInv(n){if(AUTH&&AUTH.g)return cgNeedLogin();if(!PT){autoParty();for(let i=0;i<40&&!(PT&&PT.st);i++)await new Promise(r=>setTimeout(r,150));if(!(PT&&PT.st))return}fAct('inv',n)}
+function openFriends(a){tab(0);if(a&&!PT)autoParty();if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{const f=$('fa');f&&f.focus()},60)}
+async function fInv(n){if(!PT){autoParty();for(let i=0;i<40&&!(PT&&PT.st);i++)await new Promise(r=>setTimeout(r,150));if(!(PT&&PT.st))return}fAct('inv',n)}
 function invList(){const m=$('im');if(!m)return;const on=SOC.f.filter(f=>f.on);m.querySelector('.il').innerHTML=on.length?on.map(f=>`<div class="fr"><i class="on"></i><span>${esc(f.n)}</span><button onclick="fAct('inv','${esc(f.n)}',code)">📨 Invite</button></div>`).join(''):'<p class="em">No friends online.<br>Add friends from the main menu.</p>'}
 
 function ftShow(r){const[p,w,l]=r.dataset.s.split(',').map(Number);ft.innerHTML=`<b>${r.dataset.n}</b>${r.querySelector('i').className?'🟢 Online':'⚫ Offline'}<br>🎮 ${p} played<br>🏆 ${w} won · 💀 ${l} lost<br>📈 ${p?Math.round(w/p*100):0}% win rate`;const b=r.getBoundingClientRect();ft.style.display='block';ft.style.top=Math.max(4,Math.min(innerHeight-ft.offsetHeight-4,b.top+b.height/2-ft.offsetHeight/2))+'px';ft.style.left=Math.max(4,b.left-ft.offsetWidth-8)+'px'}
@@ -494,8 +417,7 @@ function setMode(i){const st=PT&&PT.st;if(st){if(!pCan(st))return;st.md=i;pSend(
 function menu(msg){tutHide();INSUB=0;if(!AUTH)return loginScreen(msg);name=AUTH.u;if(!PT)warm();S.mode='menu';S.rm=null;S.pub=0;S.mf=0;S.mfGo=0;document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';ft.style.display='none';HM=msg||'';homeRender();socPoll('');autoParty()}
 async function enter(host){if(S.joining)return;if(PT)dropParty();S.joining=1;try{await enter0(host?'create':'join')}finally{S.joining=0}}
 async function enterPublic(md){if(S.joining)return;S.pm=md|0;S.joining=1;try{await enter0('quick')}finally{S.joining=0}}
-function playAgain(){if(CG_FULL_LAUNCH&&AUTH&&!ADB)return cgAd('midgame',()=>playAgain0());playAgain0()}
-function playAgain0(){const y=window.PARTY_AT,md=(S.md|0);if(y&&y.n>1&&!y.lead)return toast('Only the party leader can do that',2400);S.pm=md;if(y&&y.n>1){leaveRoom('Back with your party. Pick the mode and start!');return}leaveRoom();enterPublic(md)}
+function playAgain(){const y=window.PARTY_AT,md=(S.md|0);if(y&&y.n>1&&!y.lead)return toast('Only the party leader can do that',2400);S.pm=md;if(y&&y.n>1){leaveRoom('Back with your party. Pick the mode and start!');return}leaveRoom();enterPublic(md)}
 function leaveParty(){LASTP='';window.PARTY_AT=null;leaveRoom('You left the party.')}
 /* ---------- ghost mode: eliminated players zap lightning, back a winner, and can play again / leave ---------- */
 const ZAPCD=7;function isGhost(){return S.mode=='play'&&room&&!ME.alive}
@@ -540,7 +462,7 @@ async function enter0(kind){window.PARTY_AT=null;
  for(let at=0;at<3&&!o;at++){
   try{o=await openWS(WS_URL,first,at?25000:12000)}
   catch(e){jerr=e;if(e&&(e.code=='full'||e.code=='bad'||e.code=='nf'||e.code=='busy'||e.code=='auth'))break;if(at<2){const mg=$('msg');if(mg)mg.textContent='Waking up the server… (free hosting can take up to a minute)';await new Promise(r=>setTimeout(r,1500))}}}
- if(!o){const c=jerr&&jerr.code;if(c=='auth')return logout('Session expired. Reconnecting…');return menu(c=='full'?'Room is full (10 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':c=='busy'?'Servers are busy right now. Try again in a minute.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
+ if(!o){const c=jerr&&jerr.code;if(c=='auth')return logout('Session expired. Please log in again.');return menu(c=='full'?'Room is full (10 players max).':c=='bad'?'Invalid room code.':c=='nf'?'Room not found. Check the code.':c=='busy'?'Servers are busy right now. Try again in a minute.':'Could not reach the server ('+(c||'error')+'). Try again in a moment.')}
  return finishJoin(o,WS_URL)}
 function finishJoin(o,WS_URL){
  const h=o.hello;myId=h.id;
@@ -564,7 +486,7 @@ function partyGo(kind,ca){
  ws.onopen=go;ws.onerror=()=>{};
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(m.t=='st'){setSt(m);return}
-  if(m.t=='err'&&m.e=='auth'){PT=null;return logout('Session expired. Reconnecting…')}
+  if(m.t=='err'&&m.e=='auth'){PT=null;return logout('Session expired. Please log in again.')}
   if(m.t=='err'&&m.e=='nf'&&P.jr){PT=null;try{ws.close()}catch(x){}return joinCode(P.jr,1)}
   if(m.t=='party'){P.st=m;LASTP=m.code;return partyUI()}
   if(m.t=='err'){if(P.auto&&(m.e=='nf'||m.e=='full')){LASTP='';PT=null;try{ws.close()}catch(x){}S.apAt=0;return autoParty()}LASTP=''}
@@ -1047,9 +969,10 @@ function draw(){
  if(S.mode=='play'&&cd>0){cx.setTransform(DPR,0,0,DPR,0,0);cx.font='bold '+Math.round(60+(cd%.6)*60)+'px "Lilita One",Impact';cx.textAlign='center';cx.strokeStyle='#1b2a6b';cx.lineWidth=6;cx.lineJoin='round';cx.fillStyle='#fff';const t=cd>.4?String(Math.ceil((cd-.4)/.6)):'GO!';cx.strokeText(t,W/2,H*.42);cx.fillText(t,W/2,H*.42)}
 }
 /* back: phone/browser back button and Esc step back one screen */
-function goBack(){if($('mod'))return mclose();if($('im'))return invModal();if(S.mode=='menu'){if(AUTH&&!$('hm'))menu();return}if(S.mode=='play'||S.mode=='over'){if(room){if(Date.now()-(S.lbk||0)<2500)leaveRoom();else{S.lbk=Date.now();toast('Press back again to leave the game',2200)}}return}if(room)leaveRoom()}
+function goBack(){if($('mod'))return mclose();if($('im'))return invModal();if(S.mode=='menu'){if(AUTH&&!$('hm'))menu();return}if(S.mode=='play'||S.mode=='over'){if(room&&confirm('Leave the game?'))leaveRoom();return}if(room)leaveRoom()}
 try{history.replaceState({t:1},'');history.pushState({t:2},'')}catch(e){}
 addEventListener('popstate',()=>{try{history.pushState({t:2},'')}catch(e){}goBack()});
+addEventListener('keydown',e=>{if(e.key=='Escape')goBack()});
 /* ===================== UI LAYER (redesigned screens; game engine untouched) ===================== */
 const MODES2=[['🏃','Classic','Hold it & you\'re out','#ff2d7a'],['🦠','Infection','Spread it by touch','#2fb85f'],['❄','Freeze Tag','Freeze & rescue','#2b8cff']],SOON=[['🥔','Hot Potato','#ff9f1c'],['⚔','Teams','#a45cff']];
 const MAPN=[['Random','Surprise me'],['Neon Park','Classic · 2 pads · 2 ziplines'],['Frozen Peaks','Slopes · 2 pads · 1 zipline'],['Desert Ruins','Tall ruins · 1 pad · 2 ziplines']];
@@ -1063,9 +986,9 @@ const mapCard=(i,sel,oc,ro)=>`<button class="mp${i==sel?' on':''}${ro?' ro':''}"
 /* dummy progression data (stored locally; wire to the server later) */
 const dk=d=>d.toISOString().slice(0,10),DAY=864e5,need=l=>100+(l-1)*40;
 const MDEF=()=>({tok:0,gem:0,xp:0,streak:0,last:dk(new Date(Date.now()-DAY)),own:{},lr:{},em:[0,1,2,3],eq:{sk:0,ac:0,hat:0,fc:0,tr:0,cl:0},q:[{k:'play',t:'Play 3 matches',p:0,n:3,r:90,x:60},{k:'win',t:'Win a match',p:0,n:1,r:150,x:100},{k:'tag',t:'Tag 10 players',p:0,n:10,r:120,x:80},{k:'play',t:'Play 1 match with a friend',p:0,n:1,r:60,x:40}]});let M=MDEF(),MLOADED=0;try{localStorage.removeItem('tagmeta')}catch(e){}
-function loadMeta(ms){M=Object.assign(MDEF(),ms&&typeof ms=='object'?ms:{});M.eq=Object.assign({cl:0},M.eq);MLOADED=1;if(AUTH&&AUTH.g)guestSave();pfLive();if(S.mode=='menu'&&!INSUB&&AUTH&&!$('mod')&&!document.querySelector('input:focus'))try{homeRender()}catch(e){}}
+function loadMeta(ms){M=Object.assign(MDEF(),ms&&typeof ms=='object'?ms:{});M.eq=Object.assign({cl:0},M.eq);MLOADED=1;pfLive();if(S.mode=='menu'&&!INSUB&&AUTH&&!$('mod')&&!document.querySelector('input:focus'))try{homeRender()}catch(e){}}
 const msave=()=>{};
-async function act(a,x){try{const d=await(await post(Object.assign({m:'pr',tk:AUTH&&AUTH.tk,a},x||{}))).json();if(d.ok){loadMeta(d.pr);return d}toast(({funds:'Not enough tokens',gems:'Not enough gems',adwait:'The next ad is available in a moment',adcap:'Daily ad limit reached. Come back tomorrow!'})[d.e]||'Could not complete that')}catch(e){toast('Connection problem')}return null}
+async function act(a,x){try{const d=await(await post(Object.assign({m:'pr',tk:AUTH&&AUTH.tk,a},x||{}))).json();if(d.ok){loadMeta(d.pr);return d}toast(d.e=='funds'?'Not enough tokens':d.e=='gems'?'Not enough gems':'Could not complete that')}catch(e){toast('Connection problem')}return null}
 function lvOf(x){let l=1;while(x>=need(l)){x-=need(l);l++}return{l,x,n:need(l)}}
 /* overlay + scaling: every screen is a fixed-size stage scaled to fit any device */
 function ovShow(h,full){const im=$('im');im&&im.remove();mclose();ov.innerHTML=h;ov.classList.remove('off','fit');ov.classList.toggle('bg',!!full);document.body.classList.toggle('inm',!!full);ov.style.opacity='';ov.scrollTop=0;scrollTo(0,0)}
@@ -1082,23 +1005,25 @@ function mclose(){PFO=0;const m=$('mod');m&&m.remove()}
 const copyCode=c=>{try{navigator.clipboard.writeText(c);toast('Code copied 📋',1200)}catch(e){}};
 
 /* ---------- login ---------- */
-function loginScreen(msg,retry){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';
+let AM='login';
+function setAM(m){AM=m;$('sl').classList.toggle('on',m=='login');$('sr').classList.toggle('on',m=='reg');$('lgb').textContent=m=='login'?'Login':'Create account';$('lp').autocomplete=m=='login'?'current-password':'new-password'}
+function loginScreen(msg){S.mode='menu';document.body.classList.remove('pl');$('leave').style.display='none';$('timer').textContent='';AM='login';
  const F=[[3,40,70,92,0],[1,820,60,100,1.1],[4,110,330,84,.6],[0,830,330,108,1.7],[5,330,430,70,2.3],[2,640,420,76,.9]];
- scr(`${F.map(f=>`<div class="fl2" style="left:${f[1]}px;top:${f[2]}px;animation-delay:${f[4]}s;opacity:.85">${chH({c:COLS[f[0]]},f[3],0)}</div>`).join('')}<div class="lgn"><div class="logo">TAG</div><div class="xc" style="width:380px;padding:20px;display:flex;flex-direction:column;gap:12px"><div id="msg" class="stm" style="text-align:center;font-size:18px">${esc(msg||'Connecting…')}</div>${retry?'<button class="xb g" style="font-size:24px;padding:12px" onclick="cgBoot()">Try again</button>':'<div class="xp"><i style="width:60%"></i></div>'}</div></div>`,1000,560,1)}
+ scr(`${F.map(f=>`<div class="fl2" style="left:${f[1]}px;top:${f[2]}px;animation-delay:${f[4]}s;opacity:.85">${chH({c:COLS[f[0]]},f[3],0)}</div>`).join('')}<div class="lgn"><div class="logo">TAG</div><div class="xc" style="width:380px;padding:20px;display:flex;flex-direction:column;gap:12px"><div class="sg"><button id="sl" class="on" onclick="setAM('login')">Login</button><button id="sr" onclick="setAM('reg')">Sign up</button></div><div class="xi"><span>👤</span><input id="lu" maxlength="12" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" onkeydown="if(event.key=='Enter')$('lp').focus()"></div><div class="xi"><span>🔒</span><input id="lp" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key=='Enter')doAuth(AM)"></div><button id="lgb" class="xb g" style="font-size:24px;padding:12px" onclick="doAuth(AM)">Login</button><div id="msg" class="stm">${esc(msg||'Sign up once - you stay logged in and your stats are saved.')}</div></div></div>`,1000,560,1)}
 
 /* ---------- home ---------- */
 const qH=()=>M.q.map((q,i)=>`<div class="qs"><div>${q.t}</div><div class="xp"><i style="width:${Math.min(100,q.p/q.n*100)}%"></i></div><div class="rw"><span>${q.p}/${q.n} · 🪙${q.r} · ⭐${q.x}</span>${q.d?'<span>✔ Claimed</span>':`<button class="xb g sm" ${q.p>=q.n?'':'disabled'} onclick="qClaim(${i})">Claim</button>`}</div></div>`).join('');
 async function qClaim(i){const q=M.q[i];if(!q||q.d||q.p<q.n)return;const g=gx();if(!await act('qc',{i}))return;toast('+'+q.r+' 🪙  +'+q.x+' XP',1600);const e=$('p2');e&&(e.innerHTML=qH());AUTH&&gainFx(g)}
 let LBT=2;const LBN=['NovaRush','PixelFox','ZenTagger','Blitz','Mochi','Vortex','LunaX','Sprout','Kito','Rune'];
 let LBD=[0,0,0];
-function lbLoad(){if(AUTH&&AUTH.g)return;const t=LBT;post({m:'lb',tk:AUTH&&AUTH.tk,t}).then(r=>r.json()).then(d=>{if(d&&d.ok){LBD[t]=d;const e=$('p3');if(e&&LBT==t)e.innerHTML=lbH()}}).catch(()=>{})}
+function lbLoad(){const t=LBT;post({m:'lb',tk:AUTH&&AUTH.tk,t}).then(r=>r.json()).then(d=>{if(d&&d.ok){LBD[t]=d;const e=$('p3');if(e&&LBT==t)e.innerHTML=lbH()}}).catch(()=>{})}
 function lbGo(i){LBT=i;$('p3').innerHTML=lbH();lbLoad()}
-function lbH(){if(AUTH.g)return'<p class="em">Log in with CrazyGames<br>to join the leaderboard.</p>';const d=LBD[LBT],me=AUTH.u.toLowerCase(),rows=!d?'<p class="em">Loading…</p>':d.rows.length?d.rows.map((r,i)=>`<div class="lb${r[0].toLowerCase()==me?' me3':''}"><span class="rk">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><b>${esc(r[0])}</b><span class="sc">🏆 ${r[1].toLocaleString()}</span></div>`).join('')+(d.me&&d.me.r>50?`<div class="lb me3"><span class="rk">${d.me.r}</span><b>${esc(AUTH.u)}</b><span class="sc">🏆 ${d.me.w}</span></div>`:''):'<p class="em">No wins yet.<br>Win a public match to get on the board!</p>';
+function lbH(){const d=LBD[LBT],me=AUTH.u.toLowerCase(),rows=!d?'<p class="em">Loading…</p>':d.rows.length?d.rows.map((r,i)=>`<div class="lb${r[0].toLowerCase()==me?' me3':''}"><span class="rk">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><b>${esc(r[0])}</b><span class="sc">🏆 ${r[1].toLocaleString()}</span></div>`).join('')+(d.me&&d.me.r>50?`<div class="lb me3"><span class="rk">${d.me.r}</span><b>${esc(AUTH.u)}</b><span class="sc">🏆 ${d.me.w}</span></div>`:''):'<p class="em">No wins yet.<br>Win a public match to get on the board!</p>';
  return`<div class="sg">${['Daily','Weekly','All-time'].map((t,i)=>`<button class="${i==LBT?'on':''}" onclick="lbGo(${i})">${t}</button>`).join('')}</div>`+rows}
-const topH=()=>{const L=lvOf(M.xp),can=M.last!==dk(new Date());return`<div class="me" style="cursor:pointer" onclick="openProfile()"><div class="lv">${L.l}</div><div style="min-width:0"><div class="nm">${esc(AUTH.u)}</div><div class="xp" title="${L.x}/${L.n} XP" style="width:180px;margin:5px 0 3px"><i style="width:${(L.x/L.n*100).toFixed(1)}%"></i></div><small id="stl">${stTxt()}</small></div></div><div class="pill" title="Win streak">🔥 <b>${M.ws|0}</b></div><div class="pill pbuy" title="Get tokens" onclick="shopModal(0)">🪙 <b id="ptk">${M.tok.toLocaleString()}</b><i>＋</i></div><div class="pill pbuy" title="Get gems" onclick="shopModal(1)">💎 <b id="pgm">${M.gem}</b><i>＋</i></div><button class="ico" onclick="dailyModal()">🎁${can?'<span class="dotn"></span>':''}</button><button class="ico" onclick="rewardsModal()">⭐${rwDot()?'<span class="dotn"></span>':''}</button><button class="ico" onclick="howTo()">❓</button><button class="ico" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">${MUTE?'🔇':'🔊'}</button>${AUTH.g?'<button class="ico" style="width:auto;padding:0 12px;font-size:15px" onclick="cgLogin()">Log in</button>':''}`};
+const topH=()=>{const L=lvOf(M.xp),can=M.last!==dk(new Date());return`<div class="me" style="cursor:pointer" onclick="openProfile()"><div class="lv">${L.l}</div><div style="min-width:0"><div class="nm">${esc(AUTH.u)}</div><div class="xp" title="${L.x}/${L.n} XP" style="width:180px;margin:5px 0 3px"><i style="width:${(L.x/L.n*100).toFixed(1)}%"></i></div><small id="stl">${stTxt()}</small></div></div><div class="pill" title="Win streak">🔥 <b>${M.ws|0}</b></div><div class="pill pbuy" title="Get tokens" onclick="shopModal(0)">🪙 <b id="ptk">${M.tok.toLocaleString()}</b><i>＋</i></div><div class="pill pbuy" title="Get gems" onclick="shopModal(1)">💎 <b id="pgm">${M.gem}</b><i>＋</i></div><button class="ico" onclick="dailyModal()">🎁${can?'<span class="dotn"></span>':''}</button><button class="ico" onclick="rewardsModal()">⭐${rwDot()?'<span class="dotn"></span>':''}</button><button class="ico" onclick="howTo()">❓</button><button class="ico" onclick="MUTE=!MUTE;this.textContent=MUTE?'🔇':'🔊'">${MUTE?'🔇':'🔊'}</button><button class="ico" onclick="logout()">⎋</button>`};
 function homeParts(){const st=PT&&PT.st,md=st?st.md:(S.pm|0),lead=pCan(st),me=(st&&st.mem.find(x=>x.id===st.you))||{},all=st&&st.mem.every(x=>x.rd),oth=st?st.mem.filter(x=>x.id!==st.you):[],L=lvOf(M.xp);
  const slot=i=>oth[i]?`<div class="sl2">${chH(Object.assign(look(oth[i].nm),{z:parseCs(oth[i].cs)}),98,1)}<div class="nmx">${esc(oth[i].nm)}${oth[i].id===st.lead?' ★':''}</div><em class="${oth[i].rd?'ok':''}">${oth[i].rd?'✔ Ready':'Not ready'}</em></div>`:`<button class="sl2 add" onclick="openFriends(1)"><div class="plus">＋</div><div class="nmx" style="opacity:.6;font-size:15px">Invite</div></button>`;
- const act=AUTH.g?(needTut()?'<button class="xb g big" onclick="tutGo()">🎓 TUTORIAL</button>':'<button class="xb g big" onclick="guestPlay()">▶ PLAY</button>'):!st?'<button class="xb g big" disabled>Connecting…</button>':!oth.length?(needTut()?'<button class="xb g big" onclick="tutGo()">🎓 TUTORIAL</button>':'<button class="xb g big" onclick="soloGo()">▶ PLAY</button>'):`<button class="xb ${me.rd?'g':'b'}" style="min-width:130px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="xb g big" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<div class="stm" style="font-size:16px">Waiting for the leader…</div>');
+ const act=!st?'<button class="xb g big" disabled>Connecting…</button>':!oth.length?(needTut()?'<button class="xb g big" onclick="tutGo()">🎓 TUTORIAL</button>':'<button class="xb g big" onclick="soloGo()">▶ PLAY</button>'):`<button class="xb ${me.rd?'g':'b'}" style="min-width:130px" onclick="pSend({t:'prdy',v:${me.rd?0:1}})">${me.rd?'✔ Ready':'Ready'}</button>`+(lead?`<button class="xb g big" ${all?'':'disabled'} onclick="pSend({t:'pstart'})">▶ START</button>`:'<div class="stm" style="font-size:16px">Waiting for the leader…</div>');
  return{top:topH(),modes:MODES2.map((m,i)=>`<button class="md${i==md?' on':''}" style="--c:${m[3]}" ${lead?'':'disabled'} onclick="setMode(${i})"><div class="mi">${m[0]}</div><span><b>${m[1]}</b><small>${m[2]}</small></span></button>`).join('')+SOON.map(m=>`<button class="md soon" style="--c:${m[2]}" onclick="toast('Coming soon 🚧')"><div class="mi">${m[0]}</div><span><b>${m[1]}</b><small>Coming soon</small></span><i class="tagx">SOON</i></button>`).join(''),
  cs:`<div class="ps">${st?`<button class="chipx" onclick="copyCode('${st.code}')">PARTY <b>${st.code}</b> ⧉</button>`:''}${slot(0)}<div class="sl2 me2">${chH(myLook(),128,1)}<div class="nmx" style="font-size:22px">${esc(AUTH.u)}${st&&st.lead===st.you?' ★':''}</div><em class="${me.rd&&oth.length?'ok':''}">${oth.length?(me.rd?'✔ Ready':'Not ready'):'Level '+L.l}</em></div>${slot(1)}<button class="xb d cb" onclick="cosScreen()">🎨 Customize</button></div><div class="pr">${act}</div><div class="pr" style="min-height:44px"><button class="xb b" onclick="joinMenu()">🚪 Join Room</button><button class="xb b" onclick="privMenu()">🔒 Private Room</button><button class="xb b" onclick="practice()">🎯 Practice</button></div><div id="msg" class="stm">${esc(HM)||'Public match of '+PUB_SIZE+' · whoever holds the arrow when the timer hits 0 is out.'}</div>`}}
 function homeRender(){const P=homeParts();
@@ -1114,12 +1039,19 @@ function invModal(){let m=$('im');if(m){clearInterval(IM_T);return m.remove()}m=
 function dr(){const can=M.last!==dk(new Date()),cont=M.last===dk(new Date(Date.now()-DAY)),S=can?(cont?M.streak+1:1):M.streak,i=Math.max(0,(S-1)%7),w=Math.min(Math.floor(Math.max(0,S-1)/7),10);return{can,i,w,done:can?i:i+1,t:[100,150,200,250,300,400,500],g:20}}
 function dailyModal(){const d=dr(),can=d.can,idx=d.i,done=d.done,R=d.t;
  modal(`<div class="xc" style="padding:22px"><div class="lt" style="font-size:30px">🎁 Daily Rewards</div><div style="opacity:.7;margin:2px 0 16px">🔥 ${M.streak}-day streak · come back every day for bigger rewards</div><div class="dg">${R.map((r,i)=>`<div class="dy${i<done?' dn':''}${can&&i==idx?' td':''}">Day ${i+1}<b>${i==6?'💎':'🪙'}</b>${i==6?d.g+' + ':''}${r}</div>`).join('')}</div><div style="display:flex;gap:10px;margin-top:18px"><button class="xb d" style="flex:1" onclick="mclose()">Close</button><button class="xb g" style="flex:2" ${can?'':'disabled'} onclick="claimDaily()">${can?'Claim reward':'Come back tomorrow'}</button></div></div>`,600)}
-
+const PKS=[[['t1','2,000',349],['t2','6,000',849],['t3','15,000',1699],['t4','40,000',3999]],[['g1','50',349],['g2','130',849],['g3','280',1699],['g4','600',3499]]];
+function shopModal(t){t=t|0;const cur=t?'💎':'🪙';modal(`<div class="xc" style="padding:22px"><div class="lt" style="font-size:30px">🛒 Get ${t?'Gems':'Tokens'}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="xb ${t?'d':'g'}" style="flex:1" onclick="shopModal(0)">🪙 Tokens</button><button class="xb ${t?'g':'d'}" style="flex:1" onclick="shopModal(1)">💎 Gems</button></div><div class="pkg">${PKS[t].map(p=>`<div class="pkc"><div style="font-size:34px">${cur}</div><b>${p[1]}</b><button class="xb g" style="width:100%" onclick="buyPack('${p[0]}')">₹${p[2].toLocaleString('en-IN')}</button></div>`).join('')}</div><div style="opacity:.6;font-size:12px;margin-top:14px;line-height:1.5">Real-money purchase, paid securely online. Most items are meant to be earned by playing; ${t?'gems also come from level rewards and the 7-day login streak':'tokens also come from matches, quests and daily logins'}.</div><button class="xb d" style="width:100%;margin-top:14px" onclick="mclose()">Close</button></div>`,560)}
+let PAYB=0,RZL=0;
+function rzLoad(){return RZL||(RZL=new Promise((ok,no)=>{if(window.Razorpay)return ok();const s=document.createElement('script');s.src='https://checkout.razorpay.com/v1/checkout.js';s.onload=ok;s.onerror=()=>{RZL=0;no()};document.head.appendChild(s)}))}
+function pollBal(){let k=0;const iv=setInterval(()=>{act('get');if(++k>=8)clearInterval(iv)},3000)}
+async function buyPack(id){if(PAYB||!AUTH)return;PAYB=1;try{const d=await(await post({m:'shop',tk:AUTH.tk,pk:id})).json();if(!d.ok){PAYB=0;return toast(d.e=='off'?'The store is not open yet':'Could not start checkout')}await rzLoad();
+ const rz=new Razorpay({key:d.k,order_id:d.o,amount:d.a,currency:'INR',name:'Tag',description:d.n,theme:{color:'#3dff7a'},modal:{ondismiss:()=>{PAYB=0}},handler:async r=>{try{const v=await(await post({m:'shopv',tk:AUTH.tk,o:r.razorpay_order_id,p:r.razorpay_payment_id,s:r.razorpay_signature})).json();if(v.ok){loadMeta(v.pr);mclose();toast('Purchase complete! 🎉',2500)}else{toast('Payment received. Updating your balance…',3000);pollBal()}}catch(e){toast('Payment received. Updating your balance…',3000);pollBal()}PAYB=0}});
+ rz.on('payment.failed',()=>{toast('Payment failed. Please try again.',3000)});rz.open()}catch(e){PAYB=0;toast('Could not open checkout')}}
 async function claimDaily(){const d=dr();if(!d.can)return;const g=gx();if(!await act('daily'))return;toast('+'+d.t[d.i]+' 🪙'+(d.i==6?'  +'+d.g+' 💎':''),1800);dailyModal();gainFx(g);fRender()}
 function howTo(){modal(`<div class="xc" style="padding:22px;display:flex;flex-direction:column;gap:12px"><div class="lt" style="font-size:30px">❓ How to play</div><div>🎯 Touch a player to pass them the arrow. When the timer hits 0, whoever holds it is out. Last one standing wins.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:15px"><div><span class="kc">A</span><span class="kc">D</span> Move</div><div><span class="kc">W</span><span class="kc">Space</span> Jump</div><div><span class="kc">Shift</span> Dash</div><div><span class="kc">E</span> Ability</div><div><span class="kc">Q</span> Grab players &amp; crates</div><div><span class="kc">◀ ▶ ▲</span> On-screen (mobile)</div></div><div style="font-size:15px;line-height:1.6;opacity:.9">🦠 <b>Infection</b> – infected players spread it by touch.<br>❄ <b>Freeze Tag</b> – freezers freeze runners; touch frozen friends to free them.<br>👥 <b>Party</b> – invite friends with ＋, everyone readies up, the leader starts.</div><button class="xb g" onclick="mclose();tutGo()">🎓 Play Tutorial</button><button class="xb b" onclick="mclose()">Got it</button></div>`,600)}
 
 /* ---------- private room join / maps / cosmetics ---------- */
-function privMenu(){if(AUTH&&AUTH.g)return cgNeedLogin();S.pr=0;const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
+function privMenu(){S.pr=0;const q=(location.search+location.hash+document.referrer).match(/room=([a-z0-9]{3,6})/i);
  scr(`<button class="xb d" style="position:absolute;left:0;top:0;z-index:3" onclick="menu()">← Back</button><div style="position:absolute;inset:0;display:grid;place-items:center"><div class="xc" style="width:440px;padding:26px;display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center"><div style="font-size:46px">🔒</div><div class="lt" style="font-size:34px">Private Room</div><div style="opacity:.7">Create a room for your friends, or jump into one with a code.</div><button class="xb g big" style="width:100%;font-size:26px;padding:14px" onclick="enter(1)">＋ Create room</button><div style="opacity:.5;font-size:12px;letter-spacing:3px">OR</div><div style="display:flex;gap:8px;width:100%"><div class="xi"><input id="cd" maxlength="5" placeholder="ROOM CODE" value="${q?q[1].toUpperCase():''}" style="text-transform:uppercase;letter-spacing:4px;text-align:center"></div><button class="xb b" onclick="enter(0)">Join</button></div><div id="msg" class="stm"></div></div></div>`,1000,560,1)}
 try{S.pmap=+(localStorage.getItem('tagmap')||0)}catch(e){S.pmap=0}
 function mapSel(i){S.pmap=i;try{localStorage.setItem('tagmap',i)}catch(e){}document.querySelectorAll('#mapg .mp').forEach((b,k)=>b.classList.toggle('on',k==i))}
@@ -1129,7 +1061,6 @@ function cosScreen(){INSUB=1;PV=null;scr(`<div class="hdr"><button class="xb d" 
 /* ---------- rooms ---------- */
 function lobbyUI(f){
  if(S.pub)return pubUI(f);
- if(S.pr&&S.autoStart&&isHost){S.autoStart=0;netSend({t:'start'});return}
  const sig=peers.map(p=>p.peer+(p.presence.nm||'')+(p.presence.host||0)+(p.presence.ci||0)+(p.presence.rd||0)).join()+isHost+S.md+'/'+(S.sl|0);
  if(!f&&S.sig===sig&&$('lob'))return;S.sig=sig;
  const nd=MINP[S.md|0],me=peers.find(p=>p.isMe)||{presence:{}},allR=peers.every(p=>p.presence.rd),nR=peers.filter(p=>p.presence.rd).length,
@@ -1142,7 +1073,7 @@ function lobbyUI(f){
  if($('lob')&&S.lobCode===code){$('lpl').innerHTML=plH;$('lrt').innerHTML=rtH;thumbs();return}
  S.lobCode=code;
  scr(`<div id="lob" class="hdr"><button class="xb d" onclick="leaveRoom()">← Back</button><div class="ttl">${S.pr?'🎯 Practice':'🔒 Private Room'}</div></div><div style="position:absolute;left:0;right:0;top:60px;bottom:0;display:grid;grid-template-columns:206px minmax(0,1fr) 400px;gap:12px"><div class="xc" style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">${S.pr?`<div class="hd2">PRACTICE</div><div style="margin-top:34px">${chH(myLook(),120,1)}</div><div class="lt" style="font-size:20px">${esc(name)}</div><div class="stm">Play solo against 4 bots.<br>Pick a mode and a map →</div>`:`<div class="hd2">ROOM CODE</div><div class="lt" style="font-size:44px;letter-spacing:6px;line-height:1">${esc(code)}</div><button class="xb d" style="font-size:14px;padding:5px 12px" onclick="copyCode('${esc(code)}')">⧉ Copy</button><div id="qrw" style="width:116px;height:116px"><div id="qr"></div></div><button class="xb b" style="font-size:16px;padding:8px 14px" onclick="invModal()">📨 Invite friends</button><div class="stm">Friends join with the code or by scanning the QR.</div>`}</div><div style="display:flex;flex-direction:column;gap:12px;min-height:0"><div class="xc" style="flex:1;min-height:0;display:flex;flex-direction:column"><div class="hd2">PLAYERS ${S.pr?'':'· '+peers.length+'/10'}</div><div id="lpl" class="pg">${plH}</div></div><div id="abw" class="xc">${abHTML()}</div></div><div id="lrt" class="xc" style="overflow-y:auto;touch-action:pan-y">${rtH}</div></div>`,1000,560,1);
- const drawQR=()=>{const q=$('qr');if(!q||q.firstChild)return 1;if(!window.QRCode)return 0;try{const t=document.createElement('div');const LK=cgLink(code);if(!LK)return 0;new QRCode(t,{text:LK,width:104,height:104});const c=t.querySelector('canvas');if(c){const im=new Image(104,104);im.src=c.toDataURL('image/png');im.style.cssText='display:block;width:104px;height:104px';q.appendChild(im);return 1}}catch(e){}return 0};
+ const drawQR=()=>{const q=$('qr');if(!q||q.firstChild)return 1;if(!window.QRCode)return 0;try{const t=document.createElement('div');new QRCode(t,{text:BASE+'?room='+code,width:104,height:104});const c=t.querySelector('canvas');if(c){const im=new Image(104,104);im.src=c.toDataURL('image/png');im.style.cssText='display:block;width:104px;height:104px';q.appendChild(im);return 1}}catch(e){}return 0};
  if(!S.pr&&!drawQR())setTimeout(()=>{if(!drawQR()){const w=$('qrw');w&&(w.style.display='none')}},1800)}
 function pubUI(f){
  const ps=peers.slice(),n=ps.length,full=n>=PUB_SIZE,sig=ps.map(p=>p.peer+(p.presence.nm||'')+(p.presence.ci||0)).join()+S.md,live=!ov.classList.contains('off')&&$('pubw');
