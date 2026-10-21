@@ -72,7 +72,7 @@ function plr(){var p=DATA.pl;if(!p)return;var h='<tr><th>Player</th><th>Matches<
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a,k=b.dataset.k,x={act:a,k:k};
  if(a=='remove'&&!confirm('Permanently delete account "'+k+'"? This cannot be undone.'))return;
  if(a=='ban'&&!confirm('Ban "'+k+'"? They will be kicked and cannot log in.'))return;
- if(a=='set'){var c=DATA.pl.all.concat(DATA.pl.on).filter(function(z){return z.k==k})[0]||{t:0,g:0},t=prompt('Tokens for '+k,c.t);if(t===null)return;var g=prompt('Gems for '+k,c.g);if(g===null)return;x.tok=t;x.gem=g}
+ if(a=='set'){var c=DATA.pl.all.concat(DATA.pl.on).filter(function(z){return z.k==k})[0]||{t:0,g:0,p:0,w:0},t=prompt('Tokens for '+k,c.t);if(t===null)return;var g=prompt('Gems for '+k,c.g);if(g===null)return;var mp=prompt('Matches played for '+k,c.p);if(mp===null)return;var wn=prompt('Wins for '+k,c.w);if(wn===null)return;x.tok=t;x.gem=g;x.p=mp;x.w=wn}
  load(0,x)});
 var qt;$('sq').oninput=function(){clearTimeout(qt);qt=setTimeout(function(){load(0)},250)};
 function render(){plr();

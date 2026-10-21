@@ -6,7 +6,7 @@ const KEY = process.env.ADMIN_KEY || '';
 const DAY = 864e5, day = (t = Date.now()) => Math.floor(t / DAY);
 const SESS_GAP = 90000;   // a reconnect within 90 s belongs to the same visit (menu <-> match reconnects don't inflate sessions)
 
-module.exports = function ({ db, wss, ACC, rooms, MEM, UP, getAcc, accSave, prog, kickAcc, pushPr, delAcc }) {
+module.exports = function ({ db, wss, ACC, rooms, MEM, UP, getAcc, accSave, prog, kickAcc, pushPr, delAcc, LB, lbSave }) {
   const idx = new Map(), sm = a => ({ k: a.k, n: a.n, p: a.p | 0, w: a.w | 0, t: (a.pr && a.pr.tok) | 0, g: (a.pr && a.pr.gem) | 0, b: a.ban ? 1 : 0 });   // light index of every account
   const days = {}, packs = {}, users = new Map(), dirty = new Set(), sess = new Map(), live = [];
   let dDirty = false, ready = false, bad = false, pend = [], snap = null, snapAt = 0, scanning = false, cache = null, cacheAt = 0;
@@ -149,7 +149,10 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP, getAcc, accSave, prog
     if (m.act === 'ban') { a.ban = 1; accSave(a); kickAcc(a); }
     else if (m.act === 'unban') { delete a.ban; accSave(a); }
     else if (m.act === 'remove') { await delAcc(a); idx.delete(k); if (users.delete(k)) dirty.add(shard(k)); if (snap && snap.total > 0) snap.total--; cache = null; return; }
-    else if (m.act === 'set') { const X = prog(a), t = Math.floor(+m.tok), g = Math.floor(+m.gem); if (isFinite(t) && t >= 0 && t <= 1e9) X.tok = t; if (isFinite(g) && g >= 0 && g <= 1e9) X.gem = g; accSave(a); pushPr(a); }
+    else if (m.act === 'set') { const X = prog(a), t = Math.floor(+m.tok), g = Math.floor(+m.gem); if (isFinite(t) && t >= 0 && t <= 1e9) X.tok = t; if (isFinite(g) && g >= 0 && g <= 1e9) X.gem = g;
+      const p = Math.floor(+m.p), w = Math.floor(+m.w); if (isFinite(p) && p >= 0 && p <= 1e9) a.p = p;
+      if (isFinite(w) && w >= 0 && w <= 1e9) { a.w = w; const e = LB.get(a.k); if (e) { e[1] = w; lbSave(); } }
+      snapAt = 0; accSave(a); pushPr(a); }
     idx.set(k, sm(a));
   }
   /* ---------- http: /admin and /admin/api ---------- */

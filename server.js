@@ -420,7 +420,7 @@ const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: f
 const kickAcc = a => { const w = LIVE.get(a); if (w) try { w.close(); } catch {} };
 const pushPr = a => { const w = LIVE.get(a); if (w && w.readyState === 1) try { w.send(JSON.stringify({ t: 'pr', pr: prog(a) })); } catch {} };   // live balance update
 async function delAcc(a) { kickAcc(a); const c = [['DEL', 'acc:' + a.k]]; for (const h of a.tk || []) { byTok.delete(h); c.push(['DEL', 'tok:' + h]); } ACC.delete(a.k); dirty.delete(a); LB.delete(a.k); lbSave(); await db(...c); }
-const AN = require('./analytics')({ db, wss, ACC, rooms, MEM, UP: UP_URL, getAcc, accSave, prog, kickAcc, pushPr, delAcc });   // private analytics dashboard (/admin)
+const AN = require('./analytics')({ db, wss, ACC, rooms, MEM, UP: UP_URL, getAcc, accSave, prog, kickAcc, pushPr, delAcc, LB, lbSave });   // private analytics dashboard (/admin)
 
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
