@@ -99,8 +99,9 @@ const RQ_TTL = 7 * 864e5;   // friend requests expire after 7 days
 function rqPrune(a) { a.rq = a.rq || []; a.rqt = a.rqt || {}; const n = Date.now(); let c = 0; a.rq = a.rq.filter(k => { if (!a.rqt[k]) { a.rqt[k] = n; c = 1; return true } if (n - a.rqt[k] > RQ_TTL) { delete a.rqt[k]; c = 1; return false } return true }); for (const k in a.rqt) if (!a.rq.includes(k)) { delete a.rqt[k]; c = 1 } return c }
 async function tokAcc(tk) {
   if (typeof tk !== 'string' || !tk || tk.length > 64) return null;
-  const h = sha(tk); let a = byTok.get(h); if (a) return a;
-  const [k] = await db(['GET', 'tok:' + h]); a = k ? await getAcc(k) : null; if (a) byTok.set(h, a); return a;
+  const h = sha(tk); let a = byTok.get(h);
+  if (!a) { const [k] = await db(['GET', 'tok:' + h]); a = k ? await getAcc(k) : null; if (a) byTok.set(h, a); }
+  return a && !a.ban ? a : null;   // banned accounts are locked out
 }
 async function newTok(a) {
   const tk = hex(24), h = sha(tk), cmds = [['SET', 'tok:' + h, a.k]]; a.tk.push(h); byTok.set(h, a);
@@ -196,6 +197,7 @@ function authReq(req, res) {
       if (m.m === 'login') {
         const a = await getAcc(k); if (!a) return out(401, { e: 'cred' });
         if (!crypto.timingSafeEqual(await scr(a.s), Buffer.from(a.h, 'hex'))) return out(401, { e: 'cred' });
+        if (a.ban) return out(403, { e: 'ban' });
         return out(200, accOut(a, await newTok(a)));
       }
       out(400, { e: 'bad' });
@@ -263,6 +265,7 @@ function csClean(a, v) {   // a player can only show cosmetics they own
 function progAct(a, m) {
   const X = prog(a), act = String(m.a);
   if (act === 'get') return '';
+  if (act === 'sab') { const k = m.i; if (typeof k === 'string' && ABIL.has(k) && (ABP[k] === 0 || X.own['ab_' + k])) X.sab = k; return ''; }   // remembered ability choice
   if (act === 'buy') {
     let key, price, gem = false;
     if (m.k === 'ab') { if (typeof m.i !== 'string' || !Object.hasOwn(ABP, m.i)) return 'bad'; key = 'ab_' + m.i; price = ABP[m.i]; gem = !!ABG[m.i]; }
@@ -414,7 +417,10 @@ server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 
 const wss = new WebSocketServer({ server, maxPayload: 2048, perMessageDeflate: false });
-const AN = require('./analytics')({ db, wss, ACC, rooms, MEM, UP: UP_URL });   // private analytics dashboard (/admin)
+const kickAcc = a => { const w = LIVE.get(a); if (w) try { w.close(); } catch {} };
+const pushPr = a => { const w = LIVE.get(a); if (w && w.readyState === 1) try { w.send(JSON.stringify({ t: 'pr', pr: prog(a) })); } catch {} };   // live balance update
+async function delAcc(a) { kickAcc(a); const c = [['DEL', 'acc:' + a.k]]; for (const h of a.tk || []) { byTok.delete(h); c.push(['DEL', 'tok:' + h]); } ACC.delete(a.k); dirty.delete(a); LB.delete(a.k); lbSave(); await db(...c); }
+const AN = require('./analytics')({ db, wss, ACC, rooms, MEM, UP: UP_URL, getAcc, accSave, prog, kickAcc, pushPr, delAcc });   // private analytics dashboard (/admin)
 
 /* ---------------- world (identical to the client's copy) ---------------- */
 const WW = 1600, WH = 836, PW = 30, PH = 34, LX = 22, RX = 1570;
@@ -1363,7 +1369,7 @@ wss.on('connection', (ws, req) => {
     if (rr.pub && rr.st !== 'lobby') return err('full');                       // public matches in progress are closed
     if (!rooms.has(rr.key)) rooms.set(rr.key, rr);
     const used = new Set([...rr.players.values()].map(q => q.ci)); let ci = 0; while (used.has(ci)) ci++; ci %= 10;
-    const pp = newPlayer(nm, ci); pp.since = now(); pp.acct = ws.acct; pp.rec = 0;
+    const pp = newPlayer(nm, ci); pp.since = now(); pp.acct = ws.acct; pp.rec = 0; { const X = prog(ws.acct); if (X.sab && ABIL.has(X.sab) && (ABP[X.sab] === 0 || X.own['ab_' + X.sab])) pp.ab = X.sab; }
     rr.players.set(pp.id, pp);
     if (!rr.pub && !rr.hostId) rr.hostId = pp.id;
     attach(rr, pp);

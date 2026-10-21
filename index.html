@@ -340,7 +340,12 @@ const typing=e=>{const t=e.target;return t&&(t.tagName=='INPUT'||t.tagName=='TEX
 addEventListener('keydown',e=>{if(typing(e))return;K[e.code]=1;if(DKEY[e.code])TL.s=1;if(AKEY[e.code])TL.a=1;if(GKEY[e.code])TL.g=1;if(e.code.startsWith('Arrow')||e.code=='Space')e.preventDefault()});
 addEventListener('keyup',e=>K[e.code]=0);
 document.querySelectorAll('#tc button').forEach(b=>{const k=b.dataset.k,on=e=>{e.preventDefault();T[k]=1;b.classList.add('on')},off=e=>{T[k]=0;b.classList.remove('on')};b.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(n=>b.addEventListener(n,off))});
-document.querySelectorAll('#hud button').forEach(b=>{const k=b.dataset.k,on=e=>{e.preventDefault();T[k]=1;TL[k]=1;b.classList.add('on')},off=e=>{T[k]=0;b.classList.remove('on')};b.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(n=>b.addEventListener(n,off))});
+let GL=0,GS=0;
+document.querySelectorAll('#hud button').forEach(b=>{const k=b.dataset.k,on=e=>{e.preventDefault();T[k]=1;TL[k]=1;b.classList.add('on')},off=e=>{T[k]=0;b.classList.remove('on')};
+ if(k=='g'){   /* GRAB is a toggle on touch: tap once to hold, tap again (or it ends by itself) to let go - so your thumb is free to JUMP while you hold someone */
+  b.addEventListener('pointerdown',e=>{e.preventDefault();if(T.g)off();else{on(e);GL=Date.now();GS=0}});
+  setInterval(()=>{if(!T.g)return;if(ME.gs>0)GS=1;const w=Date.now()-GL>1500;if((GS&&!ME.gs)||(w&&!ME.gs)||(w&&S.st!='play'))off()},100)}
+ else{b.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(n=>b.addEventListener(n,off))}});
 addEventListener('blur',()=>{for(const k in K)K[k]=0;for(const k in T)T[k]=0;document.querySelectorAll('#tc button.on,#hud button.on').forEach(b=>b.classList.remove('on'))});
 addEventListener('contextmenu',e=>e.preventDefault());
 function human(){return{l:K.KeyA||K.ArrowLeft||T.l,r:K.KeyD||K.ArrowRight||T.r,j:K.KeyW||K.ArrowUp||K.Space||T.j,d:0,s:K.ShiftLeft||K.ShiftRight||K.KeyK||T.s||TL.s,a:K.KeyE||K.KeyL||T.a||TL.a,g:K.KeyQ||K.KeyJ||T.g||TL.g}}
@@ -469,7 +474,7 @@ function finishJoin(o,WS_URL){
  const h=o.hello;myId=h.id;
  room={ws:o.ws,id:h.id,tk:h.tk,rk:h.rk,url:WS_URL,left:0,rx:Date.now(),resuming:0};
  code=h.code||'';resetMatch();S.pub=h.pub?1:0;S.mode='lobby';$('leave').style.display='block';
- let sv='';try{sv=localStorage.getItem('tagab')||''}catch(e){}const F0=Object.keys(AB)[0],ok=k=>k&&AB[k]&&(!AB_PRICE[k]||(typeof M!=='undefined'&&M&&M.own&&M.own['ab_'+k]));MYAB=ok(sv)?sv:(ok(h.ab)?h.ab:F0);try{localStorage.setItem('tagab',MYAB)}catch(e){}netSend({t:'ab',k:MYAB});if(S.pmap>0)netSend({t:'map',m:S.pmap});netSend({t:'cos',v:csStr()});   /* remembered ability choice */
+ let sv='';try{sv=localStorage.getItem('tagab')||''}catch(e){}const F0=Object.keys(AB)[0],ok=k=>k&&AB[k]&&(!AB_PRICE[k]||(typeof M!=='undefined'&&M&&M.own&&M.own['ab_'+k]));MYAB=AB[h.ab]?h.ab:(ok(sv)?sv:F0);try{localStorage.setItem('tagab',MYAB)}catch(e){}netSend({t:'ab',k:MYAB});if(S.pmap>0)netSend({t:'map',m:S.pmap});netSend({t:'cos',v:csStr()});   /* remembered ability choice */
  if(S.rm)applyRoom(S.rm)}
 /* ---------- party (play public lobbies with friends) ---------- */
 let PT=null;const PMN=['Classic','Infection','Freeze Tag'];
@@ -987,7 +992,7 @@ const mapCard=(i,sel,oc,ro)=>`<button class="mp${i==sel?' on':''}${ro?' ro':''}"
 /* dummy progression data (stored locally; wire to the server later) */
 const dk=d=>d.toISOString().slice(0,10),DAY=864e5,need=l=>100+(l-1)*40;
 const MDEF=()=>({tok:0,gem:0,xp:0,streak:0,last:dk(new Date(Date.now()-DAY)),own:{},lr:{},em:[0,1,2,3],eq:{sk:0,ac:0,hat:0,fc:0,tr:0,cl:0},q:[{k:'play',t:'Play 3 matches',p:0,n:3,r:90,x:60},{k:'win',t:'Win a match',p:0,n:1,r:150,x:100},{k:'tag',t:'Tag 10 players',p:0,n:10,r:120,x:80},{k:'play',t:'Play 1 match with a friend',p:0,n:1,r:60,x:40}]});let M=MDEF(),MLOADED=0;try{localStorage.removeItem('tagmeta')}catch(e){}
-function loadMeta(ms){M=Object.assign(MDEF(),ms&&typeof ms=='object'?ms:{});M.eq=Object.assign({cl:0},M.eq);MLOADED=1;pfLive();if(S.mode=='menu'&&!INSUB&&AUTH&&!$('mod')&&!document.querySelector('input:focus'))try{homeRender()}catch(e){}}
+function loadMeta(ms){M=Object.assign(MDEF(),ms&&typeof ms=='object'?ms:{});M.eq=Object.assign({cl:0},M.eq);{const s=M.sab&&AB[M.sab]?M.sab:(()=>{try{return localStorage.getItem('tagab')}catch(e){return ''}})();if(s&&AB[s]&&(!AB_PRICE[s]||(M.own&&M.own['ab_'+s]))){MYAB=s;if(!M.sab&&s!='fake')post({m:'pr',tk:AUTH&&AUTH.tk,a:'sab',i:s}).catch(()=>{})}}MLOADED=1;pfLive();if(S.mode=='menu'&&!INSUB&&AUTH&&!$('mod')&&!document.querySelector('input:focus'))try{homeRender()}catch(e){}}
 const msave=()=>{};
 async function act(a,x){try{const d=await(await post(Object.assign({m:'pr',tk:AUTH&&AUTH.tk,a},x||{}))).json();if(d.ok){loadMeta(d.pr);return d}toast(d.e=='funds'?'Not enough tokens':d.e=='gems'?'Not enough gems':'Could not complete that')}catch(e){toast('Connection problem')}return null}
 function lvOf(x){let l=1;while(x>=need(l)){x-=need(l);l++}return{l,x,n:need(l)}}
@@ -1324,7 +1329,7 @@ function drawThumb(c,i){const x=c.getContext('2d'),W=c.width,H=c.height;x.drawIm
 /* abilities (purchasable) + customize */
 function abGrid(){return Object.keys(AB).map(k=>{const lo=AB_PRICE[k]&&!M.own['ab_'+k];return`<button class="abx${k===(APV||MYAB)?' sel':''}" onclick="APV='${k}';cosR()"><span>${AB[k].i}</span><b>${AB[k].n}</b><small>${AB[k].d}</small><small>⏱ ${AB[k].cd}s</small>${lo?'<em class="lkb">'+CUR(ABG[k])+' '+AB_PRICE[k]+'</em>':k===MYAB?'<em class="lkb" style="color:#3dff7a">✔ Equipped</em>':''}</button>`}).join('')}
 function abHTML(){const a=AB[MYAB];return`<div class="hd2">YOUR ABILITY</div><div class="abrow2" style="display:block;max-height:none"><div class="abx sel" style="cursor:default"><span>${a.i}</span><b>${a.n}</b><small>${a.d}</small></div></div><div class="ks"><span>Change it in 🎨 Customize</span><span>⚡ Shift · Dash (${DASH_CD}s)</span><span>${a.i} E · Ability (${a.cd||AB_CD}s)</span><span>✊ Q · Grab</span><span>1-4 · Emotes</span></div>`}
-async function pickAb(k){if(!AB[k])return;if(AB_PRICE[k]&&!M.own['ab_'+k]){if(!await act('buy',{k:'ab',i:k}))return;toast('Ability unlocked',1200)}MYAB=k;try{localStorage.setItem('tagab',k)}catch(e){}if(S.mode=='lobby')netSend({t:'ab',k});snd(660,.07,'square',.04,120);if(INSUB&&$('cgr'))cosR();const w=$('abw');if(w){w.innerHTML=abHTML();fitLobby()}}
+async function pickAb(k){if(!AB[k])return;if(AB_PRICE[k]&&!M.own['ab_'+k]){if(!await act('buy',{k:'ab',i:k}))return;toast('Ability unlocked',1200)}MYAB=k;try{localStorage.setItem('tagab',k)}catch(e){}post({m:'pr',tk:AUTH&&AUTH.tk,a:'sab',i:k}).catch(()=>{});if(S.mode=='lobby')netSend({t:'ab',k});snd(660,.07,'square',.04,120);if(INSUB&&$('cgr'))cosR();const w=$('abw');if(w){w.innerHTML=abHTML();fitLobby()}}
 var INSUB=0,PV=null,APV=null,APR=0;let ES=0;
 function pvLook(){const l=myLook();if(PV&&PV.k!="em")l.z=Object.assign({},M.eq,{[PV.k]:PV.i});return l}
 function pvBuy(){if(!PV)return"";const it=CAT[PV.k][1][PV.i];return`<div class="pvb">${PV.k=="em"?ic("e_"+it[1],"54px"):""}<div style="opacity:.8">Previewing <b>${it[0]}</b></div><div><button class="xb g" onclick="cosBuy()">Buy ${CUR(GM[PV.k+PV.i])} ${it[2]}</button><button class="xb d" onclick="PV=null;cosR()">Cancel</button></div></div>`}

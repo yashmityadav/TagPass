@@ -23,6 +23,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;t
 <div class="kpis" id="kp"></div>
 <div class="pills" id="gr"></div>
 <div class="grid">
+<div class="card wide"><h3>Players</h3><div class="row" style="margin-bottom:8px"><input id="sq" placeholder="🔍 Search player…" autocomplete="off" style="background:#0e1424;border:1px solid var(--b);color:var(--t);border-radius:8px;padding:7px 10px;font:inherit;width:240px"><span id="pn" style="color:var(--m);font-size:12px"></span></div><div style="overflow-x:auto"><h3 style="margin:8px 0 4px">🟢 Online now</h3><table id="pon"></table><h3 style="margin:14px 0 4px">All players</h3><table id="pall"></table></div></div>
 <div class="card wide"><h3>Active users (DAU / WAU / MAU)</h3><div class="cv"><canvas id="c1"></canvas></div></div>
 <div class="card"><h3>New vs returning users per day</h3><div class="cv"><canvas id="c2"></canvas></div></div>
 <div class="card"><h3>Total registered users</h3><div class="cv"><canvas id="c3"></canvas></div></div>
@@ -49,7 +50,7 @@ var COL=['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#22d3ee'];
 Chart.defaults.color='#8b97b8';Chart.defaults.borderColor='#232d47';Chart.defaults.maintainAspectRatio=false;Chart.defaults.plugins.legend.labels.boxWidth=12;
 function go(){KEY=$('ki').value;load(0)}
 $('ki').onkeydown=function(e){if(e.key=='Enter')go()};
-function load(r){fetch('/admin/api',{method:'POST',headers:{'x-admin-key':KEY,'Content-Type':'application/json'},body:JSON.stringify({r:r?1:0})}).then(function(x){if(x.status==401||x.status==429){sessionStorage.removeItem('ak');$('lg').style.display='flex';$('le').textContent=x.status==429?'Too many tries, wait a minute.':'Wrong key.';throw 0}return x.json()}).then(function(d){sessionStorage.setItem('ak',KEY);$('lg').style.display='none';DATA=d;render();if(!T)T=setInterval(function(){if(!document.hidden)load(0)},3000)}).catch(function(){})}
+function load(r,x){fetch('/admin/api',{method:'POST',headers:{'x-admin-key':KEY,'Content-Type':'application/json'},body:JSON.stringify(Object.assign({r:r?1:0,q:$('sq').value},x||{}))}).then(function(x){if(x.status==401||x.status==429){sessionStorage.removeItem('ak');$('lg').style.display='flex';$('le').textContent=x.status==429?'Too many tries, wait a minute.':'Wrong key.';throw 0}return x.json()}).then(function(d){sessionStorage.setItem('ak',KEY);$('lg').style.display='none';DATA=d;render();if(!T)T=setInterval(function(){if(!document.hidden)load(0)},2000)}).catch(function(){})}
 function sum(a){return a.reduce(function(x,y){return x+(+y||0)},0)}
 function f(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'k':Math.round(n).toLocaleString('en')}
 function mm(s){s=Math.round(s||0);return Math.floor(s/60)+'m '+('0'+s%60).slice(-2)+'s'}
@@ -61,7 +62,20 @@ function ln(l,d,c,x){return Object.assign({label:l,data:d,borderColor:c,backgrou
 function bar(l,d,c,x){return Object.assign({label:l,data:d,backgroundColor:c,borderRadius:3},x||{})}
 function op(x){return Object.assign({responsive:true,interaction:{mode:'index',intersect:false}},x||{})}
 function dn(id,labels,data){mk(id,{type:'doughnut',data:{labels:labels,datasets:[{data:data,backgroundColor:COL,borderColor:'#141b2d'}]},options:{plugins:{legend:{position:'right'}}}})}
-function render(){
+function esc(s){return String(s).replace(/[<>&"']/g,'')}
+function nf(n){return (+n||0).toLocaleString('en')}
+function prow(x){var k=esc(x.k);return '<tr><td>'+(x.o?'<span class="dot" style="width:7px;height:7px"></span> ':'')+esc(x.n)+(x.b?' <b class="dn">BANNED</b>':'')+'</td><td>'+nf(x.p)+'</td><td>'+nf(x.w)+'</td><td>🪙 '+nf(x.t)+'</td><td>💎 '+nf(x.g)+'</td><td style="white-space:nowrap"><button data-a="set" data-k="'+k+'">Edit</button> <button data-a="'+(x.b?'unban':'ban')+'" data-k="'+k+'">'+(x.b?'Unban':'Ban')+'</button> <button data-a="remove" data-k="'+k+'">Remove</button></td></tr>'}
+function plr(){var p=DATA.pl;if(!p)return;var h='<tr><th>Player</th><th>Matches</th><th>Wins</th><th>Tokens</th><th>Gems</th><th></th></tr>';
+ $('pon').innerHTML=p.on.length?h+p.on.map(prow).join(''):'<tr><td style="color:var(--m)">Nobody online</td></tr>';
+ $('pall').innerHTML=p.all.length?h+p.all.map(prow).join(''):'<tr><td style="color:var(--m)">No players found</td></tr>';
+ $('pn').textContent=p.total+' players'+(p.total>100?' (showing first 100 - use search)':'')}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a,k=b.dataset.k,x={act:a,k:k};
+ if(a=='remove'&&!confirm('Permanently delete account "'+k+'"? This cannot be undone.'))return;
+ if(a=='ban'&&!confirm('Ban "'+k+'"? They will be kicked and cannot log in.'))return;
+ if(a=='set'){var c=DATA.pl.all.concat(DATA.pl.on).filter(function(z){return z.k==k})[0]||{t:0,g:0},t=prompt('Tokens for '+k,c.t);if(t===null)return;var g=prompt('Gems for '+k,c.g);if(g===null)return;x.tok=t;x.gem=g}
+ load(0,x)});
+var qt;$('sq').oninput=function(){clearTimeout(qt);qt=setTimeout(function(){load(0)},250)};
+function render(){plr();
  var d=DATA,rows=d.rows,v=rows.slice(-R),L=v.map(function(r){return dl(r.d)}),td=rows[rows.length-1],yd=rows[rows.length-2],s=d.snap||{},l7=rows.slice(-7),p7=rows.slice(-14,-7),n=function(a,k){return sum(a.map(function(r){return r[k]}))};
  $('on').textContent=d.live.online;$('up').textContent='updated '+new Date(d.now).toLocaleTimeString();
  var ses7=n(l7,'s'),ssec7=n(l7,'ss'),dau7=n(l7,'dau'),m30=rows.slice(-30),rev30=n(m30,'rv')/100,pu=s.payers||0;

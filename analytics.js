@@ -6,7 +6,8 @@ const KEY = process.env.ADMIN_KEY || '';
 const DAY = 864e5, day = (t = Date.now()) => Math.floor(t / DAY);
 const SESS_GAP = 90000;   // a reconnect within 90 s belongs to the same visit (menu <-> match reconnects don't inflate sessions)
 
-module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
+module.exports = function ({ db, wss, ACC, rooms, MEM, UP, getAcc, accSave, prog, kickAcc, pushPr, delAcc }) {
+  const idx = new Map(), sm = a => ({ k: a.k, n: a.n, p: a.p | 0, w: a.w | 0, t: (a.pr && a.pr.tok) | 0, g: (a.pr && a.pr.gem) | 0, b: a.ban ? 1 : 0 });   // light index of every account
   const days = {}, packs = {}, users = new Map(), dirty = new Set(), sess = new Map(), live = [];
   let dDirty = false, ready = false, bad = false, pend = [], snap = null, snapAt = 0, scanning = false, cache = null, cacheAt = 0;
   const shard = k => { let h = 0; for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) & 7; return h; };
@@ -73,7 +74,7 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
       for (let i = 0; i < need.length; i += 100) for (const v of await db(...need.slice(i, i + 100).map(k => ['GET', k]))) if (v) { try { accs.push(JSON.parse(v)); } catch {} }
       const S = { total: accs.length, p1: 0, p5: 0, p20: 0, payers: 0, matches: 0, wins: 0, top: [] };
       for (const a of accs) {
-        if (!users.has(a.k)) { users.set(a.k, [0]); dirty.add(shard(a.k)); }
+        idx.set(a.k, sm(a)); if (!users.has(a.k)) { users.set(a.k, [0]); dirty.add(shard(a.k)); }
         const p = a.p | 0; S.matches += p; S.wins += a.w | 0; if (p >= 1) S.p1++; if (p >= 5) S.p5++; if (p >= 20) S.p20++;
         if (a.pay && a.pay.ids && a.pay.ids.length) S.payers++;
       }
@@ -130,6 +131,22 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
     let inM = 0, lob = 0, rm = 0; for (const r of rooms.values()) { rm++; let h = 0; for (const p of r.players.values()) if (p.ws && !p.bot) h++; if (r.st === 'play' || r.st === 'between') inM += h; else if (r.pub) lob += h; }
     const c = online(), t = Date.now(); return { online: c, inMatch: inM, lobby: lob, rooms: rm, series: live.concat([[t, c]]) };
   };
+  function players(q) {   // fresh on every request: live accounts override the scanned index
+    for (const a of ACC.values()) idx.set(a.k, sm(a));
+    q = String(q || '').toLowerCase().slice(0, 20); const all = [], on = [];
+    for (const [k, v] of idx) { if (q && !String(v.n).toLowerCase().includes(q)) continue; const o = sess.has(k) && sess.get(k).n > 0 ? 1 : 0; const x = Object.assign({ o }, v); all.push(x); if (o) on.push(x); }
+    const srt = (a, b) => b.p - a.p; all.sort((a, b) => b.o - a.o || srt(a, b)); on.sort(srt);
+    return { all: all.slice(0, 100), on: on.slice(0, 200), total: all.length };
+  }
+  async function adminAct(m) {
+    const k = String(m.k || '').toLowerCase(); if (!/^[a-z0-9_]{3,12}$/.test(k)) return;
+    const a = await getAcc(k); if (!a) return;
+    if (m.act === 'ban') { a.ban = 1; accSave(a); kickAcc(a); }
+    else if (m.act === 'unban') { delete a.ban; accSave(a); }
+    else if (m.act === 'remove') { await delAcc(a); idx.delete(k); return; }
+    else if (m.act === 'set') { const X = prog(a), t = Math.floor(+m.tok), g = Math.floor(+m.gem); if (isFinite(t) && t >= 0 && t <= 1e9) X.tok = t; if (isFinite(g) && g >= 0 && g <= 1e9) X.gem = g; accSave(a); pushPr(a); }
+    idx.set(k, sm(a));
+  }
   /* ---------- http: /admin and /admin/api ---------- */
   const hs = s => crypto.createHash('sha256').update(String(s)).digest(), bad401 = new Map(); setInterval(() => bad401.clear(), 60000).unref();
   function http(req, res, url) {
@@ -143,15 +160,16 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP }) {
     if (url === '/admin/api' && req.method === 'POST') {
       const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
       if ((bad401.get(ip) || 0) >= 10) { res.writeHead(429, H); return res.end('{}'); }
-      let b = ''; req.on('data', d => { b += d; if (b.length > 512) req.destroy(); });
+      let b = ''; req.on('data', d => { b += d; if (b.length > 1024) req.destroy(); });
       req.on('end', async () => {
         const out = (c, o) => { res.writeHead(c, { ...H, 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
         try {
           if (!crypto.timingSafeEqual(hs(req.headers['x-admin-key'] || ''), hs(KEY))) { bad401.set(ip, (bad401.get(ip) || 0) + 1); return out(401, { e: 'key' }); }
           let m = {}; try { m = JSON.parse(b || '{}'); } catch {}
+          if (m.act) await adminAct(m);
           if (m.r && Date.now() - snapAt > 300000) { await scan(); cache = null; }   // "refresh accounts" button: at most once per 5 min (it reads the DB)
           if (!cache || Date.now() - cacheAt > 2000) { cache = build(); cacheAt = Date.now(); }
-          out(200, Object.assign({}, cache, { now: Date.now(), live: liveNow() }));
+          out(200, Object.assign({}, cache, { now: Date.now(), live: liveNow(), pl: players(m.q) }));
         } catch (e) { console.error('admin api:', e.message); out(500, { e: 'err' }); }
       });
       return;
