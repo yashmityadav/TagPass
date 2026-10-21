@@ -72,6 +72,11 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP, getAcc, accSave, prog
       const accs = [], need = [];
       for (const k of keys) { const c = ACC.get(k.slice(4)); c ? accs.push(c) : need.push(k); }
       for (let i = 0; i < need.length; i += 100) for (const v of await db(...need.slice(i, i + 100).map(k => ['GET', k]))) if (v) { try { accs.push(JSON.parse(v)); } catch {} }
+      if (keys.length < 50000 && accs.length === keys.length) {   // drop deleted accounts from the user history + index
+        const ex = new Set(accs.map(a => a.k));
+        for (const k of [...users.keys()]) if (!ex.has(k)) { users.delete(k); dirty.add(shard(k)); }
+        for (const k of [...idx.keys()]) if (!ex.has(k)) idx.delete(k);
+      }
       const S = { total: accs.length, p1: 0, p5: 0, p20: 0, payers: 0, matches: 0, wins: 0, top: [] };
       for (const a of accs) {
         idx.set(a.k, sm(a)); if (!users.has(a.k)) { users.set(a.k, [0]); dirty.add(shard(a.k)); }
@@ -143,7 +148,7 @@ module.exports = function ({ db, wss, ACC, rooms, MEM, UP, getAcc, accSave, prog
     const a = await getAcc(k); if (!a) return;
     if (m.act === 'ban') { a.ban = 1; accSave(a); kickAcc(a); }
     else if (m.act === 'unban') { delete a.ban; accSave(a); }
-    else if (m.act === 'remove') { await delAcc(a); idx.delete(k); return; }
+    else if (m.act === 'remove') { await delAcc(a); idx.delete(k); if (users.delete(k)) dirty.add(shard(k)); if (snap && snap.total > 0) snap.total--; cache = null; return; }
     else if (m.act === 'set') { const X = prog(a), t = Math.floor(+m.tok), g = Math.floor(+m.gem); if (isFinite(t) && t >= 0 && t <= 1e9) X.tok = t; if (isFinite(g) && g >= 0 && g <= 1e9) X.gem = g; accSave(a); pushPr(a); }
     idx.set(k, sm(a));
   }

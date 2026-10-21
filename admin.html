@@ -64,7 +64,7 @@ function op(x){return Object.assign({responsive:true,interaction:{mode:'index',i
 function dn(id,labels,data){mk(id,{type:'doughnut',data:{labels:labels,datasets:[{data:data,backgroundColor:COL,borderColor:'#141b2d'}]},options:{plugins:{legend:{position:'right'}}}})}
 function esc(s){return String(s).replace(/[<>&"']/g,'')}
 function nf(n){return (+n||0).toLocaleString('en')}
-function prow(x){var k=esc(x.k);return '<tr><td>'+(x.o?'<span class="dot" style="width:7px;height:7px"></span> ':'')+esc(x.n)+(x.b?' <b class="dn">BANNED</b>':'')+'</td><td>'+nf(x.p)+'</td><td>'+nf(x.w)+'</td><td>🪙 '+nf(x.t)+'</td><td>💎 '+nf(x.g)+'</td><td style="white-space:nowrap"><button data-a="set" data-k="'+k+'">Edit</button> <button data-a="'+(x.b?'unban':'ban')+'" data-k="'+k+'">'+(x.b?'Unban':'Ban')+'</button> <button data-a="remove" data-k="'+k+'">Remove</button></td></tr>'}
+function prow(x){var k=esc(x.k);return '<tr><td>'+(x.o?'<span class="dot" style="width:7px;height:7px"></span> ':'')+esc(x.n)+(x.b?' <b class="dn">BANNED</b>':'')+'</td><td>'+nf(x.p)+'</td><td>'+nf(x.w)+'</td><td>'+nf(x.t)+'</td><td>💎 '+nf(x.g)+'</td><td style="white-space:nowrap"><button data-a="set" data-k="'+k+'">Edit</button> <button data-a="'+(x.b?'unban':'ban')+'" data-k="'+k+'">'+(x.b?'Unban':'Ban')+'</button> <button data-a="remove" data-k="'+k+'">Remove</button></td></tr>'}
 function plr(){var p=DATA.pl;if(!p)return;var h='<tr><th>Player</th><th>Matches</th><th>Wins</th><th>Tokens</th><th>Gems</th><th></th></tr>';
  $('pon').innerHTML=p.on.length?h+p.on.map(prow).join(''):'<tr><td style="color:var(--m)">Nobody online</td></tr>';
  $('pall').innerHTML=p.all.length?h+p.all.map(prow).join(''):'<tr><td style="color:var(--m)">No players found</td></tr>';
